@@ -1197,8 +1197,8 @@ async def voice_clone(file: UploadFile = File(...), prefix: str = Form(...)):
         }
         
         logger.info(f"正在上传文件到tfLink，文件名: {file.filename}, 大小: {file_size} bytes, MIME类型: {mime_type}")
-        resp = requests.post('https://tmpfile.link/api/upload', files=files, headers=headers, timeout=60)
-        
+        resp = requests.post('http://47.101.214.205:8000/api/upload', files=files, headers=headers, timeout=60)
+
         # 检查响应状态
         if resp.status_code != 200:
             logger.error(f"上传到tfLink失败，状态码: {resp.status_code}, 响应内容: {resp.text}")
@@ -1211,7 +1211,7 @@ async def voice_clone(file: UploadFile = File(...), prefix: str = Form(...)):
             
             # 获取下载链接
             tmp_url = None
-            possible_keys = ['downloadLink', 'download_link', 'url', 'direct_link', 'link']
+            possible_keys = ['downloadLink', 'download_link', 'url', 'direct_link', 'link', 'download_url']
             for key in possible_keys:
                 if key in data:
                     tmp_url = data[key]
