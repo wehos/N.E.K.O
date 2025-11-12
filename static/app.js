@@ -1,3 +1,18 @@
+/**
+ * Initialize the application's UI, media handling, WebSocket connection, Live2D integration, and event handlers.
+ *
+ * Sets up DOM bindings, media capture (microphone/screen), audio processing, WebSocket messaging and heartbeat,
+ * chat UI (text, screenshots, and audio streaming), proactive chat scheduling, Agent controls, microphone
+ * permission and selection logic, Live2D show/hide and lip-sync hooks, and periodic catgirl/model switching checks.
+ *
+ * Side effects:
+ * - Establishes and manages a WebSocket connection and heartbeat.
+ * - Attaches numerous DOM event listeners for buttons, text input, screenshots, and floating Live2D controls.
+ * - Starts/stops audio worklets, mic/screen capture, silence detection, and audio playback scheduling.
+ * - Persists and loads microphone and UI settings.
+ * - Exposes helper functions and state to window (for example: showStatusToast, startScreenSharing, stopScreenSharing,
+ *   renderFloatingMicList, resetProactiveChatBackoff, stopProactiveChatSchedule, saveXiao8Settings, and catgirlSwitchInterval).
+ */
 function init_app(){
     const micButton = document.getElementById('micButton');
     const muteButton = document.getElementById('muteButton');
@@ -2690,11 +2705,11 @@ function init_app(){
                     if (modelData.success && modelData.model_name && modelData.model_info) {
                         console.log('[猫娘切换监听] 检测到新猫娘的 Live2D 模型:', modelData.model_name, '路径:', modelData.model_info.path);
                         
-                        // 检查 live2dManager 是否存在
+                        // 检查 live2dManager 是否存在并已初始化
                         if (!window.live2dManager) {
                             console.error('[猫娘切换监听] live2dManager 不存在，无法重新加载模型');
-                        } else if (!window.live2dManager.getCurrentModel) {
-                            console.error('[猫娘切换监听] live2dManager.getCurrentModel 不存在，无法重新加载模型');
+                        } else if (!window.live2dManager.pixi_app) {
+                            console.error('[猫娘切换监听] live2dManager 未初始化，无法重新加载模型');
                         } else {
                             const currentModel = window.live2dManager.getCurrentModel();
                             const currentModelPath = currentModel ? (currentModel.url || '') : '';
@@ -2774,4 +2789,3 @@ window.addEventListener("load", () => {
         }
     }, 1000);
 });
-

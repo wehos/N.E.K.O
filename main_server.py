@@ -749,7 +749,22 @@ async def get_l2d_manager(request: Request, lanlan_name: str = ""):
 
 @app.get('/api/characters/current_live2d_model')
 async def get_current_live2d_model(catgirl_name: str = ""):
-    """获取指定角色或当前角色的Live2D模型信息"""
+    """
+    Retrieve Live2D model information for a specified catgirl or for the currently selected catgirl.
+    
+    Parameters:
+        catgirl_name (str): Optional name of the catgirl to query. If empty, the configured current catgirl is used.
+    
+    Returns:
+        JSONResponse: A JSON object with:
+            - `success` (bool): `true` if the request completed, `false` on error.
+            - On success:
+                - `catgirl_name` (str): The resolved catgirl name.
+                - `model_name` (str or null): The Live2D model name if configured, otherwise `null`.
+                - `model_info` (object or null): If found, an object with `name` and `path` (URL to the model file); otherwise `null`.
+            - On error:
+                - `error` (str): Error message describing the failure.
+    """
     try:
         characters = _config_manager.load_characters()
         
@@ -769,14 +784,14 @@ async def get_current_live2d_model(catgirl_name: str = ""):
         # 如果找到了模型名称，获取模型信息
         if live2d_model_name:
             try:
-                # 检查模型是否存在
-                model_dir = os.path.join(os.path.dirname(__file__), 'static', live2d_model_name)
+                # 使用 find_model_directory 查找模型目录（支持 static 和用户文档目录）
+                model_dir, url_prefix = find_model_directory(live2d_model_name)
                 if os.path.exists(model_dir):
                     # 查找模型配置文件
                     model_files = [f for f in os.listdir(model_dir) if f.endswith('.model3.json')]
                     if model_files:
                         model_file = model_files[0]
-                        model_path = f'/static/{live2d_model_name}/{model_file}'
+                        model_path = f'{url_prefix}/{live2d_model_name}/{model_file}'
                         model_info = {
                             'name': live2d_model_name,
                             'path': model_path
