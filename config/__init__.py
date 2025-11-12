@@ -13,6 +13,12 @@ from config.api import (
     SETTING_VERIFIER_MODEL,
     SEMANTIC_MODEL,
     RERANKER_MODEL,
+    SUMMARY_MODEL,
+    CORRECTION_MODEL,
+    EMOTION_MODEL,
+    VISION_MODEL,
+    OMNI_MODEL,
+    TTS_MODEL,
 )
 from copy import deepcopy
 
@@ -186,5 +192,11 @@ __all__ = [
     'SETTING_VERIFIER_MODEL',
     'SEMANTIC_MODEL',
     'RERANKER_MODEL',
+    'SUMMARY_MODEL',
+    'CORRECTION_MODEL',
+    'EMOTION_MODEL',
+    'VISION_MODEL',
+    'OMNI_MODEL',
+    'TTS_MODEL',
 ]
 

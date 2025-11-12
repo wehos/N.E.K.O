@@ -232,6 +232,80 @@
         .tooltip-content {
             position: fixed;
             background: #333;
+        }
+        
+        /* 自定义API折叠样式 */
+        .custom-api-container {
+            transition: all 0.3s ease-in-out;
+        }
+        
+        .model-config-container {
+            margin-bottom: 16px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: all 0.3s ease-in-out;
+        }
+        
+        .model-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            cursor: pointer;
+            transition: background 0.2s ease-in-out;
+        }
+        
+        .model-header:hover {
+            background: #e9ecef;
+        }
+        
+        .model-title {
+            font-weight: bold;
+            color: #495057;
+            font-size: 0.95rem;
+        }
+        
+        .toggle-icon {
+            transition: transform 0.3s ease-in-out;
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        
+        .model-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-in-out;
+        }
+        
+        .model-content.expanded {
+            max-height: 300px;
+        }
+        
+        .model-content .field-row {
+            margin: 0;
+            padding: 12px 16px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .model-content .field-row:last-child {
+            border-bottom: none;
+        }
+        
+        .model-content .field-row label {
+            font-weight: normal;
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        .model-content .field-row input {
+            max-width: 600px;
+            margin-top: 4px;
+        }
+        
+        .tooltip-content {
             color: white;
             padding: 12px;
             border-radius: 6px;
@@ -414,22 +488,199 @@
                 <input type="text" id="assistApiKeyInputSilicon" placeholder="可选，默认为核心API Key" value="" style="max-width: 600px;">
             </div>
             
-            <!-- 添加MCP Router Token设置 -->
-            <div class="field-row">
-                <label for="mcpTokenInput">
-                    MCP Router Token
-                    <div class="tooltip-container">
-                        <span class="tooltip-icon">?</span>
-                        <div class="tooltip-content">
-                            <strong>MCP Router Token说明：</strong><br>
-                            用于访问MCP Router服务的认证令牌，启用MCP功能时需要填写。如果您的MCP Router不需要认证，可以留空。
+            <!-- MCP Router Token设置 -->
+            <div class="field-row" style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #6c757d;">
+                <h4 style="color: #6c757d; margin-bottom: 16px;">🔗 MCP Router 设置</h4>
+                <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 16px; margin-bottom: 16px; font-size: 0.9em; color: #495057; line-height: 1.5;">
+                    <strong>💡 MCP Router说明：</strong><br>
+                    MCP Router用于连接和管理多个MCP服务器，提供统一的API接口。此设置与API配置无关，是独立的服务配置项。
+                </div>
+                
+                <div class="field-row">
+                    <label for="mcpTokenInput">
+                        MCP Router Token
+                        <div class="tooltip-container">
+                            <span class="tooltip-icon">?</span>
+                            <div class="tooltip-content">
+                                <strong>MCP Router Token说明：</strong><br>
+                                用于访问MCP Router服务的认证令牌，启用MCP功能时需要填写。如果您的MCP Router不需要认证，可以留空。
+                            </div>
                         </div>
-                    </div>
-                </label>
-                <input type="text" id="mcpTokenInput" placeholder="请输入MCP Router Token（可选）" value="" style="max-width: 600px;">
+                    </label>
+                    <input type="text" id="mcpTokenInput" placeholder="请输入MCP Router Token（可选）" value="" style="width: 100%; max-width: 600px; padding: 10px 12px; border-radius: 6px; border: 1px solid #ccc; font-size: 1rem; font-family: 'Courier New', monospace;">
+                </div>
             </div>
         </div>
     </div>
+
+    <!-- 用户自定义API配置（位于高级选项下方） -->
+    <div id="custom-api-section" class="section" style="margin-top: 0;">
+    <div style="margin-bottom: 8px; cursor: pointer; user-select: none; display: flex; align-items: center;" onclick="toggleCustomApiSection()">
+        <span id="custom-api-arrow" style="font-size: 1.2em; margin-right: 6px; transition: transform 0.2s;">▶</span>
+        <span style="font-weight: bold; color: #4f8cff;">自定义API配置（可选）</span>
+        <div class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <div class="tooltip-content">
+                <strong>自定义API说明：</strong><br>
+                这些API用于特定的功能模块，如摘要生成、文本纠错、情感分析、视觉识别、全模态对话和语音合成。每个API都需要单独配置供应商、URL和API Key。<br>
+                <strong>⚠️ 注意：启用自定义API后，核心API和辅助API将被禁用且无法修改。</strong>
+            </div>
+        </div>
+    </div>
+    <div id="custom-api-options" style="display: none; padding: 12px 0 0 0; border-top: 1px solid #eee;">
+        <div style="background: #f0f8ff; border: 1px solid #b3d9ff; border-radius: 6px; padding: 16px; margin-bottom: 16px; font-size: 0.9em; color: #0d6efd; line-height: 1.5;">
+            <strong>💡 自定义API说明：</strong><br>
+            这些API用于特定的功能模块，如摘要生成、文本纠错、情感分析、视觉识别、全模态对话和语音合成。每个API都需要单独配置供应商、URL和API Key。<br>
+            <strong>⚠️ 注意：启用自定义API后，核心API和辅助API将被禁用且无法修改。</strong>
+        </div>
+        
+        <!-- 启用自定义API开关 -->
+        <div class="field-row" style="margin-bottom: 20px;">
+            <label for="enableCustomApi" style="display: flex; align-items: center; cursor: pointer;">
+                <input type="checkbox" id="enableCustomApi" style="margin-right: 8px; width: 18px; height: 18px;">
+                <span style="font-weight: bold;">启用自定义API配置</span>
+            </label>
+            <div style="color: #666; font-size: 0.9em; margin-top: 4px;">
+                启用后将使用自定义API配置，禁用核心API和辅助API的修改
+            </div>
+        </div>
+        
+        <!-- 自定义API折叠容器 -->
+        <div id="custom-api-container" class="custom-api-container" style="display: none;">
+        
+        <!-- 摘要模型配置 -->
+        <div class="model-config-container">
+            <div class="model-header" onclick="toggleModelConfig('summary')">
+                <span class="model-title">📝 摘要模型配置</span>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div id="summary-model-content" class="model-content">
+                <div class="field-row">
+                    <label for="summaryModelProvider">供应商</label>
+                    <input type="text" id="summaryModelProvider" placeholder="如：openai、azure、custom" value="" style="max-width: 600px;">
+                </div>
+                <div class="field-row">
+                    <label for="summaryModelUrl">API URL</label>
+                    <input type="text" id="summaryModelUrl" placeholder="如：https://api.openai.com/v1/chat/completions" value="" style="max-width: 600px;">
+                </div>
+                <div class="field-row">
+                    <label for="summaryModelApiKey">API Key</label>
+                    <input type="text" id="summaryModelApiKey" placeholder="请输入摘要模型的API Key" value="" style="max-width: 600px;">
+                </div>
+            </div>
+        </div>
+        
+        <!-- 纠错模型配置 -->
+        <div class="model-config-container">
+            <div class="model-header" onclick="toggleModelConfig('correction')">
+                <span class="model-title">✏️ 纠错模型配置</span>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div id="correction-model-content" class="model-content">
+                <div class="field-row">
+                    <label for="correctionModelProvider">供应商</label>
+                    <input type="text" id="correctionModelProvider" placeholder="如：openai、azure、custom" value="" style="max-width: 600px;">
+                </div>
+                <div class="field-row">
+                    <label for="correctionModelUrl">API URL</label>
+                    <input type="text" id="correctionModelUrl" placeholder="如：https://api.openai.com/v1/chat/completions" value="" style="max-width: 600px;">
+                </div>
+                <div class="field-row">
+                    <label for="correctionModelApiKey">API Key</label>
+                    <input type="text" id="correctionModelApiKey" placeholder="请输入纠错模型的API Key" value="" style="max-width: 600px;">
+                </div>
+            </div>
+        </div>
+        
+        <!-- 情感模型配置 -->
+        <div class="model-config-container">
+            <div class="model-header" onclick="toggleModelConfig('emotion')">
+                <span class="model-title">😊 情感模型配置</span>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div id="emotion-model-content" class="model-content">
+                <div class="field-row">
+                    <label for="emotionModelProvider">供应商</label>
+                    <input type="text" id="emotionModelProvider" placeholder="如：openai、azure、custom" value="" style="max-width: 600px;">
+                </div>
+                <div class="field-row">
+                    <label for="emotionModelUrl">API URL</label>
+                    <input type="text" id="emotionModelUrl" placeholder="如：https://api.openai.com/v1/chat/completions" value="" style="max-width: 600px;">
+                </div>
+                <div class="field-row">
+                    <label for="emotionModelApiKey">API Key</label>
+                    <input type="text" id="emotionModelApiKey" placeholder="请输入情感模型的API Key" value="" style="max-width: 600px;">
+                </div>
+            </div>
+        </div>
+        
+        <!-- 视觉模型配置 -->
+        <div class="model-config-container">
+            <div class="model-header" onclick="toggleModelConfig('vision')">
+                <span class="model-title">👁️ 视觉模型配置</span>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div id="vision-model-content" class="model-content">
+                <div class="field-row">
+                    <label for="visionModelProvider">供应商</label>
+                    <input type="text" id="visionModelProvider" placeholder="如：openai、azure、custom" value="" style="max-width: 600px;">
+                </div>
+                <div class="field-row">
+                    <label for="visionModelUrl">API URL</label>
+                    <input type="text" id="visionModelUrl" placeholder="如：https://api.openai.com/v1/chat/completions" value="" style="max-width: 600px;">
+                </div>
+                <div class="field-row">
+                    <label for="visionModelApiKey">API Key</label>
+                    <input type="text" id="visionModelApiKey" placeholder="请输入视觉模型的API Key" value="" style="max-width: 600px;">
+                </div>
+            </div>
+        </div>
+        
+        <!-- 全模态模型配置 -->
+        <div class="model-config-container">
+            <div class="model-header" onclick="toggleModelConfig('omni')">
+                <span class="model-title">🌐 全模态模型配置</span>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div id="omni-model-content" class="model-content">
+                <div class="field-row">
+                    <label for="omniModelProvider">供应商</label>
+                    <input type="text" id="omniModelProvider" placeholder="如：aliyun、custom" value="" style="max-width: 600px;">
+                </div>
+                <div class="field-row">
+                    <label for="omniModelUrl">API URL<em>（必须是WebSocket地址，以ws://或wss://开头）</em></label>
+                    <input type="text" id="omniModelUrl" placeholder="如：wss://dashscope.aliyuncs.com/api-ws/v1/realtime" value="" style="max-width: 600px;">
+                </div>
+                <div class="field-row">
+                    <label for="omniModelApiKey">API Key</label>
+                    <input type="text" id="omniModelApiKey" placeholder="请输入全模态模型的API Key" value="" style="max-width: 600px;">
+                </div>
+            </div>
+        </div>
+        
+        <!-- TTS模型配置 -->
+        <div class="model-config-container">
+            <div class="model-header" onclick="toggleModelConfig('tts')">
+                <span class="model-title">🔊 TTS模型配置</span>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div id="tts-model-content" class="model-content">
+                <div class="field-row">
+                    <label for="ttsModelProvider">供应商</label>
+                    <input type="text" id="ttsModelProvider" placeholder="如：aliyun、azure、custom" value="" style="max-width: 600px;">
+                </div>
+                <div class="field-row">
+                    <label for="ttsModelUrl">API URL</label>
+                    <input type="text" id="ttsModelUrl" placeholder="如：https://dashscope.aliyuncs.com/api/v1/services/aigc/tts/chat" value="" style="max-width: 600px;">
+                </div>
+                <div class="field-row">
+                    <label for="ttsModelApiKey">API Key</label>
+                    <input type="text" id="ttsModelApiKey" placeholder="请输入TTS模型的API Key" value="" style="max-width: 600px;">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 </div>
 
 <!-- 弹出式警告 -->
@@ -495,7 +746,9 @@ async function loadCurrentApiKey() {
         if (response.ok) {
             const data = await response.json();
             // 设置API Key显示
-            if (data.api_key) {
+            if (data.enableCustomApi) {
+                showCurrentApiKey('🔧 当前使用：自定义API模式');
+            } else if (data.api_key) {
                 if (data.api_key === 'free-access' || data.coreApi === 'free' || data.assistApi === 'free') {
                     showCurrentApiKey('📋 当前使用：免费版（无需API Key）');
                 } else {
@@ -532,9 +785,77 @@ async function loadCurrentApiKey() {
                 document.getElementById('assistApiKeyInputSilicon').placeholder = data.assistApiKeySilicon || '可选，默认为核心API Key';
             }
             
+            // 加载用户自定义API配置
+            if (typeof data.summaryModelProvider === 'string' && document.getElementById('summaryModelProvider')) {
+                document.getElementById('summaryModelProvider').value = data.summaryModelProvider;
+            }
+            if (typeof data.summaryModelUrl === 'string' && document.getElementById('summaryModelUrl')) {
+                document.getElementById('summaryModelUrl').value = data.summaryModelUrl;
+            }
+            if (typeof data.summaryModelApiKey === 'string' && document.getElementById('summaryModelApiKey')) {
+                document.getElementById('summaryModelApiKey').value = data.summaryModelApiKey;
+            }
+            
+            if (typeof data.correctionModelProvider === 'string' && document.getElementById('correctionModelProvider')) {
+                document.getElementById('correctionModelProvider').value = data.correctionModelProvider;
+            }
+            if (typeof data.correctionModelUrl === 'string' && document.getElementById('correctionModelUrl')) {
+                document.getElementById('correctionModelUrl').value = data.correctionModelUrl;
+            }
+            if (typeof data.correctionModelApiKey === 'string' && document.getElementById('correctionModelApiKey')) {
+                document.getElementById('correctionModelApiKey').value = data.correctionModelApiKey;
+            }
+            
+            if (typeof data.emotionModelProvider === 'string' && document.getElementById('emotionModelProvider')) {
+                document.getElementById('emotionModelProvider').value = data.emotionModelProvider;
+            }
+            if (typeof data.emotionModelUrl === 'string' && document.getElementById('emotionModelUrl')) {
+                document.getElementById('emotionModelUrl').value = data.emotionModelUrl;
+            }
+            if (typeof data.emotionModelApiKey === 'string' && document.getElementById('emotionModelApiKey')) {
+                document.getElementById('emotionModelApiKey').value = data.emotionModelApiKey;
+            }
+            
+            if (typeof data.visionModelProvider === 'string' && document.getElementById('visionModelProvider')) {
+                document.getElementById('visionModelProvider').value = data.visionModelProvider;
+            }
+            if (typeof data.visionModelUrl === 'string' && document.getElementById('visionModelUrl')) {
+                document.getElementById('visionModelUrl').value = data.visionModelUrl;
+            }
+            if (typeof data.visionModelApiKey === 'string' && document.getElementById('visionModelApiKey')) {
+                document.getElementById('visionModelApiKey').value = data.visionModelApiKey;
+            }
+            
+            if (typeof data.omniModelProvider === 'string' && document.getElementById('omniModelProvider')) {
+                document.getElementById('omniModelProvider').value = data.omniModelProvider;
+            }
+            if (typeof data.omniModelUrl === 'string' && document.getElementById('omniModelUrl')) {
+                document.getElementById('omniModelUrl').value = data.omniModelUrl;
+            }
+            if (typeof data.omniModelApiKey === 'string' && document.getElementById('omniModelApiKey')) {
+                document.getElementById('omniModelApiKey').value = data.omniModelApiKey;
+            }
+            
+            if (typeof data.ttsModelProvider === 'string' && document.getElementById('ttsModelProvider')) {
+                document.getElementById('ttsModelProvider').value = data.ttsModelProvider;
+            }
+            if (typeof data.ttsModelUrl === 'string' && document.getElementById('ttsModelUrl')) {
+                document.getElementById('ttsModelUrl').value = data.ttsModelUrl;
+            }
+            if (typeof data.ttsModelApiKey === 'string' && document.getElementById('ttsModelApiKey')) {
+                document.getElementById('ttsModelApiKey').value = data.ttsModelApiKey;
+            }
+            
             // 加载MCPR_TOKEN
             if (typeof data.mcpToken === 'string' && document.getElementById('mcpTokenInput')) {
                 document.getElementById('mcpTokenInput').value = data.mcpToken;
+            }
+            
+            // 加载自定义API启用状态
+            if (typeof data.enableCustomApi === 'boolean' && document.getElementById('enableCustomApi')) {
+                document.getElementById('enableCustomApi').checked = data.enableCustomApi;
+                // 立即应用状态
+                toggleCustomApi();
             }
         } else {
             showCurrentApiKey('📋 获取当前API Key失败');
@@ -550,6 +871,100 @@ async function loadCurrentApiKey() {
 // 全局变量存储待保存的API Key
 let pendingApiKey = null;
 
+// 切换自定义API启用状态
+function toggleCustomApi() {
+    const enableCustomApi = document.getElementById('enableCustomApi');
+    const coreApiSelect = document.getElementById('coreApiSelect');
+    const assistApiSelect = document.getElementById('assistApiSelect');
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const assistApiKeyInputs = [
+        'assistApiKeyInputQwen', 'assistApiKeyInputOpenai', 'assistApiKeyInputGlm', 
+        'assistApiKeyInputStep', 'assistApiKeyInputSilicon'
+    ];
+    
+    const isEnabled = enableCustomApi.checked;
+    
+    // 禁用或启用核心API和辅助API相关控件
+    if (coreApiSelect) coreApiSelect.disabled = isEnabled;
+    if (assistApiSelect) assistApiSelect.disabled = isEnabled;
+    if (apiKeyInput) apiKeyInput.disabled = isEnabled;
+    
+    // 禁用或启用所有辅助API Key输入框
+    assistApiKeyInputs.forEach(id => {
+        const input = document.getElementById(id);
+        if (input) input.disabled = isEnabled;
+    });
+    
+    // 控制自定义API容器的折叠状态
+    const customApiContainer = document.getElementById('custom-api-container');
+    if (customApiContainer) {
+        if (isEnabled) {
+            customApiContainer.style.display = 'block';
+            // 展开所有模型配置
+            const modelContainers = document.querySelectorAll('.model-config-container');
+            modelContainers.forEach(container => {
+                container.style.display = 'block';
+            });
+        } else {
+            customApiContainer.style.display = 'none';
+            // 折叠所有模型配置
+            const modelContainers = document.querySelectorAll('.model-config-container');
+            modelContainers.forEach(container => {
+                container.style.display = 'none';
+            });
+        }
+    }
+    
+    // 更新提示信息
+    const freeVersionHint = document.getElementById('freeVersionHint');
+    if (freeVersionHint) {
+        if (isEnabled) {
+            freeVersionHint.textContent = '（自定义API已启用）';
+            freeVersionHint.style.color = '#ff6b35';
+        } else {
+            freeVersionHint.textContent = '（免费版无需填写）';
+            freeVersionHint.style.color = '#28a745';
+        }
+    }
+    
+    // 更新高级选项的提示
+    const advancedTips = document.querySelector('#advanced-options > div:first-child');
+    if (advancedTips) {
+        if (isEnabled) {
+            advancedTips.innerHTML = '<strong>💡 配置状态：</strong><br>• <strong>自定义API已启用</strong>：核心API和辅助API已被禁用<br>• 请在下方的自定义API配置中设置各功能模块的API';
+            advancedTips.style.background = '#fff3cd';
+            advancedTips.style.borderColor = '#ffeaa7';
+            advancedTips.style.color = '#856404';
+        } else {
+            advancedTips.innerHTML = '<strong>💡 配置建议：</strong><br>• <strong>免费版</strong>：完全免费，无需API Key，适合新手体验（不支持自定义语音、Agent模式和视频对话）<br>• <strong>核心API</strong>：负责对话功能，建议根据预算和需求选择<br>• <strong>辅助API</strong>：负责记忆管理和自定义语音，<strong>只有阿里支持自定义语音</strong>';
+            advancedTips.style.background = '#e7f3ff';
+            advancedTips.style.borderColor = '#b3d9ff';
+            advancedTips.style.color = '#0d6efd';
+        }
+    }
+}
+
+// 自定义API折叠切换函数
+function toggleCustomApiSection() {
+    const customApiOptions = document.getElementById('custom-api-options');
+    const arrow = document.getElementById('custom-api-arrow');
+    if (customApiOptions.style.display === 'none') {
+        customApiOptions.style.display = 'block';
+        arrow.style.transform = 'rotate(90deg)';
+    } else {
+        customApiOptions.style.display = 'none';
+        arrow.style.transform = 'rotate(0deg)';
+    }
+}
+
+// 为自定义API开关添加事件监听器
+document.addEventListener('DOMContentLoaded', function() {
+    const enableCustomApi = document.getElementById('enableCustomApi');
+    if (enableCustomApi) {
+        enableCustomApi.addEventListener('change', toggleCustomApi);
+    }
+});
+
 document.getElementById('api-key-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     
@@ -563,10 +978,39 @@ document.getElementById('api-key-form').addEventListener('submit', async functio
     const assistApiKeyGlm = document.getElementById('assistApiKeyInputGlm') ? document.getElementById('assistApiKeyInputGlm').value.trim() : '';
     const assistApiKeyStep = document.getElementById('assistApiKeyInputStep') ? document.getElementById('assistApiKeyInputStep').value.trim() : '';
     const assistApiKeySilicon = document.getElementById('assistApiKeyInputSilicon') ? document.getElementById('assistApiKeyInputSilicon').value.trim() : '';
+    
+    // 获取自定义API启用状态
+    const enableCustomApi = document.getElementById('enableCustomApi') ? document.getElementById('enableCustomApi').checked : false;
+    
+    // 获取用户自定义API配置
+    const summaryModelProvider = document.getElementById('summaryModelProvider') ? document.getElementById('summaryModelProvider').value.trim() : '';
+    const summaryModelUrl = document.getElementById('summaryModelUrl') ? document.getElementById('summaryModelUrl').value.trim() : '';
+    const summaryModelApiKey = document.getElementById('summaryModelApiKey') ? document.getElementById('summaryModelApiKey').value.trim() : '';
+    
+    const correctionModelProvider = document.getElementById('correctionModelProvider') ? document.getElementById('correctionModelProvider').value.trim() : '';
+    const correctionModelUrl = document.getElementById('correctionModelUrl') ? document.getElementById('correctionModelUrl').value.trim() : '';
+    const correctionModelApiKey = document.getElementById('correctionModelApiKey') ? document.getElementById('correctionModelApiKey').value.trim() : '';
+    
+    const emotionModelProvider = document.getElementById('emotionModelProvider') ? document.getElementById('emotionModelProvider').value.trim() : '';
+    const emotionModelUrl = document.getElementById('emotionModelUrl') ? document.getElementById('emotionModelUrl').value.trim() : '';
+    const emotionModelApiKey = document.getElementById('emotionModelApiKey') ? document.getElementById('emotionModelApiKey').value.trim() : '';
+    
+    const visionModelProvider = document.getElementById('visionModelProvider') ? document.getElementById('visionModelProvider').value.trim() : '';
+    const visionModelUrl = document.getElementById('visionModelUrl') ? document.getElementById('visionModelUrl').value.trim() : '';
+    const visionModelApiKey = document.getElementById('visionModelApiKey') ? document.getElementById('visionModelApiKey').value.trim() : '';
+    
+    const omniModelProvider = document.getElementById('omniModelProvider') ? document.getElementById('omniModelProvider').value.trim() : '';
+    const omniModelUrl = document.getElementById('omniModelUrl') ? document.getElementById('omniModelUrl').value.trim() : '';
+    const omniModelApiKey = document.getElementById('omniModelApiKey') ? document.getElementById('omniModelApiKey').value.trim() : '';
+    
+    const ttsModelProvider = document.getElementById('ttsModelProvider') ? document.getElementById('ttsModelProvider').value.trim() : '';
+    const ttsModelUrl = document.getElementById('ttsModelUrl') ? document.getElementById('ttsModelUrl').value.trim() : '';
+    const ttsModelApiKey = document.getElementById('ttsModelApiKey') ? document.getElementById('ttsModelApiKey').value.trim() : '';
+    
     const mcpToken = document.getElementById('mcpTokenInput') ? document.getElementById('mcpTokenInput').value.trim() : '';
 
-    // 免费版不需要API Key检查
-    if (coreApi !== 'free' && assistApi !== 'free' && !apiKey) {
+    // 免费版和启用自定义API时不需要API Key检查
+    if (!enableCustomApi && coreApi !== 'free' && assistApi !== 'free' && !apiKey) {
         showStatus('请输入API Key', 'error');
         return;
     }
@@ -575,17 +1019,37 @@ document.getElementById('api-key-form').addEventListener('submit', async functio
     const currentApiKeyDiv = document.getElementById('current-api-key');
     if (currentApiKeyDiv.style.display !== 'none') {
         // 已有API Key，显示警告弹窗
-        pendingApiKey = { apiKey, coreApi, assistApi, assistApiKeyQwen, assistApiKeyOpenai, assistApiKeyGlm, assistApiKeyStep, assistApiKeySilicon, mcpToken };
+        pendingApiKey = { 
+            apiKey, coreApi, assistApi, 
+            assistApiKeyQwen, assistApiKeyOpenai, assistApiKeyGlm, assistApiKeyStep, assistApiKeySilicon,
+            summaryModelProvider, summaryModelUrl, summaryModelApiKey,
+            correctionModelProvider, correctionModelUrl, correctionModelApiKey,
+            emotionModelProvider, emotionModelUrl, emotionModelApiKey,
+            visionModelProvider, visionModelUrl, visionModelApiKey,
+            omniModelProvider, omniModelUrl, omniModelApiKey,
+            ttsModelProvider, ttsModelUrl, ttsModelApiKey,
+            mcpToken, enableCustomApi
+        };
         showWarningModal();
     } else {
         // 没有现有API Key，直接保存
-        await saveApiKey({ apiKey, coreApi, assistApi, assistApiKeyQwen, assistApiKeyOpenai, assistApiKeyGlm, assistApiKeyStep, assistApiKeySilicon, mcpToken });
+        await saveApiKey({ 
+            apiKey, coreApi, assistApi, 
+            assistApiKeyQwen, assistApiKeyOpenai, assistApiKeyGlm, assistApiKeyStep, assistApiKeySilicon,
+            summaryModelProvider, summaryModelUrl, summaryModelApiKey,
+            correctionModelProvider, correctionModelUrl, correctionModelApiKey,
+            emotionModelProvider, emotionModelUrl, emotionModelApiKey,
+            visionModelProvider, visionModelUrl, visionModelApiKey,
+            omniModelProvider, omniModelUrl, omniModelApiKey,
+            ttsModelProvider, ttsModelUrl, ttsModelApiKey,
+            mcpToken, enableCustomApi
+        });
     }
 });
 
-async function saveApiKey({ apiKey, coreApi, assistApi, assistApiKeyQwen, assistApiKeyOpenai, assistApiKeyGlm, assistApiKeyStep, assistApiKeySilicon, mcpToken }) {
-    // 确保apiKey是有效的字符串
-    if (!apiKey || typeof apiKey !== 'string') {
+async function saveApiKey({ apiKey, coreApi, assistApi, assistApiKeyQwen, assistApiKeyOpenai, assistApiKeyGlm, assistApiKeyStep, assistApiKeySilicon, summaryModelProvider, summaryModelUrl, summaryModelApiKey, correctionModelProvider, correctionModelUrl, correctionModelApiKey, emotionModelProvider, emotionModelUrl, emotionModelApiKey, visionModelProvider, visionModelUrl, visionModelApiKey, omniModelProvider, omniModelUrl, omniModelApiKey, ttsModelProvider, ttsModelUrl, ttsModelApiKey, mcpToken, enableCustomApi }) {
+    // 确保apiKey是有效的字符串（启用自定义API或免费版时不需要API Key）
+    if (!enableCustomApi && coreApi !== 'free' && assistApi !== 'free' && (!apiKey || typeof apiKey !== 'string')) {
         showStatus('API Key无效', 'error');
         return;
     }
@@ -597,16 +1061,35 @@ async function saveApiKey({ apiKey, coreApi, assistApi, assistApiKeyQwen, assist
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                coreApiKey: apiKey,
-                coreApi: coreApi || undefined,
-                assistApi: assistApi || undefined,
-                assistApiKeyQwen: assistApiKeyQwen || undefined,
-                assistApiKeyOpenai: assistApiKeyOpenai || undefined,
-                assistApiKeyGlm: assistApiKeyGlm || undefined,
-                assistApiKeyStep: assistApiKeyStep || undefined,
-                assistApiKeySilicon: assistApiKeySilicon || undefined,
-                mcpToken: mcpToken || undefined
-            })
+            coreApiKey: apiKey,
+            coreApi: coreApi || undefined,
+            assistApi: assistApi || undefined,
+            assistApiKeyQwen: assistApiKeyQwen || undefined,
+            assistApiKeyOpenai: assistApiKeyOpenai || undefined,
+            assistApiKeyGlm: assistApiKeyGlm || undefined,
+            assistApiKeyStep: assistApiKeyStep || undefined,
+            assistApiKeySilicon: assistApiKeySilicon || undefined,
+            summaryModelProvider: summaryModelProvider || undefined,
+            summaryModelUrl: summaryModelUrl || undefined,
+            summaryModelApiKey: summaryModelApiKey || undefined,
+            correctionModelProvider: correctionModelProvider || undefined,
+            correctionModelUrl: correctionModelUrl || undefined,
+            correctionModelApiKey: correctionModelApiKey || undefined,
+            emotionModelProvider: emotionModelProvider || undefined,
+            emotionModelUrl: emotionModelUrl || undefined,
+            emotionModelApiKey: emotionModelApiKey || undefined,
+            visionModelProvider: visionModelProvider || undefined,
+            visionModelUrl: visionModelUrl || undefined,
+            visionModelApiKey: visionModelApiKey || undefined,
+            omniModelProvider: omniModelProvider || undefined,
+            omniModelUrl: omniModelUrl || undefined,
+            omniModelApiKey: omniModelApiKey || undefined,
+            ttsModelProvider: ttsModelProvider || undefined,
+            ttsModelUrl: ttsModelUrl || undefined,
+            ttsModelApiKey: ttsModelApiKey || undefined,
+            mcpToken: mcpToken || undefined,
+            enableCustomApi: enableCustomApi || false
+        })
         });
         
         if (response.ok) {
@@ -918,6 +1401,48 @@ function positionTooltip(iconElement, tooltipElement) {
     tooltipElement.style.top = top + 'px';
     tooltipElement.style.setProperty('--arrow-left', arrowLeft + 'px');
 }
+
+// 二级折叠功能：切换模型配置的展开/折叠状态
+function toggleModelConfig(modelType) {
+    const content = document.getElementById(`${modelType}-model-content`);
+    const header = document.querySelector(`#${modelType}-model-content`).previousElementSibling;
+    const icon = header.querySelector('.toggle-icon');
+    
+    if (content.classList.contains('expanded')) {
+        // 折叠
+        content.classList.remove('expanded');
+        icon.style.transform = 'rotate(0deg)';
+    } else {
+        // 展开
+        content.classList.add('expanded');
+        icon.style.transform = 'rotate(180deg)';
+    }
+}
+
+// 页面加载完成后初始化折叠状态
+document.addEventListener('DOMContentLoaded', function() {
+    // 初始化所有模型配置为折叠状态
+    const modelTypes = ['summary', 'correction', 'emotion', 'vision', 'omni', 'tts'];
+    modelTypes.forEach(modelType => {
+        const content = document.getElementById(`${modelType}-model-content`);
+        if (content) {
+            const header = content.previousElementSibling;
+            const icon = header?.querySelector('.toggle-icon');
+            
+            if (content && icon) {
+                content.classList.remove('expanded');
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+    });
+    
+    // 根据自定义API启用状态设置初始折叠状态
+    const enableCustomApi = document.getElementById('enableCustomApi');
+    if (enableCustomApi) {
+        toggleCustomApi(); // 调用一次以设置初始状态
+    }
+});
+
 
 // 初始化所有tooltip
 function initTooltips() {

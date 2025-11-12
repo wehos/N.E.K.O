@@ -316,6 +316,7 @@ async def get_core_config_api():
             "assistApiKeyStep": core_cfg.get('assistApiKeyStep', ''),
             "assistApiKeySilicon": core_cfg.get('assistApiKeySilicon', ''),
             "mcpToken": core_cfg.get('mcpToken', ''),  # 添加mcpToken字段
+            "enableCustomApi": core_cfg.get('enableCustomApi', False),  # 添加enableCustomApi字段
             "success": True
         }
     except Exception as e:
@@ -333,24 +334,29 @@ async def update_core_config(request: Request):
         if not data:
             return {"success": False, "error": "无效的数据"}
         
-        # 检查是否为免费版配置
-        is_free_version = data.get('coreApi') == 'free' or data.get('assistApi') == 'free'
+        # 检查是否启用了自定义API
+        enable_custom_api = data.get('enableCustomApi', False)
         
-        if 'coreApiKey' not in data:
-            return {"success": False, "error": "缺少coreApiKey字段"}
-        
-        api_key = data['coreApiKey']
-        if api_key is None:
-            return {"success": False, "error": "API Key不能为null"}
-        
-        if not isinstance(api_key, str):
-            return {"success": False, "error": "API Key必须是字符串类型"}
-        
-        api_key = api_key.strip()
-        
-        # 免费版允许使用 'free-access' 作为API key，不进行空值检查
-        if not is_free_version and not api_key:
-            return {"success": False, "error": "API Key不能为空"}
+        # 如果启用了自定义API，不需要强制检查核心API key
+        if not enable_custom_api:
+            # 检查是否为免费版配置
+            is_free_version = data.get('coreApi') == 'free' or data.get('assistApi') == 'free'
+            
+            if 'coreApiKey' not in data:
+                return {"success": False, "error": "缺少coreApiKey字段"}
+            
+            api_key = data['coreApiKey']
+            if api_key is None:
+                return {"success": False, "error": "API Key不能为null"}
+            
+            if not isinstance(api_key, str):
+                return {"success": False, "error": "API Key必须是字符串类型"}
+            
+            api_key = api_key.strip()
+            
+            # 免费版允许使用 'free-access' 作为API key，不进行空值检查
+            if not is_free_version and not api_key:
+                return {"success": False, "error": "API Key不能为空"}
         
         # 保存到core_config.json
         from pathlib import Path
@@ -360,7 +366,21 @@ async def update_core_config(request: Request):
         # 确保配置目录存在
         Path(core_config_path).parent.mkdir(parents=True, exist_ok=True)
         
-        core_cfg = {"coreApiKey": api_key}
+        # 构建配置对象
+        core_cfg = {}
+        
+        # 只有在启用自定义API时，才允许不设置coreApiKey
+        if enable_custom_api:
+            # 启用自定义API时，coreApiKey是可选的
+            if 'coreApiKey' in data:
+                api_key = data['coreApiKey']
+                if api_key is not None and isinstance(api_key, str):
+                    core_cfg['coreApiKey'] = api_key.strip()
+        else:
+            # 未启用自定义API时，必须设置coreApiKey
+            api_key = data.get('coreApiKey', '')
+            if api_key is not None and isinstance(api_key, str):
+                core_cfg['coreApiKey'] = api_key.strip()
         if 'coreApi' in data:
             core_cfg['coreApi'] = data['coreApi']
         if 'assistApi' in data:
@@ -377,6 +397,47 @@ async def update_core_config(request: Request):
             core_cfg['assistApiKeySilicon'] = data['assistApiKeySilicon']
         if 'mcpToken' in data:
             core_cfg['mcpToken'] = data['mcpToken']
+        if 'enableCustomApi' in data:
+            core_cfg['enableCustomApi'] = data['enableCustomApi']
+        
+        # 添加用户自定义API配置
+        if 'summaryModelProvider' in data:
+            core_cfg['summaryModelProvider'] = data['summaryModelProvider']
+        if 'summaryModelUrl' in data:
+            core_cfg['summaryModelUrl'] = data['summaryModelUrl']
+        if 'summaryModelApiKey' in data:
+            core_cfg['summaryModelApiKey'] = data['summaryModelApiKey']
+        if 'correctionModelProvider' in data:
+            core_cfg['correctionModelProvider'] = data['correctionModelProvider']
+        if 'correctionModelUrl' in data:
+            core_cfg['correctionModelUrl'] = data['correctionModelUrl']
+        if 'correctionModelApiKey' in data:
+            core_cfg['correctionModelApiKey'] = data['correctionModelApiKey']
+        if 'emotionModelProvider' in data:
+            core_cfg['emotionModelProvider'] = data['emotionModelProvider']
+        if 'emotionModelUrl' in data:
+            core_cfg['emotionModelUrl'] = data['emotionModelUrl']
+        if 'emotionModelApiKey' in data:
+            core_cfg['emotionModelApiKey'] = data['emotionModelApiKey']
+        if 'visionModelProvider' in data:
+            core_cfg['visionModelProvider'] = data['visionModelProvider']
+        if 'visionModelUrl' in data:
+            core_cfg['visionModelUrl'] = data['visionModelUrl']
+        if 'visionModelApiKey' in data:
+            core_cfg['visionModelApiKey'] = data['visionModelApiKey']
+        if 'omniModelProvider' in data:
+            core_cfg['omniModelProvider'] = data['omniModelProvider']
+        if 'omniModelUrl' in data:
+            core_cfg['omniModelUrl'] = data['omniModelUrl']
+        if 'omniModelApiKey' in data:
+            core_cfg['omniModelApiKey'] = data['omniModelApiKey']
+        if 'ttsModelProvider' in data:
+            core_cfg['ttsModelProvider'] = data['ttsModelProvider']
+        if 'ttsModelUrl' in data:
+            core_cfg['ttsModelUrl'] = data['ttsModelUrl']
+        if 'ttsModelApiKey' in data:
+            core_cfg['ttsModelApiKey'] = data['ttsModelApiKey']
+        
         with open(core_config_path, 'w', encoding='utf-8') as f:
             json.dump(core_cfg, f, indent=2, ensure_ascii=False)
         
