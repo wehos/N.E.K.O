@@ -2110,6 +2110,46 @@ function init_app(){
     
     // ========== Agent控制逻辑 ==========
     
+    // Agent 定时检查器
+    let agentCheckInterval = null;
+    
+    // 启动 Agent 可用性定时检查
+    function startAgentAvailabilityCheck() {
+        // 清除之前的定时器
+        if (agentCheckInterval) {
+            clearInterval(agentCheckInterval);
+        }
+        
+        // 每秒检查一次键鼠控制和MCP工具的可用性
+        const checkAgentCapabilities = async () => {
+            const checks = [
+                { id: 'live2d-agent-keyboard', capability: 'computer_use', name: '键鼠控制' },
+                { id: 'live2d-agent-mcp', capability: 'mcp', name: 'MCP工具' }
+            ];
+            for (const {id, capability, name} of checks) {
+                const cb = document.getElementById(id);
+                if (!cb) continue;
+                const available = await checkCapability(capability, false);
+                cb.disabled = !available;
+                cb.title = available ? name : `${name}不可用`;
+            }
+        };
+        
+        // 立即检查一次
+        checkAgentCapabilities();
+        
+        // 每秒检查一次
+        agentCheckInterval = setInterval(checkAgentCapabilities, 1000);
+    }
+    
+    // 停止 Agent 可用性定时检查
+    function stopAgentAvailabilityCheck() {
+        if (agentCheckInterval) {
+            clearInterval(agentCheckInterval);
+            agentCheckInterval = null;
+        }
+    }
+    
     // 浮动Agent status更新函数
     function setFloatingAgentStatus(msg) {
         const statusEl = document.getElementById('live2d-agent-status');
@@ -2131,31 +2171,24 @@ function init_app(){
     
     // 检查Agent能力
     async function checkCapability(kind, showError = true) {
+        const apis = {
+            computer_use: { url: '/api/agent/computer_use/availability', name: '键鼠控制' },
+            mcp: { url: '/api/agent/mcp/availability', name: 'MCP工具' }
+        };
+        const config = apis[kind];
+        if (!config) return false;
+        
         try {
-            if (kind === 'computer_use') {
-                const r = await fetch(`/api/agent/computer_use/availability`);
-                if (!r.ok) return false;
-                const j = await r.json();
-                if (!j.ready) {
-                    if (showError) {
-                        setFloatingAgentStatus((j.reasons && j.reasons[0]) || '键鼠控制不可用');
-                    }
-                    return false;
+            const r = await fetch(config.url);
+            if (!r.ok) return false;
+            const j = await r.json();
+            if (!j.ready) {
+                if (showError) {
+                    setFloatingAgentStatus(j.reasons?.[0] || `${config.name}不可用`);
                 }
-                return true;
-            } else if (kind === 'mcp') {
-                const r = await fetch(`/api/agent/mcp/availability`);
-                if (!r.ok) return false;
-                const j = await r.json();
-                if (!j.ready) {
-                    if (showError) {
-                        setFloatingAgentStatus((j.reasons && j.reasons[0]) || 'MCP不可用');
-                    }
-                    return false;
-                }
-                return true;
+                return false;
             }
-            return false;
+            return true;
         } catch (e) {
             return false;
         }

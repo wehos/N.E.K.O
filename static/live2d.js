@@ -1780,15 +1780,34 @@ class Live2DManager {
                 // 创建自定义圆形指示器
                 const indicator = document.createElement('div');
                 Object.assign(indicator.style, {
-                    width: '16px',
-                    height: '16px',
+                    width: '20px',
+                    height: '20px',
                     borderRadius: '50%',
                     border: '2px solid #ccc',
                     backgroundColor: 'transparent',
                     cursor: 'pointer',
                     flexShrink: '0',
-                    transition: 'all 0.2s ease'
+                    transition: 'all 0.2s ease',
+                    position: 'relative',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                 });
+                
+                // 创建对勾图标（初始隐藏）
+                const checkmark = document.createElement('div');
+                checkmark.innerHTML = '✓';
+                Object.assign(checkmark.style, {
+                    color: '#fff',
+                    fontSize: '13px',
+                    fontWeight: 'bold',
+                    lineHeight: '1',
+                    opacity: '0',
+                    transition: 'opacity 0.2s ease',
+                    pointerEvents: 'none',
+                    userSelect: 'none'
+                });
+                indicator.appendChild(checkmark);
                 
                 const label = document.createElement('label');
                 label.innerText = toggle.label;
@@ -1798,49 +1817,71 @@ class Live2DManager {
                 label.style.fontSize = '13px';
                 label.style.color = '#333';  // 文本始终为深灰色，不随选中状态改变
                 
-                // 根据 checkbox 状态更新指示器颜色（文本颜色保持不变）
+                // 同步 title 属性
+                const updateTitle = () => {
+                    const title = checkbox.title || '';
+                    label.title = toggleItem.title = title;
+                };
+                
+                // 根据 checkbox 状态更新指示器颜色和对勾显示
                 const updateStyle = () => {
                     if (checkbox.checked) {
-                        // 选中状态：蓝色填充，无边框
+                        // 选中状态：蓝色填充，显示对勾
                         indicator.style.backgroundColor = '#44b7fe';
                         indicator.style.borderColor = '#44b7fe';
+                        checkmark.style.opacity = '1';
                     } else {
-                        // 未选中状态：灰色边框，透明填充
+                        // 未选中状态：灰色边框，透明填充，隐藏对勾
                         indicator.style.backgroundColor = 'transparent';
                         indicator.style.borderColor = '#ccc';
+                        checkmark.style.opacity = '0';
                     }
                 };
+                
+                // 更新禁用状态的视觉反馈
+                const updateDisabledStyle = () => {
+                    const disabled = checkbox.disabled;
+                    const cursor = disabled ? 'default' : 'pointer';
+                    [toggleItem, label, indicator].forEach(el => el.style.cursor = cursor);
+                    toggleItem.style.opacity = disabled ? '0.5' : '1';
+                };
+                
+                // 监听 checkbox 的 disabled 和 title 属性变化
+                const disabledObserver = new MutationObserver(() => {
+                    updateDisabledStyle();
+                    if (checkbox.hasAttribute('title')) updateTitle();
+                });
+                disabledObserver.observe(checkbox, { attributes: true, attributeFilter: ['disabled', 'title'] });
                 
                 // 监听 checkbox 状态变化
                 checkbox.addEventListener('change', updateStyle);
                 
-                // 初始化样式（根据当前状态）
+                // 初始化样式
                 updateStyle();
+                updateDisabledStyle();
+                updateTitle();
                 
                 toggleItem.appendChild(checkbox);
                 toggleItem.appendChild(indicator);
                 toggleItem.appendChild(label);
                 popup.appendChild(toggleItem);
                 
+                // 鼠标悬停效果
                 toggleItem.addEventListener('mouseenter', () => {
-                    toggleItem.style.background = 'rgba(79, 140, 255, 0.1)';
+                    if (checkbox.disabled && checkbox.title?.includes('不可用')) {
+                        const statusEl = document.getElementById('live2d-agent-status');
+                        if (statusEl) statusEl.textContent = checkbox.title;
+                    } else if (!checkbox.disabled) {
+                        toggleItem.style.background = 'rgba(79, 140, 255, 0.1)';
+                    }
                 });
                 toggleItem.addEventListener('mouseleave', () => {
                     toggleItem.style.background = 'transparent';
                 });
                 
-                // 点击切换（点击整个项目或指示器都可以切换）
+                // 点击切换（点击整个项目都可以切换）
                 toggleItem.addEventListener('click', (e) => {
-                    if (e.target !== checkbox) {
-                        checkbox.checked = !checkbox.checked;
-                        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-                        updateStyle();  // 更新样式
-                    }
-                });
-                
-                // 点击指示器也可以切换
-                indicator.addEventListener('click', (e) => {
-                    e.stopPropagation();
+                    if (checkbox.disabled) return;
                     checkbox.checked = !checkbox.checked;
                     checkbox.dispatchEvent(new Event('change', { bubbles: true }));
                     updateStyle();
