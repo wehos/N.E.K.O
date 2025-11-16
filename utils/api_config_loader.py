@@ -148,14 +148,17 @@ def get_config(force_reload: bool = False) -> Dict[str, Any]:
     return _config_cache
 
 
-def get_core_api_profiles() -> Dict[str, Dict[str, Any]]:
+def get_core_api_profiles(force_reload: bool = False) -> Dict[str, Dict[str, Any]]:
     """
     获取核心API配置（兼容原有的 CORE_API_PROFILES 格式）
+    
+    Args:
+        force_reload: 是否强制重新加载配置
     
     Returns:
         Dict: 核心API配置字典，格式与 CORE_API_PROFILES 相同
     """
-    config = get_config()
+    config = get_config(force_reload=force_reload)
     core_providers = config.get('core_api_providers', {})
     
     result = {}
@@ -166,14 +169,17 @@ def get_core_api_profiles() -> Dict[str, Dict[str, Any]]:
     return result
 
 
-def get_assist_api_profiles() -> Dict[str, Dict[str, Any]]:
+def get_assist_api_profiles(force_reload: bool = False) -> Dict[str, Dict[str, Any]]:
     """
     获取辅助API配置（兼容原有的 ASSIST_API_PROFILES 格式）
+    
+    Args:
+        force_reload: 是否强制重新加载配置
     
     Returns:
         Dict: 辅助API配置字典，格式与 ASSIST_API_PROFILES 相同
     """
-    config = get_config()
+    config = get_config(force_reload=force_reload)
     assist_providers = config.get('assist_api_providers', {})
     
     result = {}
@@ -206,14 +212,17 @@ def get_default_models() -> Dict[str, str]:
     return config.get('default_models', {})
 
 
-def get_core_api_providers_for_frontend() -> list:
+def get_core_api_providers_for_frontend(force_reload: bool = False) -> list:
     """
     获取核心API服务商列表（供前端使用）
+    
+    Args:
+        force_reload: 是否强制重新加载配置
     
     Returns:
         list: 包含服务商信息的列表，每个元素包含 key, name, description
     """
-    config = get_config()
+    config = get_config(force_reload=force_reload)
     core_providers = config.get('core_api_providers', {})
     
     result = []
@@ -227,14 +236,17 @@ def get_core_api_providers_for_frontend() -> list:
     return result
 
 
-def get_assist_api_providers_for_frontend() -> list:
+def get_assist_api_providers_for_frontend(force_reload: bool = False) -> list:
     """
     获取辅助API服务商列表（供前端使用）
+    
+    Args:
+        force_reload: 是否强制重新加载配置
     
     Returns:
         list: 包含服务商信息的列表，每个元素包含 key, name, description
     """
-    config = get_config()
+    config = get_config(force_reload=force_reload)
     assist_providers = config.get('assist_api_providers', {})
     
     result = []

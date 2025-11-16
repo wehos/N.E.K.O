@@ -367,6 +367,7 @@ async def get_api_providers_config():
             get_assist_api_providers_for_frontend,
         )
         
+        # 使用缓存加载配置（性能更好，配置更新后需要重启服务）
         core_providers = get_core_api_providers_for_frontend()
         assist_providers = get_assist_api_providers_for_frontend()
         
