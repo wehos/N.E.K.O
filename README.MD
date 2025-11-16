@@ -127,7 +127,7 @@ https://github.com/user-attachments/assets/9d9e01af-e2cc-46aa-add7-8eb1803f061c
 
 - 通过访问`http://localhost:48911/api_key`可以切换核心API和辅助API（记忆/语音）的服务提供商。Qwen功能全面，GLM完全免费。
 
-#### 记忆审阅
+#### 记忆整理
 
 - 通过访问`http://localhost:48911/memory_browser`可以浏览和校对近期记忆与摘要，一定程度上缓解模型复读、认知错误等问题。
 

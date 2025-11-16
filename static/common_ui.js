@@ -39,6 +39,11 @@ if (toggleBtn) {
 
         const isMinimized = chatContainer.classList.toggle('minimized');
         
+        // 如果容器没有其他类，完全移除class属性以避免显示为class=""
+        if (!isMinimized && chatContainer.classList.length === 0) {
+            chatContainer.removeAttribute('class');
+        }
+        
         // 获取图标元素（HTML中应该已经有img标签）
         let iconImg = toggleBtn.querySelector('img');
         if (!iconImg) {
@@ -47,6 +52,7 @@ if (toggleBtn) {
             iconImg.style.width = '24px';  /* 图标尺寸 */
             iconImg.style.height = '24px';  /* 图标尺寸 */
             iconImg.style.objectFit = 'contain';
+            iconImg.style.pointerEvents = 'none'; /* 确保图标不干扰点击事件 */
             toggleBtn.innerHTML = '';
             toggleBtn.appendChild(iconImg);
         } else {
@@ -280,9 +286,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!iconImg) {
             // 如果没有图标，创建一个
             iconImg = document.createElement('img');
-            iconImg.style.width = '16px';
-            iconImg.style.height = '16px';
+            iconImg.style.width = '24px';  /* 图标尺寸 */
+            iconImg.style.height = '24px';  /* 图标尺寸 */
             iconImg.style.objectFit = 'contain';
+            iconImg.style.pointerEvents = 'none'; /* 确保图标不干扰点击事件 */
             toggleBtn.innerHTML = '';
             toggleBtn.appendChild(iconImg);
         }

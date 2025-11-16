@@ -185,7 +185,7 @@ class CompressedRecentHistoryManager:
         """
         # 检查是否被取消
         if cancel_event and cancel_event.is_set():
-            print(f"⚠️ {lanlan_name} 的记忆审阅被取消（启动前）")
+            print(f"⚠️ {lanlan_name} 的记忆整理被取消（启动前）")
             return False
             
         # 检查配置文件中是否禁用自动审阅
@@ -197,7 +197,7 @@ class CompressedRecentHistoryManager:
                 with open(config_path, 'r', encoding='utf-8') as f:
                     config_data = json.load(f)
                     if 'recent_memory_auto_review' in config_data and not config_data['recent_memory_auto_review']:
-                        print(f"💡 {lanlan_name} 的自动记忆审阅已禁用，跳过审阅")
+                        print(f"💡 {lanlan_name} 的自动记忆整理已禁用，跳过审阅")
                         return False
         except Exception as e:
             print(f"⚠️ 读取配置文件失败：{e}，继续执行审阅")
@@ -212,7 +212,7 @@ class CompressedRecentHistoryManager:
         
         # 检查是否被取消
         if cancel_event and cancel_event.is_set():
-            print(f"⚠️ {lanlan_name} 的记忆审阅被取消（获取历史后）")
+            print(f"⚠️ {lanlan_name} 的记忆整理被取消（获取历史后）")
             return False
         
         # 将消息转换为可读的文本格式
@@ -240,7 +240,7 @@ class CompressedRecentHistoryManager:
         
         # 检查是否被取消
         if cancel_event and cancel_event.is_set():
-            print(f"⚠️ {lanlan_name} 的记忆审阅被取消（准备调用LLM前）")
+            print(f"⚠️ {lanlan_name} 的记忆整理被取消（准备调用LLM前）")
             return False
         
         retries = 0
@@ -254,7 +254,7 @@ class CompressedRecentHistoryManager:
                 
                 # 检查是否被取消（LLM调用后）
                 if cancel_event and cancel_event.is_set():
-                    print(f"⚠️ {lanlan_name} 的记忆审阅被取消（LLM调用后，保存前）")
+                    print(f"⚠️ {lanlan_name} 的记忆整理被取消（LLM调用后，保存前）")
                     return False
                 
                 # 确保response_content是字符串
@@ -269,7 +269,7 @@ class CompressedRecentHistoryManager:
                 review_result = json.loads(response_content)
                 
                 if '修正说明' in review_result and '修正后的对话' in review_result:
-                    print(f"💡 记忆审阅结果：{review_result['修正说明']}")
+                    print(f"💡 记忆整理结果：{review_result['修正说明']}")
                     
                     # 将修正后的对话转换回消息格式
                     corrected_messages = []
@@ -303,7 +303,7 @@ class CompressedRecentHistoryManager:
             except RateLimitError as e:
                 retries += 1
                 if retries >= max_retries:
-                    print(f'❌ 记忆审阅失败，已达到最大重试次数: {e}')
+                    print(f'❌ 记忆整理失败，已达到最大重试次数: {e}')
                     return False
                 # 指数退避: 1, 2, 4 秒
                 wait_time = 2 ** (retries - 1)
@@ -311,14 +311,14 @@ class CompressedRecentHistoryManager:
                 await asyncio.sleep(wait_time)
                 # 检查是否被取消
                 if cancel_event and cancel_event.is_set():
-                    print(f"⚠️ {lanlan_name} 的记忆审阅在重试等待期间被取消")
+                    print(f"⚠️ {lanlan_name} 的记忆整理在重试等待期间被取消")
                     return False
             except Exception as e:
                 logger.error(f"❌ 历史记录审阅失败：{e}")
                 return False
         
         # 如果所有重试都失败
-        print(f"❌ {lanlan_name} 的记忆审阅失败，已达到最大重试次数")
+        print(f"❌ {lanlan_name} 的记忆整理失败，已达到最大重试次数")
         return False
 
     def clear_history(self, lanlan_name):
