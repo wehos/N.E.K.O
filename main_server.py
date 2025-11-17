@@ -30,7 +30,8 @@ from config import MAIN_SERVER_PORT, MONITOR_SERVER_PORT, MEMORY_SERVER_PORT, MO
 from config.prompts_sys import emotion_analysis_prompt, proactive_chat_prompt
 import glob
 from utils.config_manager import get_config_manager
-
+os.add_dll_directory(os.getcwd())
+from steamworks import STEAMWORKS
 # 确定 templates 目录位置（支持 PyInstaller 打包）
 if getattr(sys, 'frozen', False):
     # 打包后运行：从 _MEIPASS 读取
@@ -40,6 +41,27 @@ else:
     template_dir = "./"
 
 templates = Jinja2Templates(directory=template_dir)
+
+def initialize_steamworks():
+    try:
+        steamworks = STEAMWORKS()
+        steamworks.initialize()
+    except Exception as e:
+        logger.error(f"Failed to initialize Steamworks: {e}")
+
+    return steamworks
+
+def get_default_steam_info():
+    my_steam64 = steamworks.Users.GetSteamID()
+    my_steam_level = steamworks.Users.GetPlayerSteamLevel()
+    subscribed_apps = steamworks.Workshop.GetNumSubscribedItems()
+    print(f'Subscribed apps: {subscribed_apps}')
+
+    print(f'Logged on as {my_steam64}, level: {my_steam_level}')
+    print('Is subscribed to current app?', steamworks.Apps.IsSubscribed())
+
+steamworks = initialize_steamworks()
+get_default_steam_info()
 
 # Configure logging
 from utils.logger_config import setup_logging
@@ -2624,3 +2646,4 @@ if __name__ == "__main__":
         server.run()
     finally:
         logger.info("服务器已关闭")
+
