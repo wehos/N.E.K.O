@@ -1361,11 +1361,11 @@ class Live2DManager {
         const iconVersion = '?v=' + Date.now();
         
         const buttonConfigs = [
-            { id: 'mic', emoji: '🎤', title: '语音控制', hasPopup: true, toggle: true, separatePopupTrigger: true, iconOff: '/static/icons/mic_icon_off.png' + iconVersion, iconOn: '/static/icons/mic_icon_on.png' + iconVersion },
-            { id: 'screen', emoji: '🖥️', title: '屏幕分享', hasPopup: false, toggle: true, iconOff: '/static/icons/screen_icon_off.png' + iconVersion, iconOn: '/static/icons/screen_icon_on.png' + iconVersion },
-            { id: 'agent', emoji: '🔨', title: 'Agent工具', hasPopup: true, popupToggle: true, exclusive: 'settings', iconOff: '/static/icons/Agent_off.png' + iconVersion, iconOn: '/static/icons/Agent_on.png' + iconVersion },
-            { id: 'settings', emoji: '⚙️', title: '设置', hasPopup: true, popupToggle: true, exclusive: 'agent', iconOff: '/static/icons/set_off.png' + iconVersion, iconOn: '/static/icons/set_on.png' + iconVersion },
-            { id: 'goodbye', emoji: '💤', title: '请她离开', hasPopup: false, iconOff: '/static/icons/rest_off.png' + iconVersion, iconOn: '/static/icons/rest_on.png' + iconVersion }
+            { id: 'mic', emoji: '🎤', title: window.t ? window.t('buttons.voiceControl') : '语音控制', titleKey: 'buttons.voiceControl', hasPopup: true, toggle: true, separatePopupTrigger: true, iconOff: '/static/icons/mic_icon_off.png' + iconVersion, iconOn: '/static/icons/mic_icon_on.png' + iconVersion },
+            { id: 'screen', emoji: '🖥️', title: window.t ? window.t('buttons.screenShare') : '屏幕分享', titleKey: 'buttons.screenShare', hasPopup: false, toggle: true, iconOff: '/static/icons/screen_icon_off.png' + iconVersion, iconOn: '/static/icons/screen_icon_on.png' + iconVersion },
+            { id: 'agent', emoji: '🔨', title: window.t ? window.t('buttons.agentTools') : 'Agent工具', titleKey: 'buttons.agentTools', hasPopup: true, popupToggle: true, exclusive: 'settings', iconOff: '/static/icons/Agent_off.png' + iconVersion, iconOn: '/static/icons/Agent_on.png' + iconVersion },
+            { id: 'settings', emoji: '⚙️', title: window.t ? window.t('buttons.settings') : '设置', titleKey: 'buttons.settings', hasPopup: true, popupToggle: true, exclusive: 'agent', iconOff: '/static/icons/set_off.png' + iconVersion, iconOn: '/static/icons/set_on.png' + iconVersion },
+            { id: 'goodbye', emoji: '💤', title: window.t ? window.t('buttons.leave') : '请她离开', titleKey: 'buttons.leave', hasPopup: false, iconOff: '/static/icons/rest_off.png' + iconVersion, iconOn: '/static/icons/rest_on.png' + iconVersion }
         ];
 
         // 创建主按钮
@@ -1384,6 +1384,9 @@ class Live2DManager {
             btn.id = `live2d-btn-${config.id}`;
             btn.className = 'live2d-floating-btn';
             btn.title = config.title;
+            if (config.titleKey) {
+                btn.setAttribute('data-i18n-title', config.titleKey);
+            }
             
             let imgOff = null; // off状态图片
             let imgOn = null;  // on状态图片
@@ -1702,12 +1705,13 @@ class Live2DManager {
         const returnBtn = document.createElement('div');
         returnBtn.id = 'live2d-btn-return';
         returnBtn.className = 'live2d-return-btn';
-        returnBtn.title = '请她回来';
+        returnBtn.title = window.t ? window.t('buttons.return') : '请她回来';
+        returnBtn.setAttribute('data-i18n-title', 'buttons.return');
         
         // 使用与"请她离开"相同的图标
         const imgOff = document.createElement('img');
         imgOff.src = '/static/icons/rest_off.png' + iconVersion;
-        imgOff.alt = '请她回来';
+        imgOff.alt = window.t ? window.t('buttons.return') : '请她回来';
         Object.assign(imgOff.style, {
             width: '64px',
             height: '64px',
@@ -1719,7 +1723,7 @@ class Live2DManager {
         
         const imgOn = document.createElement('img');
         imgOn.src = '/static/icons/rest_on.png' + iconVersion;
-        imgOn.alt = '请她回来';
+        imgOn.alt = window.t ? window.t('buttons.return') : '请她回来';
         Object.assign(imgOn.style, {
             position: 'absolute',
             width: '64px',
@@ -1878,9 +1882,9 @@ class Live2DManager {
             popup.appendChild(statusDiv);
             
             const agentToggles = [
-                { id: 'agent-master', label: 'Agent总开关' },
-                { id: 'agent-keyboard', label: '键鼠控制' },
-                { id: 'agent-mcp', label: 'MCP工具' }
+                { id: 'agent-master', label: window.t ? window.t('settings.toggles.agentMaster') : 'Agent总开关', labelKey: 'settings.toggles.agentMaster' },
+                { id: 'agent-keyboard', label: window.t ? window.t('settings.toggles.keyboardControl') : '键鼠控制', labelKey: 'settings.toggles.keyboardControl' },
+                { id: 'agent-mcp', label: window.t ? window.t('settings.toggles.mcpTools') : 'MCP工具', labelKey: 'settings.toggles.mcpTools' }
             ];
             
             agentToggles.forEach(toggle => {
@@ -1939,11 +1943,21 @@ class Live2DManager {
                 
                 const label = document.createElement('label');
                 label.innerText = toggle.label;
+                if (toggle.labelKey) {
+                    label.setAttribute('data-i18n', toggle.labelKey);
+                }
                 label.htmlFor = `live2d-${toggle.id}`;
                 label.style.cursor = 'pointer';
                 label.style.userSelect = 'none';
                 label.style.fontSize = '13px';
                 label.style.color = '#333';  // 文本始终为深灰色，不随选中状态改变
+                
+                // 更新标签文本的函数（用于语言切换）
+                const updateLabelText = () => {
+                    if (toggle.labelKey && window.t) {
+                        label.innerText = window.t(toggle.labelKey);
+                    }
+                };
                 
                 // 同步 title 属性
                 const updateTitle = () => {
@@ -1994,6 +2008,11 @@ class Live2DManager {
                 toggleItem.appendChild(label);
                 popup.appendChild(toggleItem);
                 
+                // 存储更新函数以便语言切换时调用
+                if (toggle.labelKey) {
+                    toggleItem._updateLabelText = updateLabelText;
+                }
+                
                 // 鼠标悬停效果
                 toggleItem.addEventListener('mouseenter', () => {
                     if (checkbox.disabled && checkbox.title?.includes('不可用')) {
@@ -2020,8 +2039,8 @@ class Live2DManager {
             
             // 先添加 Focus 模式和主动搭话开关（在最上面）
             const settingsToggles = [
-                { id: 'focus-mode', label: '允许打断', storageKey: 'focusModeEnabled', inverted: true }, // inverted表示值与focusModeEnabled相反
-                { id: 'proactive-chat', label: '主动搭话', storageKey: 'proactiveChatEnabled' }
+                { id: 'focus-mode', label: window.t ? window.t('settings.toggles.allowInterrupt') : '允许打断', labelKey: 'settings.toggles.allowInterrupt', storageKey: 'focusModeEnabled', inverted: true }, // inverted表示值与focusModeEnabled相反
+                { id: 'proactive-chat', label: window.t ? window.t('settings.toggles.proactiveChat') : '主动搭话', labelKey: 'settings.toggles.proactiveChat', storageKey: 'proactiveChatEnabled' }
             ];
             
             settingsToggles.forEach(toggle => {
@@ -2205,11 +2224,11 @@ class Live2DManager {
 				
 				// 然后添加导航菜单项
 				const settingsItems = [
-					{ id: 'live2d-manage', label: 'Live2D设置', icon: '/static/icons/live2d_settings_icon.png', action: 'navigate', urlBase: '/l2d' },
-					{ id: 'api-keys', label: 'API密钥', icon: '/static/icons/api_key_icon.png', action: 'navigate', url: '/api_key' },
-					{ id: 'character', label: '角色管理', icon: '/static/icons/character_icon.png', action: 'navigate', url: '/chara_manager' },
-					{ id: 'voice-clone', label: '声音克隆', icon: '/static/icons/voice_clone_icon.png', action: 'navigate', url: '/voice_clone' },
-					{ id: 'memory', label: '记忆浏览', icon: '/static/icons/memory_icon.png', action: 'navigate', url: '/memory_browser' }
+					{ id: 'live2d-manage', label: window.t ? window.t('settings.menu.live2dSettings') : 'Live2D设置', labelKey: 'settings.menu.live2dSettings', icon: '/static/icons/live2d_settings_icon.png', action: 'navigate', urlBase: '/l2d' },
+					{ id: 'api-keys', label: window.t ? window.t('settings.menu.apiKeys') : 'API密钥', labelKey: 'settings.menu.apiKeys', icon: '/static/icons/api_key_icon.png', action: 'navigate', url: '/api_key' },
+					{ id: 'character', label: window.t ? window.t('settings.menu.characterManage') : '角色管理', labelKey: 'settings.menu.characterManage', icon: '/static/icons/character_icon.png', action: 'navigate', url: '/chara_manager' },
+					{ id: 'voice-clone', label: window.t ? window.t('settings.menu.voiceClone') : '声音克隆', labelKey: 'settings.menu.voiceClone', icon: '/static/icons/voice_clone_icon.png', action: 'navigate', url: '/voice_clone' },
+					{ id: 'memory', label: window.t ? window.t('settings.menu.memoryBrowser') : '记忆浏览', labelKey: 'settings.menu.memoryBrowser', icon: '/static/icons/memory_icon.png', action: 'navigate', url: '/memory_browser' }
 				];
 				
 				settingsItems.forEach(item => {
@@ -2244,6 +2263,9 @@ class Live2DManager {
 					// 添加文本
 					const labelText = document.createElement('span');
 					labelText.textContent = item.label;
+					if (item.labelKey) {
+						labelText.setAttribute('data-i18n', item.labelKey);
+					}
 					Object.assign(labelText.style, {
 						display: 'flex',
 						alignItems: 'center',
