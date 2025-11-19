@@ -40,7 +40,7 @@
     "screenshotTitle": "Click to view screenshot {index}",
     "removeScreenshot": "Remove this screenshot"
   },
-    "voiceControl": {
+  "voiceControl": {
     "startVoice": "🎤 Start Voice",
     "rest": "⏸️ Rest",
     "screenShare": "🖥️ Screen Share",

@@ -40,7 +40,7 @@
     "screenshotTitle": "点击查看截图 {index}",
     "removeScreenshot": "移除此截图"
   },
-    "voiceControl": {
+  "voiceControl": {
     "startVoice": "🎤 开始语音",
     "rest": "⏸️ 休息一下",
     "screenShare": "🖥️ 屏幕共享",
