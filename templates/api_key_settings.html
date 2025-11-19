@@ -1189,7 +1189,8 @@ async function saveApiKey({ apiKey, coreApi, assistApi, assistApiKeyQwen, assist
                     });
                 }
             } else {
-                showStatus('保存失败: ' + (result.error || '未知错误'), 'error');
+                const errorMsg = result.error || (window.t ? window.t('common.unknownError') : '未知错误');
+                showStatus(window.t ? window.t('api.saveFailed', {error: errorMsg}) : '保存失败: ' + errorMsg, 'error');
             }
         } else {
             showStatus('保存失败，请检查网络连接', 'error');

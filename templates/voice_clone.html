@@ -131,7 +131,7 @@
                         body: JSON.stringify({ voice_id: data.voice_id })
                     }).then(resp => resp.json()).then(res => {
                         if (!res.success) {
-                            const errorMsg = res.error || (window.t ? window.t('common.error') : '未知错误');
+                            const errorMsg = res.error || (window.t ? window.t('common.unknownError') : '未知错误');
                             resultDiv.innerHTML += '<br><span class="error">' + (window.t ? window.t('voice.voiceIdSaveFailed', {error: errorMsg}) : 'voice_id自动保存失败: ' + errorMsg) + '</span>';
                         } else {
                             resultDiv.innerHTML += '<br>' + (window.t ? window.t('voice.voiceIdSaved') : 'voice_id已自动保存到角色');
@@ -151,14 +151,14 @@
                     });
                 }
             } else {
-                const errorMsg = data.error || (window.t ? window.t('common.error') : '未知错误');
+                const errorMsg = data.error || (window.t ? window.t('common.unknownError') : '未知错误');
                 resultDiv.innerHTML = window.t ? window.t('voice.registerFailed', {error: errorMsg}) : '注册失败：' + errorMsg;
                 resultDiv.className = 'result error';
             }
             setFormDisabled(false);
         })
         .catch(err => {
-            const errorMsg = err?.message || err?.toString() || (window.t ? window.t('common.error') : '未知错误');
+            const errorMsg = err?.message || err?.toString() || (window.t ? window.t('common.unknownError') : '未知错误');
             resultDiv.textContent = window.t ? window.t('voice.requestError', {error: errorMsg}) : '请求出错：' + errorMsg;
             resultDiv.className = 'result error';
             setFormDisabled(false);

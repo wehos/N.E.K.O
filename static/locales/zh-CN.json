@@ -13,6 +13,7 @@
     "reset": "重置",
     "loading": "加载中...",
     "error": "错误",
+    "unknownError": "未知错误",
     "success": "成功",
     "warning": "警告",
     "alert": "提示",
@@ -210,7 +211,8 @@
     "customApiDescriptionText": "这些API用于特定的功能模块，如摘要生成、文本纠错、情感分析、视觉识别、全模态对话和语音合成。每个API都需要单独配置供应商、URL和API Key。",
     "customApiWarning": "⚠️ 注意：启用自定义API后，核心API和辅助API将被禁用且无法修改。",
     "enableCustomApi": "启用自定义API配置",
-    "enableCustomApiNote": "启用后将使用自定义API配置，禁用核心API和辅助API的修改"
+    "enableCustomApiNote": "启用后将使用自定义API配置，禁用核心API和辅助API的修改",
+    "saveFailed": "保存失败: {error}"
   },
   "live2d": {
     "manager": "Live2D 模型管理",
@@ -480,7 +482,13 @@
       "memoryManage": "📝 记忆管理",
       "characterSettings": "👤 角色设置",
       "live2dManage": "🎨 Live2D管理",
-      "apiSettings": "🔑 API设置"
+      "apiSettings": "🔑 API设置",
+      "language": "🌐 语言"
+    },
+    "language": {
+      "title": "选择语言",
+      "zh-CN": "简体中文",
+      "en": "English"
     },
     "toggles": {
       "allowInterrupt": "允许打断",

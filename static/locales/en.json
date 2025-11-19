@@ -13,6 +13,7 @@
     "reset": "Reset",
     "loading": "Loading...",
     "error": "Error",
+    "unknownError": "Unknown Error",
     "success": "Success",
     "warning": "Warning",
     "alert": "Alert",
@@ -210,7 +211,8 @@
     "customApiDescriptionText": "These APIs are used for specific functional modules, such as summary generation, text correction, sentiment analysis, visual recognition, full-modal dialogue, and speech synthesis. Each API requires separate configuration for vendor, URL, and API Key.",
     "customApiWarning": "⚠️ Note: After enabling custom APIs, core APIs and auxiliary APIs will be disabled and cannot be modified.",
     "enableCustomApi": "Enable Custom API Configuration",
-    "enableCustomApiNote": "After enabling, custom API configuration will be used, disabling modifications to core APIs and auxiliary APIs"
+    "enableCustomApiNote": "After enabling, custom API configuration will be used, disabling modifications to core APIs and auxiliary APIs",
+    "saveFailed": "Save failed: {error}"
   },
   "live2d": {
     "manager": "Live2D Model Manager",

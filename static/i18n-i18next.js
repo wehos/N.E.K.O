@@ -24,8 +24,39 @@
     }
     window.i18nInitialized = true;
     
-    // 固定语言为中文
-    const TARGET_LANGUAGE = 'zh-CN';
+    // 支持的语言列表
+    const SUPPORTED_LANGUAGES = ['zh-CN', 'en'];
+    
+    // 获取初始语言：优先从 localStorage，然后是浏览器设置，最后默认中文
+    function getInitialLanguage() {
+        // 1. 检查 localStorage
+        const savedLanguage = localStorage.getItem('i18nextLng');
+        if (savedLanguage && SUPPORTED_LANGUAGES.includes(savedLanguage)) {
+            return savedLanguage;
+        }
+        
+        // 2. 检查浏览器语言设置
+        const browserLanguage = navigator.language || navigator.userLanguage;
+        if (browserLanguage) {
+            // 完全匹配
+            if (SUPPORTED_LANGUAGES.includes(browserLanguage)) {
+                return browserLanguage;
+            }
+            // 部分匹配（例如 'en-US' 匹配 'en'）
+            const langCode = browserLanguage.split('-')[0];
+            if (langCode === 'en') {
+                return 'en';
+            }
+            if (langCode === 'zh') {
+                return 'zh-CN';
+            }
+        }
+        
+        // 3. 默认返回中文
+        return 'zh-CN';
+    }
+    
+    const INITIAL_LANGUAGE = getInitialLanguage();
     
     // ==================== CDN 动态加载 ====================
     
@@ -226,26 +257,37 @@
         }
         
         try {
-            // 只加载中文翻译文件
-            const response = await fetch(`/static/locales/${TARGET_LANGUAGE}.json`);
-            if (!response.ok) {
-                throw new Error(`翻译文件加载失败: ${response.status}`);
-            }
-            
-            const translations = await response.json();
-            const resources = {
-                [TARGET_LANGUAGE]: {
-                    translation: translations
+            // 加载所有支持的语言翻译文件
+            const resources = {};
+            const loadPromises = SUPPORTED_LANGUAGES.map(async (lang) => {
+                try {
+                    const response = await fetch(`/static/locales/${lang}.json`);
+                    if (response.ok) {
+                        const translations = await response.json();
+                        resources[lang] = {
+                            translation: translations
+                        };
+                        console.log(`[i18n] ✅ ${lang} 翻译文件加载成功`);
+                    } else {
+                        console.warn(`[i18n] ⚠️ ${lang} 翻译文件不存在或加载失败: ${response.status}`);
+                    }
+                } catch (error) {
+                    console.warn(`[i18n] ⚠️ ${lang} 翻译文件加载出错:`, error);
                 }
-            };
+            });
             
-            console.log(`[i18n] ✅ ${TARGET_LANGUAGE} 翻译文件加载成功`);
+            await Promise.all(loadPromises);
+            
+            // 确保至少有一个语言资源
+            if (Object.keys(resources).length === 0) {
+                throw new Error('没有可用的翻译文件');
+            }
             
             // 初始化 i18next
             i18next.init({
-                lng: TARGET_LANGUAGE,
-                fallbackLng: TARGET_LANGUAGE,
-                supportedLngs: [TARGET_LANGUAGE],
+                lng: INITIAL_LANGUAGE,
+                fallbackLng: 'zh-CN', // 默认回退到中文
+                supportedLngs: SUPPORTED_LANGUAGES,
                 ns: ['translation'],
                 defaultNS: 'translation',
                 resources: resources,
@@ -288,7 +330,7 @@
         
         window.i18n = {
             isInitialized: false,
-            language: TARGET_LANGUAGE,
+            language: INITIAL_LANGUAGE,
             store: { data: {} }
         };
         
@@ -319,15 +361,16 @@
         
         // 初始化 i18next
         console.log('[i18n] 开始初始化 i18next...');
-        console.log('[i18n] 固定语言: 中文 (zh-CN)');
+        console.log('[i18n] 初始语言:', INITIAL_LANGUAGE);
+        console.log('[i18n] 支持的语言:', SUPPORTED_LANGUAGES.join(', '));
         
         try {
             i18next
                 .use(i18nextHttpBackend)
                 .init({
-                    lng: TARGET_LANGUAGE,
-                    fallbackLng: TARGET_LANGUAGE,
-                    supportedLngs: [TARGET_LANGUAGE],
+                    lng: INITIAL_LANGUAGE,
+                    fallbackLng: 'zh-CN', // 默认回退到中文
+                    supportedLngs: SUPPORTED_LANGUAGES,
                     ns: ['translation'],
                     defaultNS: 'translation',
                     backend: {
@@ -400,10 +443,21 @@
         
         // 监听语言变化（用于更新文本）
         i18next.on('languageChanged', (lng) => {
+            // 保存语言选择到 localStorage
+            localStorage.setItem('i18nextLng', lng);
             updatePageTexts();
             updateLive2DDynamicTexts();
             window.dispatchEvent(new CustomEvent('localechange'));
         });
+        
+        // 导出语言切换函数
+        window.changeLanguage = function(lng) {
+            if (!SUPPORTED_LANGUAGES.includes(lng)) {
+                console.warn(`[i18n] 不支持的语言: ${lng}，支持的语言: ${SUPPORTED_LANGUAGES.join(', ')}`);
+                return Promise.reject(new Error(`不支持的语言: ${lng}`));
+            }
+            return i18next.changeLanguage(lng);
+        };
         
         // 确保在 DOM 加载完成后更新文本
         if (document.readyState === 'loading') {
@@ -498,8 +552,8 @@
      * 更新 Live2D 动态文本
      */
     function updateLive2DDynamicTexts() {
-        // 更新浮动按钮的标题
-        const buttons = document.querySelectorAll('.floating-btn');
+        // 更新浮动按钮的标题（包括 .floating-btn 和 .live2d-floating-btn）
+        const buttons = document.querySelectorAll('.floating-btn, .live2d-floating-btn');
         buttons.forEach(btn => {
             const titleKey = btn.getAttribute('data-i18n-title');
             if (titleKey) {
@@ -520,9 +574,22 @@
         });
         
         // 更新动态创建的标签
+        // _updateLabelText 是附加在父容器（toggleItem 或 menuItem）上的，不是直接在 [data-i18n] 元素上
+        // 查找所有可能包含 _updateLabelText 的容器元素
+        // 方法1：查找所有 live2d-popup 内的直接子 div（toggleItem 和 menuItem）
+        const popups = document.querySelectorAll('.live2d-popup');
+        popups.forEach(popup => {
+            // 查找 popup 的直接子 div 元素
+            Array.from(popup.children).forEach(child => {
+                if (child.tagName === 'DIV' && child._updateLabelText && typeof child._updateLabelText === 'function') {
+                    child._updateLabelText();
+                }
+            });
+        });
+        
+        // 方法2：也检查是否有直接附加在元素上的 _updateLabelText（向后兼容）
         document.querySelectorAll('[data-i18n]').forEach(element => {
-            const key = element.getAttribute('data-i18n');
-            if (key && element._updateLabelText) {
+            if (element._updateLabelText && typeof element._updateLabelText === 'function') {
                 element._updateLabelText();
             }
         });

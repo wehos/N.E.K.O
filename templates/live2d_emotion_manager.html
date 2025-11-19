@@ -582,7 +582,7 @@
                      renderEmotionGrid();
                      showModelInfo();
                  } else {
-                     statusText.textContent = window.t ? window.t('emotion.loadConfigFailed', {error: configData.error || '未知错误'}) : '加载配置失败: ' + (configData.error || '未知错误');
+                     statusText.textContent = window.t ? window.t('emotion.loadConfigFailed', {error: configData.error || window.t('common.unknownError')}) : '加载配置失败: ' + (configData.error || '未知错误');
                      statusDot.className = 'status-dot error';
                      
                      setTimeout(() => {

@@ -378,7 +378,7 @@ document.getElementById('save-memory-btn').onclick = async function() {
         if(data.success) {
             showSaveStatus(window.t ? window.t('memory.saveSuccess') : '保存成功', true);
         } else {
-            const errorMsg = data.error || (window.t ? '未知错误' : '未知错误');
+            const errorMsg = data.error || (window.t ? window.t('common.unknownError') : '未知错误');
             showSaveStatus(window.t ? window.t('memory.saveFailed', {error: errorMsg}) : '保存失败：' + errorMsg, false);
         }
     } catch(e) {
