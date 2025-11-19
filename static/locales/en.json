@@ -249,6 +249,7 @@
     "modelLoadSuccess": "Model {model} loaded successfully",
     "modelLoadFailed": "Failed to load model {model}",
     "loadCurrentModelFailed": "Failed to load current character model",
+    "loadingCharacterModel": "Loading character {name}'s model: {model}...",
     "currentModel": "Current model: {model}",
     "pixiInitialized": "PIXI initialized",
     "noModelsFound": "No available models found",
