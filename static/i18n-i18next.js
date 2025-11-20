@@ -2,16 +2,16 @@
  * i18next 初始化文件
  * 使用成熟的 i18next 库管理本地化文本
  * 固定使用中文 (zh-CN)
- * 包含 CDN 加载、检查和容错机制
+ * 包含本地文件加载、检查和容错机制
  * 
  * 使用方式：
  * 在 HTML 的 <head> 中引入：
  * <script src="/static/i18n-i18next.js"></script>
  * 
  * 此脚本会自动：
- * 1. 加载 i18next CDN 库
+ * 1. 加载本地 i18next 库（从 /static/libs/）
  * 2. 检查依赖加载状态
- * 3. 处理 CDN 容错（备用 CDN）
+ * 3. 处理加载失败容错（重新加载或降级方案）
  * 4. 初始化 i18next
  */
 
@@ -80,18 +80,18 @@
         document.head.appendChild(script);
     }
     
-    // 加载 i18next 核心库
+    // 加载 i18next 核心库（使用本地文件）
     loadScript(
-        'https://cdn.jsdelivr.net/npm/i18next@23.7.6/dist/umd/i18next.min.js',
+        '/static/libs/i18next.min.js',
         null,
         function() {
             console.error('[i18n] 加载 i18next 失败');
         }
     );
     
-    // 加载 i18next HTTP Backend
+    // 加载 i18next HTTP Backend（使用本地文件）
     loadScript(
-        'https://cdn.jsdelivr.net/npm/i18next-http-backend@2.4.2/dist/umd/i18nextHttpBackend.min.js',
+        '/static/libs/i18nextHttpBackend.min.js',
         null,
         function() {
             console.error('[i18n] 加载 i18nextHttpBackend 失败');
@@ -112,20 +112,20 @@
             // 依赖已加载，直接初始化
             initI18next();
         } else {
-            // 依赖未加载，尝试备用 CDN 或使用降级方案
-            console.error('[i18n] ⚠️ 依赖库未完全加载，尝试使用备用 CDN...');
+            // 依赖未加载，尝试重新加载本地文件或使用降级方案
+            console.error('[i18n] ⚠️ 依赖库未完全加载，尝试重新加载本地文件...');
             console.log('[i18n] 加载状态:', {
                 i18next: i18nextLoaded,
                 backend: backendLoaded
             });
             
-            // 如果 i18nextHttpBackend 未加载，尝试备用 CDN
+            // 如果 i18nextHttpBackend 未加载，尝试重新加载本地文件
             if (!backendLoaded) {
-                console.log('[i18n] 尝试从 unpkg CDN 加载 i18nextHttpBackend...');
+                console.log('[i18n] 尝试重新加载本地 i18nextHttpBackend...');
                 loadScript(
-                    'https://unpkg.com/i18next-http-backend@2.4.2/dist/umd/i18nextHttpBackend.min.js',
+                    '/static/libs/i18nextHttpBackend.min.js',
                     function() {
-                        console.log('[i18n] ✅ 备用 CDN 加载成功');
+                        console.log('[i18n] ✅ 本地文件加载成功');
                         // 再次检查并初始化
                         setTimeout(() => {
                             if (typeof i18nextHttpBackend !== 'undefined') {
@@ -136,7 +136,7 @@
                         }, 100);
                     },
                     function() {
-                        console.error('[i18n] ❌ 备用 CDN 也加载失败，使用降级方案');
+                        console.error('[i18n] ❌ 本地文件加载失败，使用降级方案');
                         initI18nextWithoutBackend();
                     }
                 );
