@@ -1130,12 +1130,43 @@ function init_app(){
         // 显示Live2D模型
         showLive2d();
         
+        // 清除所有语音相关的状态类（确保按钮不会显示为激活状态）
+        micButton.classList.remove('recording');
+        micButton.classList.remove('active');
+        screenButton.classList.remove('active');
+        
+        // 确保停止录音状态
+        isRecording = false;
+        
+        // 同步更新Live2D浮动按钮的状态
+        if (window.live2dManager && window.live2dManager._floatingButtons) {
+            // 更新麦克风和屏幕分享按钮状态
+            ['mic', 'screen'].forEach(buttonId => {
+                const buttonData = window.live2dManager._floatingButtons[buttonId];
+                if (buttonData && buttonData.button) {
+                    buttonData.button.dataset.active = 'false';
+                    // 更新图标显示：显示off图标，隐藏on图标
+                    if (buttonData.imgOff) {
+                        buttonData.imgOff.style.opacity = '1';
+                    }
+                    if (buttonData.imgOn) {
+                        buttonData.imgOn.style.opacity = '0';
+                    }
+                }
+            });
+        }
+        
         // 启用所有基本输入按钮
         micButton.disabled = false;
         textSendButton.disabled = false;
         textInputBox.disabled = false;
         screenshotButton.disabled = false;
         resetSessionButton.disabled = false;
+        
+        // 禁用语音控制按钮（文本模式下不需要）
+        muteButton.disabled = true;
+        screenButton.disabled = true;
+        stopButton.disabled = true;
         
         // 显示文本输入区
         const textInputArea = document.getElementById('text-input-area');
@@ -1907,20 +1938,23 @@ function init_app(){
     // 显示live2d函数
     function showLive2d() {
         console.log('[App] showLive2d函数被调用');
-        const container = document.getElementById('live2d-container');
-        console.log('[App] showLive2d调用前，容器类列表:', container.classList.toString());
-
-        // 重置"请她离开"状态
-        if (window.live2dManager) {
-            window.live2dManager._goodbyeClicked = false;
+        
+        // 检查是否处于"请她离开"状态，如果是则直接返回，不执行显示逻辑
+        if (window.live2dManager && window.live2dManager._goodbyeClicked) {
+            console.log('[App] showLive2d: 当前处于"请她离开"状态，跳过显示逻辑');
+            return;
         }
         
-        // 清除强制隐藏的样式
+        const container = document.getElementById('live2d-container');
+        console.log('[App] showLive2d调用前，容器类列表:', container.classList.toString());
+        
+        // 确保浮动按钮显示（使用 !important 强制显示，覆盖所有其他逻辑）
         const floatingButtons = document.getElementById('live2d-floating-buttons');
         if (floatingButtons) {
-            floatingButtons.style.removeProperty('display');
-            floatingButtons.style.removeProperty('visibility');
-            floatingButtons.style.removeProperty('opacity');
+            // 直接设置 !important 样式，不先清除（避免被鼠标跟踪逻辑覆盖）
+            floatingButtons.style.setProperty('display', 'flex', 'important');
+            floatingButtons.style.setProperty('visibility', 'visible', 'important');
+            floatingButtons.style.setProperty('opacity', '1', 'important');
         }
         
         const lockIcon = document.getElementById('live2d-lock-icon');
@@ -2225,6 +2259,9 @@ function init_app(){
         console.log('[App] 请她回来按钮被点击，开始恢复所有界面');
         
         // 第一步：清除"请她离开"标志
+        if (window.live2dManager) {
+            window.live2dManager._goodbyeClicked = false;
+        }
         if (window.live2d) {
             window.live2d._goodbyeClicked = false;
         }
@@ -2261,12 +2298,29 @@ function init_app(){
             lockIcon.style.removeProperty('opacity');
         }
         
-        // 第五步：恢复浮动按钮系统
+        // 第五步：恢复浮动按钮系统（使用 !important 强制显示，覆盖之前的隐藏样式）
         const floatingButtons = document.getElementById('live2d-floating-buttons');
         if (floatingButtons) {
-            floatingButtons.style.display = 'flex';
+            // 先清除所有可能的隐藏样式
+            floatingButtons.style.removeProperty('display');
             floatingButtons.style.removeProperty('visibility');
             floatingButtons.style.removeProperty('opacity');
+            
+            // 使用 !important 强制显示，确保覆盖之前的隐藏样式
+            floatingButtons.style.setProperty('display', 'flex', 'important');
+            floatingButtons.style.setProperty('visibility', 'visible', 'important');
+            floatingButtons.style.setProperty('opacity', '1', 'important');
+            
+            // 恢复所有按钮的显示状态（清除之前"请她离开"时设置的 display: 'none'）
+            if (window.live2dManager && window.live2dManager._floatingButtons) {
+                Object.keys(window.live2dManager._floatingButtons).forEach(btnId => {
+                    const buttonData = window.live2dManager._floatingButtons[btnId];
+                    if (buttonData && buttonData.button) {
+                        // 清除 display 样式，让按钮正常显示
+                        buttonData.button.style.removeProperty('display');
+                    }
+                });
+            }
         }
         
         // 第六步：恢复对话区
