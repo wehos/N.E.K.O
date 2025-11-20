@@ -61,13 +61,16 @@
     // ==================== CDN 动态加载 ====================
     
     /**
-     * 动态加载 CDN 脚本
+     * 动态加载脚本
      */
     function loadScript(src, onLoad, onError) {
-        // 检查是否已经加载
+        // 检查是否已经存在 script 标签
         const existingScript = document.querySelector(`script[src="${src}"]`);
         if (existingScript) {
-            if (onLoad) onLoad();
+            // 注意：不立即调用 onLoad，因为之前的加载可能失败
+            // 实际的可用性由下游的依赖检查（checkDependencies）来验证
+            console.log(`[i18n] Script tag for ${src} already exists, skipping duplicate load`);
+            console.log(`[i18n] Note: Actual availability will be checked by checkDependencies`);
             return;
         }
         
