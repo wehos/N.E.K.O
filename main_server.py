@@ -454,14 +454,21 @@ async def get_page_config(lanlan_name: str = ""):
         # 如果提供了 lanlan_name 参数，使用它；否则使用当前角色
         target_name = lanlan_name if lanlan_name else her_name
         
-        # 获取 live2d 字段
+        # 获取 live2d 和 live2d_item_id 字段
         live2d = lanlan_basic_config.get(target_name, {}).get('live2d', 'mao_pro')
+        live2d_item_id = lanlan_basic_config.get(target_name, {}).get('live2d_item_id', '')
         
-        # 查找所有模型
-        models = find_models()
+        logger.debug(f"获取页面配置 - 角色: {target_name}, 模型: {live2d}, item_id: {live2d_item_id}")
         
-        # 根据 live2d 字段查找对应的 model path
-        model_path = next((m["path"] for m in models if m["name"] == live2d), find_model_config_file(live2d))
+        # 使用 get_current_live2d_model 函数获取正确的模型信息
+        # 第一个参数是角色名称，第二个参数是item_id
+        model_response = await get_current_live2d_model(target_name, live2d_item_id)
+        # 提取JSONResponse中的内容
+        model_data = model_response.body.decode('utf-8')
+        import json
+        model_json = json.loads(model_data)
+        model_info = model_json.get('model_info', {})
+        model_path = model_info.get('path', '')
         
         return {
             "success": True,
@@ -1084,12 +1091,44 @@ async def get_current_live2d_model(catgirl_name: str = "", item_id: str = ""):
         live2d_model_name = None
         model_info = None
         
+        # 首先尝试通过item_id查找模型
+        if item_id:
+            try:
+                logger.debug(f"尝试通过item_id {item_id} 查找模型")
+                # 获取所有模型
+                all_models = find_models()
+                # 查找匹配item_id的模型
+                matching_model = next((m for m in all_models if m.get('item_id') == item_id), None)
+                
+                if matching_model:
+                    logger.debug(f"通过item_id找到模型: {matching_model['name']}")
+                    # 复制模型信息
+                    model_info = matching_model.copy()
+                    live2d_model_name = model_info['name']
+            except Exception as e:
+                logger.warning(f"通过item_id查找模型失败: {e}")
+        
         # 如果没有通过item_id找到模型，再通过角色名称查找
         if not model_info and catgirl_name:
             # 在猫娘列表中查找
             if '猫娘' in characters and catgirl_name in characters['猫娘']:
                 catgirl_data = characters['猫娘'][catgirl_name]
                 live2d_model_name = catgirl_data.get('live2d')
+                
+                # 检查是否有保存的item_id
+                saved_item_id = catgirl_data.get('live2d_item_id')
+                if saved_item_id:
+                    logger.debug(f"发现角色 {catgirl_name} 保存的item_id: {saved_item_id}")
+                    try:
+                        # 尝试通过保存的item_id查找模型
+                        all_models = find_models()
+                        matching_model = next((m for m in all_models if m.get('item_id') == saved_item_id), None)
+                        if matching_model:
+                            logger.debug(f"通过保存的item_id找到模型: {matching_model['name']}")
+                            model_info = matching_model.copy()
+                            live2d_model_name = model_info['name']
+                    except Exception as e:
+                        logger.warning(f"通过保存的item_id查找模型失败: {e}")
         
         # 如果找到了模型名称，获取模型信息
         if live2d_model_name:
@@ -1112,19 +1151,22 @@ async def get_current_live2d_model(catgirl_name: str = "", item_id: str = ""):
                         if model_files:
                             model_file = model_files[0]
                             
-                            # 添加使用item_id构建model_path的情况
-                            item_id = None  # 此处item_id可能从其他地方获取
+                            # 使用保存的item_id构建model_path
+                            # 从之前的逻辑中获取saved_item_id
+                            saved_item_id = catgirl_data.get('live2d_item_id', '') if 'catgirl_data' in locals() else ''
                             
-                            # 使用item_id构建路径的情况
-                            if item_id:
-                                model_path = f'{url_prefix}/{item_id}/{model_file}'
+                            # 如果有保存的item_id，使用它构建路径
+                            if saved_item_id:
+                                model_path = f'{url_prefix}/{saved_item_id}/{model_file}'
+                                logger.debug(f"使用保存的item_id构建模型路径: {model_path}")
                             else:
                                 # 原始路径构建逻辑
                                 model_path = f'{url_prefix}/{live2d_model_name}/{model_file}'
+                                logger.debug(f"使用模型名称构建路径: {model_path}")
                             
                             model_info = {
                                 'name': live2d_model_name,
-                                'item_id': item_id,
+                                'item_id': saved_item_id,
                                 'path': model_path
                             }
             except Exception as e:
@@ -2024,6 +2066,7 @@ async def update_catgirl_l2d(name: str, request: Request):
     try:
         data = await request.json()
         live2d_model = data.get('live2d')
+        item_id = data.get('item_id')  # 获取可选的item_id
         
         if not live2d_model:
             return JSONResponse(content={
@@ -2042,8 +2085,13 @@ async def update_catgirl_l2d(name: str, request: Request):
         if name not in characters['猫娘']:
             characters['猫娘'][name] = {}
         
-        # 更新Live2D模型设置
+        # 更新Live2D模型设置，同时保存item_id（如果有）
         characters['猫娘'][name]['live2d'] = live2d_model
+        if item_id:
+            characters['猫娘'][name]['live2d_item_id'] = item_id
+            logger.debug(f"已保存角色 {name} 的模型 {live2d_model} 和item_id {item_id}")
+        else:
+            logger.debug(f"已保存角色 {name} 的模型 {live2d_model}")
         
         # 保存配置
         _config_manager.save_characters(characters)
@@ -2950,21 +2998,42 @@ async def update_model_config(model_id: str, request: Request):
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 @app.get('/api/live2d/model_files_by_id/{model_id}')
-async def get_model_files(model_id: str):
+async def get_model_files_by_id(model_id: str):
     """获取指定Live2D模型的动作和表情文件列表"""
     try:
-        # 查找模型目录（可能在static或用户文档目录）
-        # find_workshop_item_by_id现在总是返回有效的元组
-        model_dir, url_prefix = find_workshop_item_by_id(model_id)
+        # 直接拒绝无效的model_id
+        if not model_id or model_id.lower() == 'undefined':
+            logger.warning("接收到无效的model_id请求，返回失败")
+            return {"success": False, "error": "无效的模型ID"}
+        
+        # 尝试通过model_id查找模型
+        model_dir = None
+        url_prefix = None
+        
+        # 首先尝试通过workshop item_id查找
+        try:
+            model_dir, url_prefix = find_workshop_item_by_id(model_id)
+            logger.debug(f"通过model_id {model_id} 查找模型目录: {model_dir}")
+        except Exception as e:
+            logger.warning(f"通过model_id查找失败: {e}")
+        
+        # 如果通过model_id找不到有效的目录，尝试将model_id当作model_name回退查找
+        if not model_dir or not os.path.exists(model_dir):
+            logger.info(f"尝试将 {model_id} 作为模型名称回退查找")
+            try:
+                model_dir, url_prefix = find_model_directory(model_id)
+                logger.debug(f"作为模型名称查找的目录: {model_dir}")
+            except Exception as e:
+                logger.warning(f"作为模型名称查找失败: {e}")
         
         # 添加额外的错误检查
         if not model_dir:
-            logger.error(f"获取模型目录失败: 目录路径为空，模型ID: {model_id}")
-            return {"success": False, "error": f"获取模型目录失败: 无效的路径"}
+            logger.error(f"获取模型目录失败: 目录路径为空")
+            return {"success": False, "error": "获取模型目录失败: 无效的路径"}
             
         if not os.path.exists(model_dir):
-            logger.warning(f"模型目录不存在: {model_dir}, 模型ID: {model_id}")
-            return {"success": False, "error": f"模型 {model_id} 不存在"}
+            logger.warning(f"模型目录不存在: {model_dir}")
+            return {"success": False, "error": "模型不存在"}
         
         motion_files = []
         expression_files = []
