@@ -283,7 +283,7 @@
         }
         
         .model-content.expanded {
-            max-height: 300px;
+            max-height: 1000px;
         }
         
         .model-content .field-row {
@@ -539,6 +539,10 @@
                                     <input type="text" id="summaryModelUrl" data-i18n-placeholder="api.apiUrlPlaceholder" placeholder="如：https://api.openai.com/v1/chat/completions" value="" style="max-width: 600px;">
                                 </div>
                                 <div class="field-row">
+                                    <label for="summaryModelId" data-i18n="api.modelId">模型ID</label>
+                                    <input type="text" id="summaryModelId" data-i18n-placeholder="api.summaryModelIdPlaceholder" placeholder="如：gpt-3.5-turbo、qwen-turbo" value="" style="max-width: 600px;">
+                                </div>
+                                <div class="field-row">
                                     <label for="summaryModelApiKey" data-i18n="api.apiKey">API Key</label>
                                     <input type="text" id="summaryModelApiKey" data-i18n-placeholder="api.summaryModelApiKeyPlaceholder" placeholder="请输入摘要模型的API Key" value="" style="max-width: 600px;">
                                 </div>
@@ -559,6 +563,10 @@
                                 <div class="field-row">
                                     <label for="correctionModelUrl" data-i18n="api.apiUrl">API URL</label>
                                     <input type="text" id="correctionModelUrl" data-i18n-placeholder="api.apiUrlPlaceholder" placeholder="如：https://api.openai.com/v1/chat/completions" value="" style="max-width: 600px;">
+                                </div>
+                                <div class="field-row">
+                                    <label for="correctionModelId" data-i18n="api.modelId">模型ID</label>
+                                    <input type="text" id="correctionModelId" data-i18n-placeholder="api.correctionModelIdPlaceholder" placeholder="如：gpt-3.5-turbo、qwen-turbo" value="" style="max-width: 600px;">
                                 </div>
                                 <div class="field-row">
                                     <label for="correctionModelApiKey" data-i18n="api.apiKey">API Key</label>
@@ -583,6 +591,10 @@
                                     <input type="text" id="emotionModelUrl" data-i18n-placeholder="api.apiUrlPlaceholder" placeholder="如：https://api.openai.com/v1/chat/completions" value="" style="max-width: 600px;">
                                 </div>
                                 <div class="field-row">
+                                    <label for="emotionModelId" data-i18n="api.modelId">模型ID</label>
+                                    <input type="text" id="emotionModelId" data-i18n-placeholder="api.emotionModelIdPlaceholder" placeholder="如：gpt-3.5-turbo、qwen-turbo" value="" style="max-width: 600px;">
+                                </div>
+                                <div class="field-row">
                                     <label for="emotionModelApiKey" data-i18n="api.apiKey">API Key</label>
                                     <input type="text" id="emotionModelApiKey" data-i18n-placeholder="api.emotionModelApiKeyPlaceholder" placeholder="请输入情感模型的API Key" value="" style="max-width: 600px;">
                                 </div>
@@ -603,6 +615,10 @@
                                 <div class="field-row">
                                     <label for="visionModelUrl" data-i18n="api.apiUrl">API URL</label>
                                     <input type="text" id="visionModelUrl" data-i18n-placeholder="api.apiUrlPlaceholder" placeholder="如：https://api.openai.com/v1/chat/completions" value="" style="max-width: 600px;">
+                                </div>
+                                <div class="field-row">
+                                    <label for="visionModelId" data-i18n="api.modelId">模型ID</label>
+                                    <input type="text" id="visionModelId" data-i18n-placeholder="api.visionModelIdPlaceholder" placeholder="如：gpt-4-vision-preview、qwen-vl-plus" value="" style="max-width: 600px;">
                                 </div>
                                 <div class="field-row">
                                     <label for="visionModelApiKey" data-i18n="api.apiKey">API Key</label>
@@ -627,6 +643,10 @@
                                     <input type="text" id="omniModelUrl" data-i18n-placeholder="api.omniApiUrlPlaceholder" placeholder="如：wss://dashscope.aliyuncs.com/api-ws/v1/realtime" value="" style="max-width: 600px;">
                                 </div>
                                 <div class="field-row">
+                                    <label for="omniModelId" data-i18n="api.modelId">模型ID</label>
+                                    <input type="text" id="omniModelId" data-i18n-placeholder="api.omniModelIdPlaceholder" placeholder="如：qwen-realtime-plus、qwen2-realtime" value="" style="max-width: 600px;">
+                                </div>
+                                <div class="field-row">
                                     <label for="omniModelApiKey" data-i18n="api.apiKey">API Key</label>
                                     <input type="text" id="omniModelApiKey" data-i18n-placeholder="api.omniModelApiKeyPlaceholder" placeholder="请输入全模态模型的API Key" value="" style="max-width: 600px;">
                                 </div>
@@ -647,6 +667,10 @@
                                 <div class="field-row">
                                     <label for="ttsModelUrl" data-i18n="api.apiUrl">API URL</label>
                                     <input type="text" id="ttsModelUrl" data-i18n-placeholder="api.apiUrlPlaceholder" placeholder="如：https://dashscope.aliyuncs.com/api/v1/services/aigc/tts/chat" value="" style="max-width: 600px;">
+                                </div>
+                                <div class="field-row">
+                                    <label for="ttsModelId" data-i18n="api.modelId">模型ID</label>
+                                    <input type="text" id="ttsModelId" data-i18n-placeholder="api.ttsModelIdPlaceholder" placeholder="如：cosyvoice、speecht5" value="" style="max-width: 600px;">
                                 </div>
                                 <div class="field-row">
                                     <label for="ttsModelApiKey" data-i18n="api.apiKey">API Key</label>
