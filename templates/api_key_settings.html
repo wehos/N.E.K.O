@@ -281,7 +281,7 @@
         }
         
         .model-content.expanded {
-            max-height: 300px;
+            max-height: 1000px;
         }
         
         .model-content .field-row {
@@ -537,6 +537,10 @@
                                     <input type="text" id="summaryModelUrl" placeholder="如：https://api.openai.com/v1/chat/completions" value="" style="max-width: 600px;">
                                 </div>
                                 <div class="field-row">
+                                    <label for="summaryModelId">模型ID <em>（示例：gpt-3.5-turbo、glm-4、qwen-turbo等）</em></label>
+                                    <input type="text" id="summaryModelId" placeholder="如：gpt-3.5-turbo" value="" style="max-width: 600px;">
+                                </div>
+                                <div class="field-row">
                                     <label for="summaryModelApiKey">API Key</label>
                                     <input type="text" id="summaryModelApiKey" placeholder="请输入摘要模型的API Key" value="" style="max-width: 600px;">
                                 </div>
@@ -557,6 +561,10 @@
                                 <div class="field-row">
                                     <label for="correctionModelUrl">API URL</label>
                                     <input type="text" id="correctionModelUrl" placeholder="如：https://api.openai.com/v1/chat/completions" value="" style="max-width: 600px;">
+                                </div>
+                                <div class="field-row">
+                                    <label for="correctionModelId">模型ID <em>（示例：gpt-3.5-turbo、glm-4、qwen-turbo等）</em></label>
+                                    <input type="text" id="correctionModelId" placeholder="如：gpt-3.5-turbo" value="" style="max-width: 600px;">
                                 </div>
                                 <div class="field-row">
                                     <label for="correctionModelApiKey">API Key</label>
@@ -581,6 +589,10 @@
                                     <input type="text" id="emotionModelUrl" placeholder="如：https://api.openai.com/v1/chat/completions" value="" style="max-width: 600px;">
                                 </div>
                                 <div class="field-row">
+                                    <label for="emotionModelId">模型ID <em>（示例：gpt-3.5-turbo、glm-4、qwen-turbo等）</em></label>
+                                    <input type="text" id="emotionModelId" placeholder="如：gpt-3.5-turbo" value="" style="max-width: 600px;">
+                                </div>
+                                <div class="field-row">
                                     <label for="emotionModelApiKey">API Key</label>
                                     <input type="text" id="emotionModelApiKey" placeholder="请输入情感模型的API Key" value="" style="max-width: 600px;">
                                 </div>
@@ -601,6 +613,10 @@
                                 <div class="field-row">
                                     <label for="visionModelUrl">API URL</label>
                                     <input type="text" id="visionModelUrl" placeholder="如：https://api.openai.com/v1/chat/completions" value="" style="max-width: 600px;">
+                                </div>
+                                <div class="field-row">
+                                    <label for="visionModelId">模型ID <em>（示例：gpt-4-vision-preview、glm-4v等）</em></label>
+                                    <input type="text" id="visionModelId" placeholder="如：gpt-4-vision-preview" value="" style="max-width: 600px;">
                                 </div>
                                 <div class="field-row">
                                     <label for="visionModelApiKey">API Key</label>
@@ -625,6 +641,10 @@
                                     <input type="text" id="omniModelUrl" placeholder="如：wss://dashscope.aliyuncs.com/api-ws/v1/realtime" value="" style="max-width: 600px;">
                                 </div>
                                 <div class="field-row">
+                                    <label for="omniModelId">模型ID <em>（示例：qwen-turbo、qwen-plus等）</em></label>
+                                    <input type="text" id="omniModelId" placeholder="如：qwen-turbo" value="" style="max-width: 600px;">
+                                </div>
+                                <div class="field-row">
                                     <label for="omniModelApiKey">API Key</label>
                                     <input type="text" id="omniModelApiKey" placeholder="请输入全模态模型的API Key" value="" style="max-width: 600px;">
                                 </div>
@@ -645,6 +665,10 @@
                                 <div class="field-row">
                                     <label for="ttsModelUrl">API URL</label>
                                     <input type="text" id="ttsModelUrl" placeholder="如：https://dashscope.aliyuncs.com/api/v1/services/aigc/tts/chat" value="" style="max-width: 600px;">
+                                </div>
+                                <div class="field-row">
+                                    <label for="ttsModelId">模型ID <em>（示例：qwen-tts、azure-tts等）</em></label>
+                                    <input type="text" id="ttsModelId" placeholder="如：qwen-tts" value="" style="max-width: 600px;">
                                 </div>
                                 <div class="field-row">
                                     <label for="ttsModelApiKey">API Key</label>
@@ -836,6 +860,9 @@ async function loadCurrentApiKey() {
             if (typeof data.summaryModelUrl === 'string' && document.getElementById('summaryModelUrl')) {
                 document.getElementById('summaryModelUrl').value = data.summaryModelUrl;
             }
+            if (typeof data.summaryModelId === 'string' && document.getElementById('summaryModelId')) {
+                document.getElementById('summaryModelId').value = data.summaryModelId;
+            }
             if (typeof data.summaryModelApiKey === 'string' && document.getElementById('summaryModelApiKey')) {
                 document.getElementById('summaryModelApiKey').value = data.summaryModelApiKey;
             }
@@ -845,6 +872,9 @@ async function loadCurrentApiKey() {
             }
             if (typeof data.correctionModelUrl === 'string' && document.getElementById('correctionModelUrl')) {
                 document.getElementById('correctionModelUrl').value = data.correctionModelUrl;
+            }
+            if (typeof data.correctionModelId === 'string' && document.getElementById('correctionModelId')) {
+                document.getElementById('correctionModelId').value = data.correctionModelId;
             }
             if (typeof data.correctionModelApiKey === 'string' && document.getElementById('correctionModelApiKey')) {
                 document.getElementById('correctionModelApiKey').value = data.correctionModelApiKey;
@@ -856,6 +886,9 @@ async function loadCurrentApiKey() {
             if (typeof data.emotionModelUrl === 'string' && document.getElementById('emotionModelUrl')) {
                 document.getElementById('emotionModelUrl').value = data.emotionModelUrl;
             }
+            if (typeof data.emotionModelId === 'string' && document.getElementById('emotionModelId')) {
+                document.getElementById('emotionModelId').value = data.emotionModelId;
+            }
             if (typeof data.emotionModelApiKey === 'string' && document.getElementById('emotionModelApiKey')) {
                 document.getElementById('emotionModelApiKey').value = data.emotionModelApiKey;
             }
@@ -865,6 +898,9 @@ async function loadCurrentApiKey() {
             }
             if (typeof data.visionModelUrl === 'string' && document.getElementById('visionModelUrl')) {
                 document.getElementById('visionModelUrl').value = data.visionModelUrl;
+            }
+            if (typeof data.visionModelId === 'string' && document.getElementById('visionModelId')) {
+                document.getElementById('visionModelId').value = data.visionModelId;
             }
             if (typeof data.visionModelApiKey === 'string' && document.getElementById('visionModelApiKey')) {
                 document.getElementById('visionModelApiKey').value = data.visionModelApiKey;
@@ -876,6 +912,9 @@ async function loadCurrentApiKey() {
             if (typeof data.omniModelUrl === 'string' && document.getElementById('omniModelUrl')) {
                 document.getElementById('omniModelUrl').value = data.omniModelUrl;
             }
+            if (typeof data.omniModelId === 'string' && document.getElementById('omniModelId')) {
+                document.getElementById('omniModelId').value = data.omniModelId;
+            }
             if (typeof data.omniModelApiKey === 'string' && document.getElementById('omniModelApiKey')) {
                 document.getElementById('omniModelApiKey').value = data.omniModelApiKey;
             }
@@ -885,6 +924,9 @@ async function loadCurrentApiKey() {
             }
             if (typeof data.ttsModelUrl === 'string' && document.getElementById('ttsModelUrl')) {
                 document.getElementById('ttsModelUrl').value = data.ttsModelUrl;
+            }
+            if (typeof data.ttsModelId === 'string' && document.getElementById('ttsModelId')) {
+                document.getElementById('ttsModelId').value = data.ttsModelId;
             }
             if (typeof data.ttsModelApiKey === 'string' && document.getElementById('ttsModelApiKey')) {
                 document.getElementById('ttsModelApiKey').value = data.ttsModelApiKey;
@@ -1029,26 +1071,32 @@ document.getElementById('api-key-form').addEventListener('submit', async functio
     // 获取用户自定义API配置
     const summaryModelProvider = document.getElementById('summaryModelProvider') ? document.getElementById('summaryModelProvider').value.trim() : '';
     const summaryModelUrl = document.getElementById('summaryModelUrl') ? document.getElementById('summaryModelUrl').value.trim() : '';
+    const summaryModelId = document.getElementById('summaryModelId') ? document.getElementById('summaryModelId').value.trim() : '';
     const summaryModelApiKey = document.getElementById('summaryModelApiKey') ? document.getElementById('summaryModelApiKey').value.trim() : '';
     
     const correctionModelProvider = document.getElementById('correctionModelProvider') ? document.getElementById('correctionModelProvider').value.trim() : '';
     const correctionModelUrl = document.getElementById('correctionModelUrl') ? document.getElementById('correctionModelUrl').value.trim() : '';
+    const correctionModelId = document.getElementById('correctionModelId') ? document.getElementById('correctionModelId').value.trim() : '';
     const correctionModelApiKey = document.getElementById('correctionModelApiKey') ? document.getElementById('correctionModelApiKey').value.trim() : '';
     
     const emotionModelProvider = document.getElementById('emotionModelProvider') ? document.getElementById('emotionModelProvider').value.trim() : '';
     const emotionModelUrl = document.getElementById('emotionModelUrl') ? document.getElementById('emotionModelUrl').value.trim() : '';
+    const emotionModelId = document.getElementById('emotionModelId') ? document.getElementById('emotionModelId').value.trim() : '';
     const emotionModelApiKey = document.getElementById('emotionModelApiKey') ? document.getElementById('emotionModelApiKey').value.trim() : '';
     
     const visionModelProvider = document.getElementById('visionModelProvider') ? document.getElementById('visionModelProvider').value.trim() : '';
     const visionModelUrl = document.getElementById('visionModelUrl') ? document.getElementById('visionModelUrl').value.trim() : '';
+    const visionModelId = document.getElementById('visionModelId') ? document.getElementById('visionModelId').value.trim() : '';
     const visionModelApiKey = document.getElementById('visionModelApiKey') ? document.getElementById('visionModelApiKey').value.trim() : '';
     
     const omniModelProvider = document.getElementById('omniModelProvider') ? document.getElementById('omniModelProvider').value.trim() : '';
     const omniModelUrl = document.getElementById('omniModelUrl') ? document.getElementById('omniModelUrl').value.trim() : '';
+    const omniModelId = document.getElementById('omniModelId') ? document.getElementById('omniModelId').value.trim() : '';
     const omniModelApiKey = document.getElementById('omniModelApiKey') ? document.getElementById('omniModelApiKey').value.trim() : '';
     
     const ttsModelProvider = document.getElementById('ttsModelProvider') ? document.getElementById('ttsModelProvider').value.trim() : '';
     const ttsModelUrl = document.getElementById('ttsModelUrl') ? document.getElementById('ttsModelUrl').value.trim() : '';
+    const ttsModelId = document.getElementById('ttsModelId') ? document.getElementById('ttsModelId').value.trim() : '';
     const ttsModelApiKey = document.getElementById('ttsModelApiKey') ? document.getElementById('ttsModelApiKey').value.trim() : '';
     
     const mcpToken = document.getElementById('mcpTokenInput') ? document.getElementById('mcpTokenInput').value.trim() : '';
@@ -1066,12 +1114,12 @@ document.getElementById('api-key-form').addEventListener('submit', async functio
         pendingApiKey = { 
             apiKey, coreApi, assistApi, 
             assistApiKeyQwen, assistApiKeyOpenai, assistApiKeyGlm, assistApiKeyStep, assistApiKeySilicon,
-            summaryModelProvider, summaryModelUrl, summaryModelApiKey,
-            correctionModelProvider, correctionModelUrl, correctionModelApiKey,
-            emotionModelProvider, emotionModelUrl, emotionModelApiKey,
-            visionModelProvider, visionModelUrl, visionModelApiKey,
-            omniModelProvider, omniModelUrl, omniModelApiKey,
-            ttsModelProvider, ttsModelUrl, ttsModelApiKey,
+            summaryModelProvider, summaryModelUrl, summaryModelId, summaryModelApiKey,
+            correctionModelProvider, correctionModelUrl, correctionModelId, correctionModelApiKey,
+            emotionModelProvider, emotionModelUrl, emotionModelId, emotionModelApiKey,
+            visionModelProvider, visionModelUrl, visionModelId, visionModelApiKey,
+            omniModelProvider, omniModelUrl, omniModelId, omniModelApiKey,
+            ttsModelProvider, ttsModelUrl, ttsModelId, ttsModelApiKey,
             mcpToken, enableCustomApi
         };
         showWarningModal();
@@ -1080,18 +1128,18 @@ document.getElementById('api-key-form').addEventListener('submit', async functio
         await saveApiKey({ 
             apiKey, coreApi, assistApi, 
             assistApiKeyQwen, assistApiKeyOpenai, assistApiKeyGlm, assistApiKeyStep, assistApiKeySilicon,
-            summaryModelProvider, summaryModelUrl, summaryModelApiKey,
-            correctionModelProvider, correctionModelUrl, correctionModelApiKey,
-            emotionModelProvider, emotionModelUrl, emotionModelApiKey,
-            visionModelProvider, visionModelUrl, visionModelApiKey,
-            omniModelProvider, omniModelUrl, omniModelApiKey,
-            ttsModelProvider, ttsModelUrl, ttsModelApiKey,
+            summaryModelProvider, summaryModelUrl, summaryModelId, summaryModelApiKey,
+            correctionModelProvider, correctionModelUrl, correctionModelId, correctionModelApiKey,
+            emotionModelProvider, emotionModelUrl, emotionModelId, emotionModelApiKey,
+            visionModelProvider, visionModelUrl, visionModelId, visionModelApiKey,
+            omniModelProvider, omniModelUrl, omniModelId, omniModelApiKey,
+            ttsModelProvider, ttsModelUrl, ttsModelId, ttsModelApiKey,
             mcpToken, enableCustomApi
         });
     }
 });
 
-async function saveApiKey({ apiKey, coreApi, assistApi, assistApiKeyQwen, assistApiKeyOpenai, assistApiKeyGlm, assistApiKeyStep, assistApiKeySilicon, summaryModelProvider, summaryModelUrl, summaryModelApiKey, correctionModelProvider, correctionModelUrl, correctionModelApiKey, emotionModelProvider, emotionModelUrl, emotionModelApiKey, visionModelProvider, visionModelUrl, visionModelApiKey, omniModelProvider, omniModelUrl, omniModelApiKey, ttsModelProvider, ttsModelUrl, ttsModelApiKey, mcpToken, enableCustomApi }) {
+async function saveApiKey({ apiKey, coreApi, assistApi, assistApiKeyQwen, assistApiKeyOpenai, assistApiKeyGlm, assistApiKeyStep, assistApiKeySilicon, summaryModelProvider, summaryModelUrl, summaryModelId, summaryModelApiKey, correctionModelProvider, correctionModelUrl, correctionModelId, correctionModelApiKey, emotionModelProvider, emotionModelUrl, emotionModelId, emotionModelApiKey, visionModelProvider, visionModelUrl, visionModelId, visionModelApiKey, omniModelProvider, omniModelUrl, omniModelId, omniModelApiKey, ttsModelProvider, ttsModelUrl, ttsModelId, ttsModelApiKey, mcpToken, enableCustomApi }) {
     // 确保apiKey是有效的字符串（启用自定义API或免费版时不需要API Key）
     if (!enableCustomApi && coreApi !== 'free' && assistApi !== 'free' && (!apiKey || typeof apiKey !== 'string')) {
         showStatus('API Key无效', 'error');
@@ -1115,21 +1163,27 @@ async function saveApiKey({ apiKey, coreApi, assistApi, assistApiKeyQwen, assist
             assistApiKeySilicon: assistApiKeySilicon || undefined,
             summaryModelProvider: summaryModelProvider || undefined,
             summaryModelUrl: summaryModelUrl || undefined,
+            summaryModelId: summaryModelId || undefined,
             summaryModelApiKey: summaryModelApiKey || undefined,
             correctionModelProvider: correctionModelProvider || undefined,
             correctionModelUrl: correctionModelUrl || undefined,
+            correctionModelId: correctionModelId || undefined,
             correctionModelApiKey: correctionModelApiKey || undefined,
             emotionModelProvider: emotionModelProvider || undefined,
             emotionModelUrl: emotionModelUrl || undefined,
+            emotionModelId: emotionModelId || undefined,
             emotionModelApiKey: emotionModelApiKey || undefined,
             visionModelProvider: visionModelProvider || undefined,
             visionModelUrl: visionModelUrl || undefined,
+            visionModelId: visionModelId || undefined,
             visionModelApiKey: visionModelApiKey || undefined,
             omniModelProvider: omniModelProvider || undefined,
             omniModelUrl: omniModelUrl || undefined,
+            omniModelId: omniModelId || undefined,
             omniModelApiKey: omniModelApiKey || undefined,
             ttsModelProvider: ttsModelProvider || undefined,
             ttsModelUrl: ttsModelUrl || undefined,
+            ttsModelId: ttsModelId || undefined,
             ttsModelApiKey: ttsModelApiKey || undefined,
             mcpToken: mcpToken || undefined,
             enableCustomApi: enableCustomApi || false
