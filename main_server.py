@@ -171,10 +171,10 @@ app = FastAPI()
 # 配置 CORS 中间件
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 允许所有源（生产环境建议配置具体域名）
-    allow_credentials=True,  # 允许携带凭证（cookies, authorization headers等）
-    allow_methods=["*"],  # 允许所有HTTP方法
-    allow_headers=["*"],  # 允许所有请求头
+    allow_origins=["*"],      # 允许所有源（生产环境建议配置具体域名）
+    allow_credentials=False,  # 允许携带凭证（cookies, authorization headers等）
+    allow_methods=["*"],      # 允许所有HTTP方法
+    allow_headers=["*"],      # 允许所有请求头
 )
 
 class CustomStaticFiles(StaticFiles):
