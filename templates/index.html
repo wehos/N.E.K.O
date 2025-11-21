@@ -656,7 +656,7 @@
         #text-input-row {
             display: flex;
             gap: 8px;
-            align-items: flex-start;
+            align-items: center; /* 垂直居中对齐 */
             position: relative;
             z-index: 1;
         }
@@ -716,22 +716,24 @@
             white-space: nowrap;
             min-width: 80px;
             display: flex;
-            align-items: center;
-            justify-content: center;
+            align-items: center; /* 图标和文字垂直居中对齐 */
+            justify-content: flex-start; /* 内容左对齐，图标在左边 */
             gap: 6px;
             box-sizing: border-box;
         }
         
+        /* 确保两个按钮的图标和文字对齐 */
         #textSendButton img, #screenshotButton img {
-            width: 20px;
-            height: 20px;
+            flex-shrink: 0; /* 图标不收缩 */
+            width: 22px; /* 统一图标宽度，确保对齐 */
+            height: 22px;
             object-fit: contain;
             pointer-events: none;
         }
         
-        #textSendButton img {
-            width: 22px;
-            height: 22px;
+        #textSendButton span, #screenshotButton span {
+            flex-shrink: 0; /* 文字不收缩 */
+            text-align: left; /* 文字左对齐 */
         }
         
         /* 发送按钮：蓝色背景 */
