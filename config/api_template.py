@@ -29,3 +29,32 @@ SEMANTIC_MODEL = 'text-embedding-v4'#'text-embedding-3-small'
 RERANKER_MODEL = 'qwen-plus'#'openai/gpt-4.1'
 CORRECTION_MODEL = 'qwen-max'
 EMOTION_MODEL = 'qwen-turbo'
+
+# User custom API configurations
+OMNI_MODEL = "" # 全模态模型(语音+文字+图片)
+TTS_MODEL = "" # TTS模型(Native TTS)
+
+# User custom API URLs and providers
+SUMMARY_MODEL_PROVIDER = ""
+SUMMARY_MODEL_URL = ""
+SUMMARY_MODEL_API_KEY = ""
+
+CORRECTION_MODEL_PROVIDER = ""
+CORRECTION_MODEL_URL = ""
+CORRECTION_MODEL_API_KEY = ""
+
+EMOTION_MODEL_PROVIDER = ""
+EMOTION_MODEL_URL = ""
+EMOTION_MODEL_API_KEY = ""
+
+VISION_MODEL_PROVIDER = ""
+VISION_MODEL_URL = ""
+VISION_MODEL_API_KEY = ""
+
+OMNI_MODEL_PROVIDER = ""
+OMNI_MODEL_URL = ""
+OMNI_MODEL_API_KEY = ""
+
+TTS_MODEL_PROVIDER = ""
+TTS_MODEL_URL = ""
+TTS_MODEL_API_KEY = ""
