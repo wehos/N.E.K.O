@@ -19,6 +19,68 @@
         .file-input-label { display: inline-block; padding: 8px 16px; background: #4f8cff; color: white; border-radius: 4px; cursor: pointer; font-size: 14px; }
         .file-input-label:hover { background: #2662c8; }
         .file-name-display { margin-left: 10px; color: #666; font-size: 14px; }
+        .field-row {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+        .field-row label {
+            min-width: auto;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .field-row label em {
+            font-weight: normal;
+        }
+        .field-row input {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            font-size: 1rem;
+            font-family: 'Courier New', monospace;
+        }
+        .field-row input:disabled {
+            background-color: #f0f0f0;
+            color: #666;
+            cursor: not-allowed;
+            border-color: #d0d0d0;
+        }
+        .field-row select:disabled {
+            background-color: #f0f0f0;
+            color: #666;
+            cursor: not-allowed;
+            border-color: #d0d0d0;
+        }
+        .field-row select option:disabled {
+            color: #999;
+        }
+        .field-row input::placeholder {
+            font-size: 0.9rem;
+            color: #999;
+        }
+        .field-row input:focus {
+            outline: none;
+            border-color: #4f8cff;
+            box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.2);
+        }
+        .btn {
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: none;
+            background: #4f8cff;
+            color: #fff;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-right: 12px;
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #2662c8; }
+        .btn:active { background: #1e4a9e; }
+        .btn.secondary { background: #6c757d; }
+        .btn.secondary:hover { background: #545b62; }
     </style>
 </head>
 <body>
@@ -31,12 +93,14 @@
         <span class="file-name-display" id="fileNameDisplay" data-i18n="voice.noFileSelected">未选择文件</span>
     </div>
 
-    <label data-i18n="voice.customPrefix">自定义前缀（阿里云需要）</label>
-    <input type="text" id="prefix" data-i18n-placeholder="voice.prefixPlaceholder" placeholder="不超过10个字符，只支持数字和英文字母">
+    <div class="field-row">
+        <label data-i18n="voice.customPrefix">自定义前缀（阿里云需要）</label>
+        <input type="text" id="prefix" data-i18n-placeholder="voice.prefixPlaceholder" placeholder="不超过10个字符，只支持数字和英文字母" required style="max-width: 600px;">
+    </div>
 
     <input type="hidden" id="lanlan_name" value="">
 
-    <button onclick="registerVoice()" data-i18n="voice.register">注册音色</button>
+    <button class="btn" onclick="registerVoice()" data-i18n="voice.register">注册音色</button>
 
     <div class="result" id="result"></div>
 </div>

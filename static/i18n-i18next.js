@@ -117,14 +117,9 @@
         } else {
             // 依赖未加载，尝试重新加载本地文件或使用降级方案
             console.error('[i18n] ⚠️ 依赖库未完全加载，尝试重新加载本地文件...');
-            console.log('[i18n] 加载状态:', {
-                i18next: i18nextLoaded,
-                backend: backendLoaded
-            });
             
             // 如果 i18nextHttpBackend 未加载，尝试重新加载本地文件
             if (!backendLoaded) {
-                console.log('[i18n] 尝试重新加载本地 i18nextHttpBackend...');
                 loadScript(
                     '/static/libs/i18nextHttpBackend.min.js',
                     function() {
@@ -220,19 +215,54 @@
             console.log('5. 当前语言:', i18next.language);
             console.log('6. 支持的语言:', i18next.options?.supportedLngs);
             console.log('7. 已加载的资源:', Object.keys(i18next.store?.data || {}));
+            
+            // 检查资源内容
+            const currentLang = i18next.language;
+            const hasResource = i18next.hasResourceBundle(currentLang, 'translation');
+            console.log('8. 资源是否存在:', hasResource);
+            
+            if (hasResource) {
+                const resource = i18next.getResourceBundle(currentLang, 'translation');
+                console.log('9. 资源键数量:', Object.keys(resource || {}).length);
+                
+                // 测试几个常见的翻译键
+                const testKeys = ['app.title', 'voiceControl.startVoice', 'chat.title'];
+                console.log('10. 测试翻译键:');
+                testKeys.forEach(key => {
+                    const value = resource?.[key] || (() => {
+                        // 尝试嵌套访问
+                        const parts = key.split('.');
+                        let obj = resource;
+                        for (const part of parts) {
+                            if (obj && typeof obj === 'object') {
+                                obj = obj[part];
+                            } else {
+                                obj = undefined;
+                                break;
+                            }
+                        }
+                        return obj;
+                    })();
+                    const translated = i18next.t(key);
+                    console.log(`   "${key}": 资源中=${value !== undefined ? '存在' : '不存在'}, 翻译结果="${translated}"`);
+                });
+            } else {
+                console.error('8. 资源不存在！');
+            }
         } else {
             console.error('4. i18next 未加载！请检查 CDN 是否成功加载。');
         }
         
         // 检查页面上的 data-i18n 元素
         const elements = document.querySelectorAll('[data-i18n]');
-        console.log(`8. 页面上的 data-i18n 元素数量: ${elements.length}`);
+        console.log(`11. 页面上的 data-i18n 元素数量: ${elements.length}`);
         if (elements.length > 0) {
-            console.log('9. 前3个元素:');
+            console.log('12. 前3个元素:');
             Array.from(elements).slice(0, 3).forEach((el, i) => {
                 const key = el.getAttribute('data-i18n');
                 const text = el.textContent;
-                console.log(`   元素 ${i+1}: key="${key}", text="${text}"`);
+                const translated = typeof window.t === 'function' ? window.t(key) : 'N/A';
+                console.log(`   元素 ${i+1}: key="${key}", text="${text}", 翻译="${translated}"`);
             });
         }
         
@@ -369,8 +399,6 @@
         
         // 初始化 i18next
         console.log('[i18n] 开始初始化 i18next...');
-        console.log('[i18n] 初始语言:', INITIAL_LANGUAGE);
-        console.log('[i18n] 支持的语言:', SUPPORTED_LANGUAGES.join(', '));
         
         try {
             i18next
@@ -384,8 +412,12 @@
                     backend: {
                         loadPath: '/static/locales/{{lng}}.json',
                         parse: function(data) {
-                            const parsed = JSON.parse(data);
-                            return { translation: parsed };
+                            try {
+                                return JSON.parse(data);
+                            } catch (e) {
+                                console.error('[i18n] 解析翻译文件失败:', e);
+                                throw e;
+                            }
                         }
                     },
                     detection: {
@@ -406,9 +438,47 @@
                     console.log('[i18n] ✅ 初始化成功！');
                     console.log('[i18n] 当前语言:', i18next.language);
                     
-                    updatePageTexts();
-                    window.dispatchEvent(new CustomEvent('localechange'));
-                    exportNormalFunctions();
+                    // 防止重复初始化的标志
+                    let initialized = false;
+                    
+                    // 统一的初始化完成函数，确保只执行一次
+                    const finalizeInit = () => {
+                        if (initialized) return;
+                        initialized = true;
+                        updatePageTexts();
+                        window.dispatchEvent(new CustomEvent('localechange'));
+                        exportNormalFunctions();
+                    };
+                    
+                    // 确保资源已经加载
+                    const checkResources = () => {
+                        const lang = i18next.language;
+                        if (i18next.hasResourceBundle(lang, 'translation')) {
+                            finalizeInit();
+                        } else {
+                            // 如果资源还没加载，等待一下再试
+                            setTimeout(() => {
+                                if (i18next.hasResourceBundle(lang, 'translation')) {
+                                    finalizeInit();
+                                } else {
+                                    console.error('[i18n] 翻译资源加载失败，使用回退函数');
+                                    exportFallbackFunctions();
+                                }
+                            }, 100);
+                        }
+                    };
+                    
+                    // 监听资源加载完成事件
+                    const loadedHandler = function(loaded) {
+                        if (loaded && i18next.hasResourceBundle(i18next.language, 'translation')) {
+                            finalizeInit();
+                            // 移除事件监听器，防止内存泄漏
+                            i18next.off('loaded', loadedHandler);
+                        }
+                    };
+                    i18next.on('loaded', loadedHandler);
+                    
+                    checkResources();
                 });
         } catch (error) {
             console.error('[i18n] Fatal error during initialization:', error);
@@ -504,6 +574,12 @@
             return;
         }
         
+        // 检查资源是否已加载
+        if (!i18next.hasResourceBundle(i18next.language, 'translation')) {
+            console.warn('[i18n] Translation resources not loaded yet, skipping updatePageTexts');
+            return;
+        }
+        
         // 更新所有带有 data-i18n 属性的元素
         const elements = document.querySelectorAll('[data-i18n]');
         elements.forEach(element => {
@@ -524,7 +600,10 @@
             const text = i18next.t(key, params);
             
             if (text === key) {
-                console.warn(`[i18n] Translation key not found: ${key}`);
+                // 只在开发模式下显示警告，避免控制台噪音
+                if (i18next.options.debug) {
+                    console.warn(`[i18n] Translation key not found: ${key}`);
+                }
             }
             
             // 特殊处理 title 标签
