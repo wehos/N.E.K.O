@@ -321,6 +321,108 @@ async def get_page_config(lanlan_name: str = ""):
             "model_path": ""
         }
 
+
+@app.post('/api/save_screenshot')
+async def save_screenshot(request: Request):
+    """保存前端发送的截图到指定目录（优先保存到 C:\\Users\\xiao8\\Pictures）。
+    接收一个 JSON: {"data": "data:image/jpeg;base64,..."}
+    """
+    try:
+        body = await request.json()
+        data = body.get('data')
+        if not data or not isinstance(data, str):
+            return JSONResponse(status_code=400, content={"success": False, "error": "invalid payload"})
+
+        # data URL 格式：data:<mime>;base64,<b64data>
+        if ',' not in data:
+            return JSONResponse(status_code=400, content={"success": False, "error": "invalid data url"})
+        header, b64 = data.split(',', 1)
+
+        import base64, datetime
+
+        # 首先尝试根据配置的 live2d 目录推导保存位置：
+        # 如果 live2d 目录为 D:\...\Xiao8\live2d，则保存到 D:\...\Xiao8\Pictures
+        target_dir = None
+        try:
+            live2d_dir = getattr(_config_manager, 'live2d_dir', None)
+            if live2d_dir:
+                from pathlib import Path
+                p = Path(live2d_dir)
+                parent = p.parent
+                candidate = parent / 'Pictures'
+                try:
+                    os.makedirs(str(candidate), exist_ok=True)
+                    testfile = candidate / '.nkatest'
+                    with open(str(testfile), 'w') as f:
+                        f.write('ok')
+                    os.remove(str(testfile))
+                    target_dir = str(candidate)
+                except Exception:
+                    # 如果无法在候选目录写入，则继续回退逻辑
+                    target_dir = None
+        except Exception:
+            target_dir = None
+
+        # 如果未成功确定目标目录，使用平台回退策略
+        if not target_dir:
+            # 优先尝试 Windows 下的 C:\Users\xiao8\Pictures（历史兼容）
+            try:
+                if os.name == 'nt':
+                    candidate = os.path.join('C:\\Users', 'xiao8', 'Pictures')
+                    os.makedirs(candidate, exist_ok=True)
+                    testfile = os.path.join(candidate, '.nkatest')
+                    with open(testfile, 'w') as f:
+                        f.write('ok')
+                    os.remove(testfile)
+                    target_dir = candidate
+            except Exception:
+                target_dir = None
+
+        if not target_dir:
+            # 最后回退到当前用户 home 下的 xiao8/Pictures
+            home = os.path.expanduser('~')
+            candidate = os.path.join(home, 'xiao8', 'Pictures')
+            os.makedirs(candidate, exist_ok=True)
+            target_dir = candidate
+
+        # 生成文件名
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        # 根据 header 推断扩展名
+        ext = 'jpg'
+        if 'png' in header:
+            ext = 'png'
+        filename = f'screenshot_{timestamp}.{ext}'
+        file_path = os.path.join(target_dir, filename)
+
+        # 写入文件
+        with open(file_path, 'wb') as f:
+            f.write(base64.b64decode(b64))
+
+        logger.info(f"Saved screenshot to {file_path}")
+
+        # 安排后台任务：在 delay 秒后永久删除该文件（默认 60 秒）
+        try:
+            import asyncio
+            async def _delayed_remove(path, delay=60):
+                try:
+                    await asyncio.sleep(delay)
+                    if os.path.exists(path):
+                        os.remove(path)
+                        logger.info(f"Auto-deleted screenshot: {path}")
+                except Exception as _e:
+                    logger.error(f"Failed to auto-delete screenshot {path}: {_e}")
+
+            # 改为 7 天后删除（秒）
+            SEVEN_DAYS_SECONDS = 7 * 24 * 3600
+            asyncio.create_task(_delayed_remove(file_path, SEVEN_DAYS_SECONDS))
+        except Exception as e:
+            logger.warning(f"无法安排截图自动删除任务: {e}")
+
+        return {"success": True, "path": file_path}
+    except Exception as e:
+        logger.error(f"保存截图失败: {e}")
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
 @app.get("/api/config/core_api")
 async def get_core_config_api():
     """获取核心配置（API Key）"""

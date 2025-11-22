@@ -1379,6 +1379,53 @@ function init_app(){
             
             // 添加截图到待发送列表（不立即发送）
             addScreenshotToList(dataUrl);
+
+            // 自动将截图发送到后端保存到本地（xiao8\Pictures）
+            try {
+                (async () => {
+                    try {
+                        const resp = await fetch('/api/save_screenshot', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ data: dataUrl })
+                        });
+
+                        let parsed = null;
+                        const status = resp.status;
+                        try {
+                            parsed = await resp.json();
+                        } catch (e) {
+                            // 无法解析为 JSON，尝试获取文本
+                            const text = await resp.text();
+                            console.warn('save_screenshot: response not json, text:', text);
+                            parsed = { __raw_text: text };
+                        }
+
+                        console.log('save_screenshot response status:', status, 'body:', parsed);
+
+                        if (resp.ok && parsed && parsed.success) {
+                            const path = parsed.path || '';
+                            const savedText = window.t ? window.t('app.screenshotSaved', { path }) : `Screenshot saved: ${path}`;
+                            const deleteHint = window.t ? window.t('app.willDeleteIn7days') : 'The image will be deleted in 7 days';
+                            const msg = deleteHint ? `${savedText}, ${deleteHint}` : savedText;
+                            showStatusToast(msg, 6000);
+                        } else {
+                            // 尝试从 parsed 中提取 error 字段，否则使用状态码或原始文本
+                            const errText = (parsed && (parsed.error || parsed.detail || parsed.__raw_text)) || `HTTP ${status}`;
+                            const msg = window.t ? window.t('app.screenshotSaveFailed', { error: errText }) : `截图保存失败: ${errText}`;
+                            showStatusToast(msg, 5000);
+                            console.error('save_screenshot failed:', { status, parsed });
+                        }
+                    } catch (err) {
+                        const errText = err?.message || String(err);
+                        const msg = window.t ? window.t('app.screenshotSaveFailed', { error: errText }) : `截图保存失败: ${errText}`;
+                        showStatusToast(msg, 5000);
+                        console.error('save_screenshot error:', err);
+                    }
+                })();
+            } catch (e) {
+                console.error('Error while sending screenshot to server (outer):', e);
+            }
             
             showStatusToast(window.t ? window.t('app.screenshotAdded') : '截图已添加，点击发送一起发送', 3000);
             
