@@ -7,7 +7,7 @@ import asyncio
 import json
 import os
 import logging
-from config import MONITOR_SERVER_PORT
+from config import MONITOR_SERVER_PORT, APP_NAME
 from utils.config_manager import get_config_manager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
@@ -70,6 +70,40 @@ async def get_page_config(lanlan_name: str = ""):
     except Exception as e:
         logger.error(f"获取页面配置失败: {e}")
         return {"success": False, "error": str(e)}
+
+
+@app.post('/api/save_screenshot')
+async def save_screenshot(request: Request):
+    """保存前端发送的截图到指定目录（优先基于live2d目录推导 Pictures 文件夹，失败则回退到用户目录下的 APP_NAME/Pictures）。
+    接收一个 JSON: {"data": "data:image/jpeg;base64,..."}
+    """
+    try:
+        body = await request.json()
+        data = body.get('data')
+        if not data or not isinstance(data, str):
+            return JSONResponse(status_code=400, content={"success": False, "error": "invalid payload"})
+
+        # 使用共享工具函数保存截图
+        from utils.file_utils import save_base64_image
+        
+        success, file_path, error_msg = save_base64_image(
+            data_url=data,
+            config_manager=_config_manager,
+            app_name=APP_NAME,
+            filename_prefix="screenshot",
+            auto_delete_days=7,  # 7天后自动删除
+            logger=logger
+        )
+        
+        if not success:
+            return JSONResponse(status_code=500, content={"success": False, "error": error_msg})
+        
+        logger.info(f"Saved screenshot to {file_path}")
+
+        return {"success": True, "path": file_path}
+    except Exception as e:
+        logger.error(f"保存截图失败: {e}")
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 @app.get('/api/live2d/emotion_mapping/{model_name}')
 async def get_emotion_mapping(model_name: str):

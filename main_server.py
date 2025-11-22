@@ -26,7 +26,7 @@ import requests
 import httpx
 import pathlib, wave
 from openai import AsyncOpenAI
-from config import MAIN_SERVER_PORT, MONITOR_SERVER_PORT, MEMORY_SERVER_PORT, MODELS_WITH_EXTRA_BODY, TOOL_SERVER_PORT
+from config import MAIN_SERVER_PORT, MONITOR_SERVER_PORT, MEMORY_SERVER_PORT, MODELS_WITH_EXTRA_BODY, TOOL_SERVER_PORT, APP_NAME
 from config.prompts_sys import emotion_analysis_prompt, proactive_chat_prompt
 import glob
 from utils.config_manager import get_config_manager
@@ -320,6 +320,40 @@ async def get_page_config(lanlan_name: str = ""):
             "lanlan_name": "",
             "model_path": ""
         }
+
+
+@app.post('/api/save_screenshot')
+async def save_screenshot(request: Request):
+    """保存前端发送的截图到指定目录（优先基于live2d目录推导 Pictures 文件夹，失败则回退到用户目录下的 APP_NAME/Pictures）。
+    接收一个 JSON: {"data": "data:image/jpeg;base64,..."}
+    """
+    try:
+        body = await request.json()
+        data = body.get('data')
+        if not data or not isinstance(data, str):
+            return JSONResponse(status_code=400, content={"success": False, "error": "invalid payload"})
+
+        # 使用共享工具函数保存截图
+        from utils.file_utils import save_base64_image
+        
+        success, file_path, error_msg = save_base64_image(
+            data_url=data,
+            config_manager=_config_manager,
+            app_name=APP_NAME,
+            filename_prefix="screenshot",
+            auto_delete_days=7,  # 7天后自动删除
+            logger=logger
+        )
+        
+        if not success:
+            return JSONResponse(status_code=500, content={"success": False, "error": error_msg})
+        
+        logger.info(f"Saved screenshot to {file_path}")
+
+        return {"success": True, "path": file_path}
+    except Exception as e:
+        logger.error(f"保存截图失败: {e}")
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 @app.get("/api/config/core_api")
 async def get_core_config_api():
