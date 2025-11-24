@@ -1876,21 +1876,26 @@ class Live2DManager {
         let dragStartY = 0;
         let containerStartX = 0;
         let containerStartY = 0;
+        let isClick = false; // 标记是否为点击操作（与返回按钮拖动一致的语义）
         
         // 鼠标按下事件
         buttonsContainer.addEventListener('mousedown', (e) => {
             // 只在按钮容器本身被点击时开始拖动（不是按钮）
             if (e.target === buttonsContainer) {
                 isDragging = true;
+                isClick = true; // 标记为可能的点击，移动一定阈值后会取消
                 dragStartX = e.clientX;
                 dragStartY = e.clientY;
-                
+
                 // 获取当前容器位置
                 const currentLeft = parseInt(buttonsContainer.style.left) || 0;
                 const currentTop = parseInt(buttonsContainer.style.top) || 0;
                 containerStartX = currentLeft;
                 containerStartY = currentTop;
-                
+
+                // 设置拖拽标记（用于其他逻辑判断）
+                buttonsContainer.setAttribute('data-dragging', 'false');
+
                 // 改变鼠标样式
                 buttonsContainer.style.cursor = 'grabbing';
                 e.preventDefault();
@@ -1923,9 +1928,21 @@ class Live2DManager {
         });
         
         // 鼠标释放事件
-        document.addEventListener('mouseup', () => {
+        document.addEventListener('mouseup', (e) => {
             if (isDragging) {
+                // 如果是拖拽操作，阻止点击事件
+                if (!isClick) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+
+                // 延迟清除拖拽标记，确保点击事件能正确检测到拖拽状态
+                setTimeout(() => {
+                    buttonsContainer.setAttribute('data-dragging', 'false');
+                }, 100);
+
                 isDragging = false;
+                isClick = false;
                 buttonsContainer.style.cursor = 'grab';
             }
         });
@@ -1937,15 +1954,19 @@ class Live2DManager {
         buttonsContainer.addEventListener('touchstart', (e) => {
             if (e.target === buttonsContainer) {
                 isDragging = true;
+                isClick = true;
                 const touch = e.touches[0];
                 dragStartX = touch.clientX;
                 dragStartY = touch.clientY;
-                
+
                 const currentLeft = parseInt(buttonsContainer.style.left) || 0;
                 const currentTop = parseInt(buttonsContainer.style.top) || 0;
                 containerStartX = currentLeft;
                 containerStartY = currentTop;
-                
+
+                // 设置拖拽标记
+                buttonsContainer.setAttribute('data-dragging', 'false');
+
                 e.preventDefault();
             }
         });
@@ -1981,11 +2002,14 @@ class Live2DManager {
                     e.preventDefault();
                     e.stopPropagation();
                 }
-                
-                // 清除拖拽标记
-                returnButtonContainer.setAttribute('data-dragging', 'false');
-                
+
+                // 延迟清除拖拽标记，确保点击事件能正确检测到拖拽状态
+                setTimeout(() => {
+                    buttonsContainer.setAttribute('data-dragging', 'false');
+                }, 100);
+
                 isDragging = false;
+                isClick = false;
             }
         });
     }
