@@ -1,3 +1,38 @@
+// ==================== 全局窗口管理函数 ====================
+// 关闭所有已打开的设置窗口（弹窗）
+window.closeAllSettingsWindows = function() {
+    // 关闭 app.js 中跟踪的窗口
+    if (window._openSettingsWindows) {
+        Object.keys(window._openSettingsWindows).forEach(url => {
+            const winRef = window._openSettingsWindows[url];
+            try {
+                if (winRef && !winRef.closed) {
+                    winRef.close();
+                }
+            } catch (_) {
+                // 忽略跨域导致的 close 异常
+            }
+            delete window._openSettingsWindows[url];
+        });
+    }
+    
+    // 关闭 live2d-ui.js 中跟踪的窗口（如果有 Live2DManager 实例）
+    if (window.live2dManager && window.live2dManager._openSettingsWindows) {
+        Object.keys(window.live2dManager._openSettingsWindows).forEach(url => {
+            const winRef = window.live2dManager._openSettingsWindows[url];
+            try {
+                if (winRef && !winRef.closed) {
+                    winRef.close();
+                }
+            } catch (_) {
+                // 忽略跨域导致的 close 异常
+            }
+            delete window.live2dManager._openSettingsWindows[url];
+        });
+    }
+};
+
+// ==================== 应用初始化 ====================
 function init_app(){
     const micButton = document.getElementById('micButton');
     const muteButton = document.getElementById('muteButton');

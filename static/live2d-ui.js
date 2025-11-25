@@ -1102,6 +1102,10 @@ Live2DManager.prototype._createSettingsMenuItems = function(popup) {
                     // 从 window.lanlan_config 动态获取 lanlan_name
                     const lanlanName = (window.lanlan_config && window.lanlan_config.lanlan_name) || '';
                     finalUrl = `${item.urlBase}?lanlan_name=${encodeURIComponent(lanlanName)}`;
+                    // 跳转前关闭所有弹窗
+                    if (window.closeAllSettingsWindows) {
+                        window.closeAllSettingsWindows();
+                    }
                     // Live2D设置页直接跳转
                     window.location.href = finalUrl;
                 } else if (item.id === 'voice-clone' && item.url) {
