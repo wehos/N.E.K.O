@@ -24,6 +24,8 @@ from utils.api_config_loader import (
     get_assist_api_key_fields,
 )
 
+# Workshop配置相关常量 - 将在ConfigManager实例化时使用self.workshop_dir
+
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,8 @@ class ConfigManager:
         self.config_dir = self.app_docs_dir / "config"
         self.memory_dir = self.app_docs_dir / "memory"
         self.live2d_dir = self.app_docs_dir / "live2d"
+        self.workshop_dir = self.app_docs_dir / "workshop"
+
         self.project_config_dir = self._get_project_config_directory()
         self.project_memory_dir = self._get_project_memory_directory()
     
@@ -815,6 +819,7 @@ class ConfigManager:
             "config_dir": str(self.config_dir),
             "memory_dir": str(self.memory_dir),
             "live2d_dir": str(self.live2d_dir),
+            "workshop_dir": str(self.workshop_dir),
             "project_config_dir": str(self.project_config_dir),
             "project_memory_dir": str(self.project_memory_dir),
             "config_files": {
@@ -822,6 +827,93 @@ class ConfigManager:
                 for filename in CONFIG_FILES
             }
         }
+    
+    def get_workshop_config_path(self):
+        """
+        获取workshop配置文件路径
+        
+        Returns:
+            str: workshop配置文件的绝对路径
+        """
+        return str(self.get_config_path('workshop_config.json'))
+    
+    def load_workshop_config(self):
+        """
+        加载workshop配置
+        
+        Returns:
+            dict: workshop配置数据
+        """
+        config_path = self.get_workshop_config_path()
+        try:
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    logger.info(f"成功加载workshop配置: {config}")
+                    return config
+            else:
+                # 如果配置文件不存在，返回默认配置
+                default_config = {
+                    "default_workshop_folder": str(self.workshop_dir),
+                    "auto_create_folder": True
+                }
+                logger.info(f"创建默认workshop配置: {default_config}")
+                return default_config
+        except Exception as e:
+            error_msg = f"加载workshop配置失败: {e}"
+            logger.error(error_msg)
+            print(error_msg)
+            # 使用默认配置
+            return {
+                "default_workshop_folder": str(self.workshop_dir),
+                "auto_create_folder": True
+            }
+    
+    def save_workshop_config(self, config_data):
+        """
+        保存workshop配置
+        
+        Args:
+            config_data: 要保存的配置数据
+        """
+        config_path = self.get_workshop_config_path()
+        try:
+            # 确保配置目录存在
+            os.makedirs(os.path.dirname(config_path), exist_ok=True)
+            
+            # 保存配置
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config_data, f, indent=4, ensure_ascii=False)
+            
+            logger.info(f"成功保存workshop配置: {config_data}")
+        except Exception as e:
+            error_msg = f"保存workshop配置失败: {e}"
+            logger.error(error_msg)
+            print(error_msg)
+            raise
+    
+    def save_workshop_path(self, workshop_path):
+        """
+        保存workshop根目录路径到配置文件
+        
+        Args:
+            workshop_path: workshop根目录路径
+        """
+        config = self.load_workshop_config()
+        config["WORKSHOP_PATH"] = workshop_path
+        self.save_workshop_config(config)
+        logger.info(f"已将workshop路径保存到配置文件: {workshop_path}")
+    
+    def get_workshop_path(self):
+        """
+        获取保存的workshop根目录路径
+        
+        Returns:
+            str: workshop根目录路径
+        """
+        config = self.load_workshop_config()
+        # 优先使用WORKSHOP_PATH，然后使用default_workshop_folder，最后使用self.workshop_dir
+        return config.get("WORKSHOP_PATH", config.get("default_workshop_folder", str(self.workshop_dir)))
 
 
 # 全局配置管理器实例
@@ -853,6 +945,23 @@ def load_json_config(filename, default_value=None):
 def save_json_config(filename, data):
     """保存JSON配置"""
     return get_config_manager().save_json_config(filename, data)
+
+# Workshop配置便捷函数
+def load_workshop_config():
+    """加载workshop配置"""
+    return get_config_manager().load_workshop_config()
+
+def save_workshop_config(config_data):
+    """保存workshop配置"""
+    return get_config_manager().save_workshop_config(config_data)
+
+def save_workshop_path(workshop_path):
+    """保存workshop根目录路径"""
+    return get_config_manager().save_workshop_path(workshop_path)
+
+def get_workshop_path():
+    """获取workshop根目录路径"""
+    return get_config_manager().get_workshop_path()
 
 
 if __name__ == "__main__":

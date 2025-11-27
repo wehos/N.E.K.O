@@ -74,6 +74,7 @@ CONFIG_FILES = [
     'core_config.json',
     'user_preferences.json',
     'voice_storage.json',
+    'workshop_config.json',
 ]
 
 DEFAULT_MASTER_TEMPLATE = {

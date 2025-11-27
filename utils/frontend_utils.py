@@ -20,7 +20,7 @@ import json
 from pathlib import Path
 import requests
 
-from utils.workshop_utils import workshop_config
+from utils.workshop_utils import load_workshop_config
 
 
 
@@ -241,7 +241,8 @@ def find_model_directory(model_name: str):
     """
     from utils.config_manager import get_config_manager
     # 从配置文件获取WORKSHOP_PATH
-    WORKSHOP_SEARCH_DIR = workshop_config.get("WORKSHOP_PATH")
+    workshop_config_data = load_workshop_config()
+    WORKSHOP_SEARCH_DIR = workshop_config_data.get("WORKSHOP_PATH")
     # 首先尝试在用户文档目录
     try:
         config_mgr = get_config_manager()
@@ -298,6 +299,7 @@ def find_workshop_item_by_id(item_id: str) -> tuple:
     """
     try:
         # 从配置文件获取WORKSHOP_PATH，如果不存在则使用默认路径
+        workshop_config = load_workshop_config()
         workshop_dir = workshop_config.get("WORKSHOP_PATH", workshop_config.get("default_workshop_folder", "static"))
         
         # 如果路径不存在或为空，使用默认的static目录
