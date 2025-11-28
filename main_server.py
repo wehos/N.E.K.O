@@ -163,8 +163,7 @@ async def initialize_character_data():
                 )
                 sync_process[k].start()
                 logger.info(f"✅ 已为角色 {k} 启动同步连接器进程 (PID: {sync_process[k].pid})")
-                import time
-                time.sleep(0.2)
+                await asyncio.sleep(0.2)
                 if not sync_process[k].is_alive():
                     logger.error(f"❌ 同步连接器进程 {k} (PID: {sync_process[k].pid}) 启动后立即退出！退出码: {sync_process[k].exitcode}")
                 else:
@@ -633,8 +632,7 @@ async def startup_event():
                 sync_process[k].start()
                 logger.info(f"✅ 同步连接器进程已启动 (PID: {sync_process[k].pid}) for {k}")
                 # 检查进程是否成功启动
-                import time
-                time.sleep(0.2)
+                await asyncio.sleep(0.2)
                 if not sync_process[k].is_alive():
                     logger.error(f"❌ 同步连接器进程 {k} (PID: {sync_process[k].pid}) 启动后立即退出！退出码: {sync_process[k].exitcode}")
                 else:
@@ -1675,8 +1673,7 @@ async def voice_clone(file: UploadFile = File(...), prefix: str = Form(...)):
                     logger.info(f"voice_id已保存到音色库: {voice_id}")
                     
                     # 验证voice_id是否能够被正确读取（添加短暂延迟，避免文件系统延迟）
-                    import time
-                    time.sleep(0.1)  # 等待100ms，确保文件写入完成
+                    await asyncio.sleep(0.1)  # 等待100ms，确保文件写入完成
                     
                     # 最多验证3次，每次间隔100ms
                     validation_success = False
@@ -1686,7 +1683,7 @@ async def voice_clone(file: UploadFile = File(...), prefix: str = Form(...)):
                             logger.info(f"voice_id保存验证成功: {voice_id} (尝试 {validation_attempt + 1})")
                             break
                         if validation_attempt < 2:
-                            time.sleep(0.1)
+                            await asyncio.sleep(0.1)
                     
                     if not validation_success:
                         logger.warning(f"voice_id保存后验证失败，但可能已成功保存: {voice_id}")

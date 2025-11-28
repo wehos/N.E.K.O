@@ -31,21 +31,36 @@ semantic_manager = SemanticMemory(recent_history_manager)
 settings_manager = ImportantSettingsManager()
 time_manager = TimeIndexedMemory(recent_history_manager)
 
-def reload_memory_components():
-    """重新加载记忆组件配置（用于新角色创建后）"""
+# 用于保护重新加载操作的锁
+_reload_lock = asyncio.Lock()
+
+async def reload_memory_components():
+    """重新加载记忆组件配置（用于新角色创建后）
+    
+    使用锁保护重新加载操作，确保原子性交换，避免竞态条件。
+    先创建所有新实例，然后原子性地交换引用。
+    """
     global recent_history_manager, semantic_manager, settings_manager, time_manager
-    logger.info("[MemoryServer] 开始重新加载记忆组件配置...")
-    try:
-        # 重新初始化各个管理器
-        recent_history_manager = CompressedRecentHistoryManager()
-        semantic_manager = SemanticMemory(recent_history_manager)
-        settings_manager = ImportantSettingsManager()
-        time_manager = TimeIndexedMemory(recent_history_manager)
-        logger.info("[MemoryServer] ✅ 记忆组件配置重新加载完成")
-        return True
-    except Exception as e:
-        logger.error(f"[MemoryServer] ❌ 重新加载记忆组件配置失败: {e}", exc_info=True)
-        return False
+    async with _reload_lock:
+        logger.info("[MemoryServer] 开始重新加载记忆组件配置...")
+        try:
+            # 先创建所有新实例
+            new_recent = CompressedRecentHistoryManager()
+            new_semantic = SemanticMemory(new_recent)
+            new_settings = ImportantSettingsManager()
+            new_time = TimeIndexedMemory(new_recent)
+            
+            # 然后原子性地交换引用
+            recent_history_manager = new_recent
+            semantic_manager = new_semantic
+            settings_manager = new_settings
+            time_manager = new_time
+            
+            logger.info("[MemoryServer] ✅ 记忆组件配置重新加载完成")
+            return True
+        except Exception as e:
+            logger.error(f"[MemoryServer] ❌ 重新加载记忆组件配置失败: {e}", exc_info=True)
+            return False
 
 # 全局变量用于控制服务器关闭
 shutdown_event = asyncio.Event()
@@ -235,7 +250,7 @@ def get_settings(lanlan_name: str):
 async def reload_config():
     """重新加载记忆服务器配置（用于新角色创建后）"""
     try:
-        success = reload_memory_components()
+        success = await reload_memory_components()
         if success:
             return {"status": "success", "message": "配置已重新加载"}
         else:
