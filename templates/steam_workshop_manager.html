@@ -2103,8 +2103,9 @@
                 const previewUrl = item.previewImage ? `/api/proxy-image?image_path=${encodeURIComponent(item.previewImage.replace(/\\/g, '/'))}` : '../static/icons/Steam_icon_logo.png';
                 
                 // 生成卡片HTML，对所有用户输入进行转义以防止XSS攻击
+                // 添加data-item-path属性用于后续检查上传标记文件
                 return `
-                    <div class="workshop-card">
+                    <div class="workshop-card" data-item-path="${encodeURIComponent(item.path)}">
                         <div class="card-header">
                             <img src="${previewUrl}" alt="${escapeHtml(item.name || '本地物品')}" class="card-image">
                             <div class="status-badge ${statusClass}">${statusText}</div>
@@ -2129,6 +2130,50 @@
                     </div>
                 `;
             }).join('');
+            
+            // 生成卡片后，检查每个物品的上传标记文件状态
+            checkUploadStatusForLocalItems();
+        }
+        
+        // 检查本地物品的上传标记文件状态
+        function checkUploadStatusForLocalItems() {
+            // 获取所有物品卡片
+            const itemCards = document.querySelectorAll('.workshop-card');
+            
+            itemCards.forEach(card => {
+                const itemPath = card.getAttribute('data-item-path');
+                if (itemPath) {
+                    // 调用后端API检查上传标记文件
+                    fetch(`/api/steam/workshop/check-upload-status?item_path=${itemPath}`)
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`HTTP错误，状态码: ${response.status}`);
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            if (data.success && data.is_published) {
+                                // 如果存在上传标记文件，更新状态为已发布
+                                const statusBadge = card.querySelector('.status-badge');
+                                if (statusBadge) {
+                                    statusBadge.className = 'status-badge status-published';
+                                    statusBadge.textContent = '已发布';
+                                }
+                                
+                                // 更新上传按钮状态为已发布
+                                const actionButton = card.querySelector('.card-actions button');
+                                if (actionButton) {
+                                    actionButton.className = 'button button-disabled';
+                                    actionButton.disabled = true;
+                                    actionButton.textContent = '已发布';
+                                }
+                            }
+                        })
+                        .catch(error => {
+                            console.error('检查上传标记文件失败:', error);
+                        });
+                }
+            });
         }
         
         // 准备物品上传

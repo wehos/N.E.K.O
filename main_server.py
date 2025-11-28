@@ -3532,6 +3532,82 @@ async def get_local_workshop_item(item_id: str, folder_path: str = None):
         logger.error(f"获取本地创意工坊物品失败: {e}")
         return JSONResponse(content={"success": False, "error": str(e)}, status_code=500)
 
+@app.get('/api/steam/workshop/check-upload-status')
+async def check_upload_status(item_path: str = None):
+    try:
+        # 验证路径参数
+        if not item_path:
+            return JSONResponse(content={
+                "success": False,
+                "error": "未提供物品文件夹路径"
+            }, status_code=400)
+        
+        # 安全检查：使用get_workshop_path()作为基础目录
+        base_workshop_folder = os.path.abspath(os.path.normpath(get_workshop_path()))
+        
+        # Windows路径处理：确保路径分隔符正确
+        if os.name == 'nt':  # Windows系统
+            # 解码并处理Windows路径
+            decoded_item_path = unquote(item_path)
+            # 替换斜杠为反斜杠，确保Windows路径格式正确
+            decoded_item_path = decoded_item_path.replace('/', '\\')
+            # 处理可能的双重编码问题
+            if decoded_item_path.startswith('\\\\'):
+                decoded_item_path = decoded_item_path[2:]  # 移除多余的反斜杠前缀
+        else:
+            decoded_item_path = unquote(item_path)
+        
+        # 将相对路径转换为基于基础目录的绝对路径
+        if not os.path.isabs(decoded_item_path):
+            full_path = os.path.join(base_workshop_folder, decoded_item_path)
+        else:
+            full_path = decoded_item_path
+            full_path = os.path.normpath(full_path)
+        
+        # 安全检查：验证路径是否在基础目录内
+        if not full_path.startswith(base_workshop_folder):
+            logger.warning(f'路径遍历尝试被拒绝: {item_path}')
+            return JSONResponse(content={"success": False, "error": "访问被拒绝: 路径不在允许的范围内"}, status_code=403)
+        
+        # 验证路径存在性
+        if not os.path.exists(full_path) or not os.path.isdir(full_path):
+            return JSONResponse(content={
+                "success": False,
+                "error": "无效的物品文件夹路径"
+            }, status_code=400)
+        
+        # 搜索以steam_workshop_id_开头的txt文件
+        import glob
+        import re
+        
+        upload_files = glob.glob(os.path.join(full_path, "steam_workshop_id_*.txt"))
+        
+        # 提取第一个找到的物品ID
+        published_file_id = None
+        if upload_files:
+            # 获取第一个文件
+            first_file = upload_files[0]
+            
+            # 从文件名提取ID
+            match = re.search(r'steam_workshop_id_(\d+)\.txt', os.path.basename(first_file))
+            if match:
+                published_file_id = match.group(1)
+        
+        # 返回检查结果
+        return JSONResponse(content={
+            "success": True,
+            "is_published": published_file_id is not None,
+            "published_file_id": published_file_id
+        })
+        
+    except Exception as e:
+        logger.error(f"检查上传状态失败: {e}")
+        return JSONResponse(content={
+            "success": False,
+            "error": str(e),
+            "message": "检查上传状态时发生错误"
+        }, status_code=500)
+
 @app.post('/api/steam/workshop/publish')
 async def publish_to_workshop(request: Request):
     global steamworks
@@ -3698,6 +3774,28 @@ def _publish_workshop_item(steamworks, title, description, content_folder, previ
     """
     # 在函数内部添加导入语句，确保枚举在函数作用域内可用
     from steamworks.enums import EItemUpdateStatus
+    
+    # 检查是否存在现有的上传标记文件，避免重复上传
+    try:
+        if os.path.exists(content_folder) and os.path.isdir(content_folder):
+            # 查找以steam_workshop_id_开头的txt文件
+            import glob
+            marker_files = glob.glob(os.path.join(content_folder, "steam_workshop_id_*.txt"))
+            
+            if marker_files:
+                # 使用第一个找到的标记文件
+                marker_file = marker_files[0]
+                
+                # 从文件名中提取物品ID
+                import re
+                match = re.search(r'steam_workshop_id_([0-9]+)\.txt', marker_file)
+                if match:
+                    existing_item_id = int(match.group(1))
+                    logger.info(f"检测到物品已上传，找到标记文件: {marker_file}，物品ID: {existing_item_id}")
+                    return existing_item_id
+    except Exception as e:
+        logger.error(f"检查上传标记文件时出错: {e}")
+        # 即使检查失败，也继续尝试上传，不阻止功能
     try:
         # 再次验证内容文件夹，确保在多线程环境中仍然有效
         if not os.path.exists(content_folder) or not os.path.isdir(content_folder):
@@ -3945,6 +4043,19 @@ def _publish_workshop_item(steamworks, title, description, content_folder, previ
             raise Exception(error_msg)
         
         logger.info(f"创意工坊物品上传成功完成！物品ID: {created_item_id[0]}")
+        
+        # 在原文件夹创建带物品ID的txt文件，标记为已上传
+        try:
+            marker_file_path = os.path.join(content_folder, f"steam_workshop_id_{created_item_id[0]}.txt")
+            with open(marker_file_path, 'w', encoding='utf-8') as f:
+                f.write(f"Steam创意工坊物品ID: {created_item_id[0]}\n")
+                f.write(f"上传时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}\n")
+                f.write(f"物品标题: {title}\n")
+            logger.info(f"已在原文件夹创建上传标记文件: {marker_file_path}")
+        except Exception as e:
+            logger.error(f"创建上传标记文件失败: {e}")
+            # 即使创建标记文件失败，也不影响物品上传的成功返回
+        
         return created_item_id[0]
         
     except Exception as e:
