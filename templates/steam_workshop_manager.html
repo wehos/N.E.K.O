@@ -1,180 +1,261 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Steam创意工坊管理</title>
+    <title data-i18n="steam.workshopManager">Steam 创意工坊管理 - Project N.E.K.O.</title>
+    <!-- i18next 加载器（统一处理 CDN 加载和初始化） -->
+    <script src="/static/i18n-i18next.js"></script>
+    <script src="/static/common_dialogs.js"></script>
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f5f5f5;
-            margin: 0;
+        *:focus {
+            outline: none !important;
+            box-shadow: none !important; 
+        }
+        html, body {
+            height: 100%; 
+            margin: 0; 
+            padding: 0; 
+            background: #eee; 
+            color: #222;
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            overflow-x: hidden;
+        }
+        
+        /* 布局容器 */
+        .layout-container {
+            display: flex;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        
+        #sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 280px;
+            width: 280px;
+            padding: 15px;
+            background: #fff;
+            border-radius: 12px;
+        }
+        
+        .main-content {
+            flex: 1;
+            background: #fff;
+            border-radius: 12px;
             padding: 20px;
+            min-width: 0; /* 防止flex子项溢出 */
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .control-label {
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        .control-select,
+        .control-input {
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            font-size: 14px;
+            cursor: pointer;
+            background: #fff;
+            color: #333;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23d5f1ff' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 35px;
+        }
+        
+        .control-input {
+            cursor: text;
+            padding-right: 15px;
+            background-image: none;
+        }
+        
+        textarea.control-input {
+            min-height: 100px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        
+        .btn {
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+            color: white;
+            transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+            text-align: center;
+        }
+        
+        .btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        
+        .btn:disabled {
+            background: #e0e0e0;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        
+        .btn-primary {
+            background: #44b7fe;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background: #2662c8;
+        }
+        
+        .btn-secondary {
+            background: #d5f1ff;
             color: #333;
         }
         
-        /* 浏览器通知样式 */
-        .browser-notice {
+        .btn-secondary:hover:not(:disabled) {
+            background: #b8e5ff;
+            color: #333;
+        }
+        
+        #sidebar .btn-secondary.active {
+            background: #44b7fe;
+            color: white;
+        }
+        
+        .btn-success {
+            background: #44b7fe;
+        }
+        
+        .btn-success:hover:not(:disabled) {
+            background: #2662c8;
+        }
+        
+        .btn-danger {
+            background: #ff6b6b;
+        }
+        
+        .btn-danger:hover:not(:disabled) {
+            background: #ff4757;
+        }
+        
+        .btn-icon {
             display: flex;
-            align-items: flex-start;
-            background-color: #e8f4fd;
-            border: 1px solid #b8e2ff;
-            border-radius: 8px;
-            padding: 16px;
-            margin: 20px auto;
-            max-width: 600px;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
         }
         
-        .notice-icon {
-            font-size: 24px;
-            margin-right: 12px;
-            margin-top: 2px;
+        .btn-icon img {
+            width: 16px;
+            height: 16px;
+            object-fit: contain;
         }
         
-        .notice-content h3 {
-            margin: 0 0 8px 0;
-            color: #0056b3;
-            font-size: 18px;
+        .action-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
         }
         
-        .notice-content p {
-            margin: 6px 0;
-            color: #495057;
-            line-height: 1.5;
+        .action-group .control-select,
+        .action-group .control-input {
+            flex-grow: 1;
         }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            padding: 20px;
-        }
+        
         h1 {
-            color: #1b2838;
-            margin-bottom: 30px;
-            border-bottom: 2px solid #2a475e;
-            padding-bottom: 10px;
-        }
-        /* 页面控制区样式 */
-        .page-controls {
+            color: #333;
+            margin-bottom: 25px;
+            font-weight: 600;
+            font-size: 24px;
             display: flex;
-            justify-content: flex-end;
-            margin-bottom: 20px;
+            align-items: center;
+            gap: 10px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e0e0e0;
         }
         
-        /* 上传切换按钮样式 */
-        .upload-toggle-button {
-            background-color: #27ae60;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 16px;
-            margin: 4px 2px;
-            cursor: pointer;
-            border-radius: 4px;
-            transition: background-color 0.3s, transform 0.2s;
-        }
-        
-        .upload-toggle-button:hover {
-            background-color: #229954;
-            transform: translateY(-2px);
-        }
-        
-        .upload-toggle-button:active {
-            transform: translateY(0);
-        }
-        
-        /* 上传区域容器样式 */
-        .upload-section-container {
-            background-color: #f9f9f9;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            transition: all 0.3s ease;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        input[type="text"],
-        input[type="number"],
-        textarea,
-        select {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-        textarea {
-            resize: vertical;
-            min-height: 100px;
-        }
-        .button {
-            background-color: #2a475e;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 16px;
-            margin: 4px 2px;
-            cursor: pointer;
-            border-radius: 4px;
-            transition: background-color 0.3s;
-        }
-        .button:hover {
-            background-color: #1b2838;
-        }
-        .button-danger {
-            background-color: #e74c3c;
-        }
-        .button-danger:hover {
-            background-color: #c0392b;
-        }
+        /* 上传区域样式 - 去掉边框效果 */
         .upload-section {
-            margin-bottom: 30px;
+            background: #fff;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
         }
-        .file-upload {
-            border: 2px dashed #ddd;
-            padding: 20px;
-            text-align: center;
-            border-radius: 4px;
-            margin-bottom: 15px;
+        
+        .upload-section h2 {
+            color: #333;
+            font-weight: 600;
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-size: 20px;
         }
-        .file-upload.dragover {
-            border-color: #2a475e;
-            background-color: #f0f4f8;
-        }
+        
+        /* 标签容器样式 */
         .tags-container {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 8px;
             margin-bottom: 15px;
         }
+        
         .tag {
-            background-color: #e1e8ed;
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-size: 14px;
+            background: #d5f1ff;
+            color: #333;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 13px;
             display: flex;
             align-items: center;
+            gap: 5px;
+            transition: background 0.2s;
         }
+        
+        .tag:hover {
+            background: #b8e5ff;
+        }
+        
         .tag-remove {
-            margin-left: 5px;
             cursor: pointer;
             font-weight: bold;
+            font-size: 16px;
+            line-height: 1;
         }
+        
+        /* 信息框样式 */
+        .info-box {
+            background: #e1f5fe;
+            border-left: 4px solid #0288d1;
+            padding: 16px 20px;
+            margin: 16px 0;
+            border-radius: 8px;
+            border-top-left-radius: 0;
+            border-bottom-left-radius: 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        
+        .info-box p {
+            margin: 0;
+            color: #01579b;
+            font-weight: 500;
+        }
+        
+        /* 状态指示器 */
         .status-indicator {
             display: inline-block;
             width: 10px;
@@ -182,79 +263,650 @@
             border-radius: 50%;
             margin-right: 5px;
         }
+        
+        /* 标签页导航样式 */
+        .navigation-tabs {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        
+        .tab-buttons {
+            display: flex;
+            padding: 5px;
+            background: #f5f5f5;
+        }
+        
+        .tab-button {
+            flex: 1;
+            padding: 12px 20px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            color: #666;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            margin: 0 2px;
+        }
+        
+        .tab-button:hover {
+            background: #e0e0e0;
+            color: #333;
+        }
+        
+        .tab-button.active {
+            background: #44b7fe;
+            color: white;
+        }
+        
+        .tab-content {
+            padding: 20px;
+            background: #fff;
+            border-radius: 0 0 12px 12px;
+        }
+        
+        /* 菜单部分样式 */
+        .menu-section h3, .config-section h4 {
+            margin-top: 20px;
+            margin-bottom: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 8px;
+        }
+        
+        .menu-section .button-group {
+            margin-bottom: 5px;
+        }
+        
+        #sidebar .btn-secondary {
+            margin-bottom: 2px;
+        }
+        
+        .menu-section {
+            margin-bottom: 5px;
+        }
+        
+        .info-text {
+            font-size: 12px;
+            color: #666;
+            margin: 5px 0;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+        
+        .info-text p {
+            margin: 0;
+            line-height: 1.4;
+        }
+        
+        /* 配置区域样式 - 去掉边框效果 */
+        .section-card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        /* 区域标题样式 */
+        .section-header {
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .section-header h2 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .config-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .config-section h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .control-group {
+            margin: 15px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .control-label {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+            color: #333;
+        }
+        
+        .control-input {
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        
+        .control-input:focus {
+            outline: none;
+            border-color: #44b7fe;
+            box-shadow: 0 0 0 2px rgba(68, 183, 254, 0.2);
+        }
+        
+        .control-group.checkbox {
+            flex-direction: row;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        
+        .checkbox-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+            flex: 1;
+        }
+        
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+        
+        .help-text.success {
+            color: #2e7d32;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-top: 15px;
+        }
+        
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .button-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .control-group.checkbox {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+        
+        /* 设置面板相关样式 */
+        .settings-container {
+            margin-top: 15px;
+        }
+        
+        #settings-panel {
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 15px;
+            background-color: #fff;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transition: all 0.4s ease;
+            overflow: hidden;
+        }
+        
+        #settings-panel h3 {
+            margin-top: 0;
+            color: #333;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        
         .status-published {
             background-color: #2ecc71;
         }
+        
         .status-pending {
             background-color: #f39c12;
         }
+        
         .status-failed {
             background-color: #e74c3c;
         }
+        
+        /* 过滤器控件 */
         .filter-controls {
             display: flex;
             justify-content: space-between;
             margin-bottom: 20px;
             flex-wrap: wrap;
             gap: 15px;
+            background: #fff;
+            border-radius: 12px;
+            padding: 15px 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
+        
         .filter-group {
             display: flex;
             gap: 10px;
             align-items: center;
         }
+        
+        /* 卡片容器样式 - tile视图 */
+        .cards-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 24px;
+            margin-top: 20px;
+        }
+        
+        .workshop-card {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+            border: 1px solid #e0e0e0;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            height: 380px;
+        }
+        
+        .workshop-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.12);
+        }
+        
+        .card-image {
+            width: 100%;
+            height: 160px;
+            object-fit: cover;
+            display: block;
+            background-color: #f5f5f5;
+        }
+        
+        .card-content {
+            padding: 20px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0 0 12px 0;
+            color: #333;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        /* 删除重复的status-badge定义，只保留下方的统一样式 */
+        
+        .status-subscribed {
+            background-color: #e6f3ff;
+            color: #0066cc;
+        }
+        
+        .status-downloading {
+            background-color: #fff2cc;
+            color: #cc7700;
+        }
+        
+        .status-needs-update {
+            background-color: #fff2cc;
+            color: #cc7700;
+        }
+        
+        .status-installed {
+            background-color: #e6ffe6;
+            color: #008000;
+        }
+        
+        .author-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        
+        .author-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: #0078d4;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .card-info {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        /* 统一的状态徽章样式 */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 16px;
+            font-size: 0.85em;
+            font-weight: 500;
+            margin-right: 8px;
+            margin-bottom: 8px;
+            background: #f0f0f0;
+            color: #666;
+            text-align: center;
+            box-sizing: border-box;
+        }
+        
+        /* 为卡片头部的状态徽章添加定位样式 */
+        .card-header .status-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            margin: 0;
+            z-index: 10;
+            padding: 2px 8px;
+            font-size: 11px;
+            border-radius: 12px;
+        }
+        
+        /* 调整卡片高度以适应新结构 */
+        .workshop-card {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+            overflow: hidden;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            height: auto;
+            min-height: 380px;
+        }
+        
+        /* 卡片头部样式 */
+        .card-header {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* 卡片信息网格布局 */
+        .card-info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .card-info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .info-label {
+            font-size: 12px;
+            color: #888;
+            font-weight: 500;
+        }
+        
+        .info-value {
+            font-size: 14px;
+            color: #333;
+            font-weight: 400;
+        }
+        
+        .status-subscribed {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+        
+        .status-installed {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        
+        .status-downloading {
+            background: #fff3e0;
+            color: #ef6c00;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-needs-update {
+            background: #fff8e1;
+            color: #ff8f00;
+        }
+        
+        .status-error {
+            background: #ffebee;
+            color: #c62828;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.7; }
+            50% { opacity: 1; }
+            100% { opacity: 0.7; }
+        }
+        
+        /* 安装路径样式 */
+        .card-path {
+            background: #f5f7fa;
+            padding: 10px 14px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+        
+        .path-text {
+            font-size: 12px;
+            color: #666;
+            word-break: break-all;
+            display: inline-block;
+            max-width: 100%;
+            line-height: 1.4;
+        }
+        
+        /* 卡片操作按钮 */
+        .card-actions {
+            margin-top: auto;
+            padding-top: 12px;
+            display: flex;
+            gap: 8px;
+        }
+        
+        .card-actions button,
+        .card-actions .button {
+            width: 100%;
+            padding: 11px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s ease;
+            text-align: center;
+            display: inline-block;
+        }
+        
+        .card-actions button:hover,
+        .card-actions .button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+        
+        /* 默认按钮样式 */
+        .card-actions button,
+        .card-actions .button {
+            background: #f1f5f9;
+            color: #334155;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .card-actions button:hover,
+        .card-actions .button:hover {
+            background: #e2e8f0;
+            border-color: #cbd5e1;
+        }
+        
+        /* 主要按钮样式 */
+        .card-actions .button-primary {
+            background: #44b7fe;
+            color: white;
+            border: 1px solid #44b7fe;
+        }
+        
+        .card-actions .button-primary:hover {
+            background: #2662c8;
+            border-color: #2662c8;
+        }
+        
+        /* 禁用按钮样式 */
+        .card-actions .button-disabled {
+            background: #f1f5f9;
+            color: #94a3b8;
+            border: 1px solid #e2e8f0;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        
+        .card-actions .button-disabled:hover {
+            transform: none;
+            box-shadow: none;
+            background: #f1f5f9;
+            border-color: #e2e8f0;
+        }
+        
+        /* 危险操作按钮样式 */
+        .card-actions .button-danger {
+            background: #e11d48;
+            color: white;
+            border: 1px solid #e11d48;
+        }
+        
+        .card-actions .button-danger:hover {
+            background: #be123c;
+            border-color: #be123c;
+        }
+        
+        /* 下载进度条样式 */
+        .download-progress {
+            margin: 12px 0 8px 0;
+            width: 100%;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background: #f0f0f0;
+            border-radius: 5px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0078d4, #44b7fe);
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            color: #333;
+            font-size: 0.75em;
+            font-weight: bold;
+            transition: width 0.3s ease;
+            padding-right: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1) inset;
+        }
+        
+        /* 空状态样式 */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+        }
+        
+        .empty-state p {
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+        
+        /* 分页控件样式 */
         .pagination {
             display: flex;
             justify-content: center;
-            margin-top: 20px;
+            margin-top: 30px;
+            gap: 8px;
         }
-        .pagination button {
-            margin: 0 5px;
+        
+        .pagination .btn {
+            min-width: 40px;
         }
-        .empty-state {
-            text-align: center;
-            padding: 40px;
-            color: #7f8c8d;
-        }
+        
+        /* 消息提示样式 */
         .success-message,
-        .error-message {
-            padding: 10px;
-            margin-bottom: 15px;
-            border-radius: 4px;
-        }
-        .success-message {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-            position: relative;
-            padding-right: 30px;
-            opacity: 0;
-            transform: translateY(-10px);
-            transition: opacity 0.3s ease, transform 0.3s ease;
-        }
-        .error-message {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-            position: relative;
-            padding-right: 30px;
-            opacity: 0;
-            transform: translateY(-10px);
-            transition: opacity 0.3s ease, transform 0.3s ease;
-        }
+        .error-message,
         .warning-message {
-            background-color: #fff3cd;
-            color: #856404;
-            border: 1px solid #ffeaa7;
+            padding: 12px 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
             position: relative;
-            padding-right: 30px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
             opacity: 0;
             transform: translateY(-10px);
             transition: opacity 0.3s ease, transform 0.3s ease;
         }
+        
+        .success-message {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border-left: 4px solid #4caf50;
+        }
+        
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            border-left: 4px solid #f44336;
+        }
+        
+        .warning-message {
+            background: #fff8e1;
+            color: #ff8f00;
+            border-left: 4px solid #ffb74d;
+        }
+        
         .message-close {
             position: absolute;
-            right: 10px;
+            right: 15px;
             top: 50%;
             transform: translateY(-50%);
             cursor: pointer;
@@ -262,223 +914,11 @@
             font-size: 18px;
             color: inherit;
             opacity: 0.7;
+            transition: opacity 0.2s;
         }
+        
         .message-close:hover {
             opacity: 1;
-        }
-        .input.error {
-            border-color: #dc3545;
-            background-color: #fdf2f2;
-        }
-        .button-disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        .button-sm {
-            font-size: 14px;
-            padding: 5px 10px;
-            margin: 0 5px;
-        }
-        
-        /* 为表单输入添加错误状态样式 */
-        input.error,
-        textarea.error,
-        select.error {
-            border-color: #dc3545;
-            background-color: #fdf2f2;
-        }
-        
-        /* 添加表单组的错误提示样式 */
-        .form-group.error {
-            color: #dc3545;
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        
-        /* 卡片样式 */
-        .cards-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
-        .workshop-card {
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            transition: transform 0.3s, box-shadow 0.3s;
-            display: flex;
-            flex-direction: column;
-        }
-        .workshop-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
-        }
-        .card-image {
-            width: 100%;
-            height: 180px;
-            object-fit: cover;
-            display: block;
-        }
-        .card-content {
-            padding: 16px;
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
-        .card-title {
-            font-size: 18px;
-            font-weight: bold;
-            margin: 0 0 8px 0;
-            color: #1b2838;
-        }
-        .card-author {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 12px;
-        }
-        .card-info {
-            font-size: 12px;
-            color: #888;
-            margin-bottom: 8px;
-        }
-        /* 安装路径样式 */
-        .card-path {
-            max-height: 3em;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .path-text {
-            font-size: 11px;
-            color: #666;
-            word-break: break-all;
-            display: inline-block;
-            max-width: 100%;
-            vertical-align: middle;
-        }
-        
-        /* 物品状态样式 */
-        .status-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 0.8em;
-            font-weight: 500;
-            margin-right: 8px;
-            margin-bottom: 8px;
-        }
-
-        .status-subscribed {
-            background-color: #e3f2fd;
-            color: #1565c0;
-        }
-
-        .status-installed {
-            background-color: #e8f5e9;
-            color: #2e7d32;
-        }
-
-        .status-downloading {
-            background-color: #fff3e0;
-            color: #ef6c00;
-            animation: pulse 2s infinite;
-        }
-
-        .status-needs-update {
-            background-color: #fff8e1;
-            color: #ff8f00;
-        }
-
-        .status-error {
-            background-color: #ffebee;
-            color: #c62828;
-        }
-
-        @keyframes pulse {
-            0% {
-                opacity: 0.7;
-            }
-            50% {
-                opacity: 1;
-            }
-            100% {
-                opacity: 0.7;
-            }
-        }
-        
-        /* 下载进度条样式 */
-        .download-progress {
-            margin: 8px 0;
-            width: 100%;
-        }
-        
-        .progress-bar {
-            width: 100%;
-            height: 16px;
-            background-color: #e0e0e0;
-            border-radius: 8px;
-            overflow: hidden;
-            position: relative;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background-color: #2196f3;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 0.7em;
-            font-weight: bold;
-            transition: width 0.3s ease;
-        }
-        
-        /* 用户头像样式 */
-        .author-info {
-            display: flex;
-            align-items: center;
-            margin: 4px 0;
-        }
-        
-        .author-avatar {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            margin-right: 6px;
-            background-color: #f0f0f0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.8em;
-            color: #666;
-        }
-        .card-actions {
-            margin-top: auto;
-            display: flex;
-            gap: 8px;
-            justify-content: flex-end;
-        }
-        .card-actions .button {
-            font-size: 14px;
-            padding: 8px 12px;
-        }
-        
-        /* 响应式调整 */
-        @media (max-width: 768px) {
-            .cards-container {
-                grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-            }
-            .filter-controls {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .filter-group {
-                flex-direction: column;
-                align-items: stretch;
-            }
         }
         
         /* 模态框样式 */
@@ -489,19 +929,20 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.5);
             z-index: 1000;
             justify-content: center;
             align-items: center;
+            padding: 20px;
         }
         
         .modal-content {
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-            width: 90%;
-            max-width: 600px;
-            max-height: 80vh;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            max-width: 650px;
+            max-height: 85vh;
             overflow: hidden;
             display: flex;
             flex-direction: column;
@@ -523,15 +964,15 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 16px 20px;
+            padding: 20px 25px;
             border-bottom: 1px solid #e0e0e0;
-            background-color: #f9f9f9;
+            background: #fafafa;
         }
         
         .modal-title {
             font-size: 20px;
-            font-weight: bold;
-            color: #1b2838;
+            font-weight: 600;
+            color: #333;
             margin: 0;
         }
         
@@ -539,25 +980,25 @@
             background: none;
             border: none;
             font-size: 24px;
-            color: #7f8c8d;
+            color: #888;
             cursor: pointer;
             padding: 0;
-            width: 30px;
-            height: 30px;
+            width: 32px;
+            height: 32px;
             display: flex;
             align-items: center;
             justify-content: center;
-            border-radius: 4px;
-            transition: background-color 0.2s;
+            border-radius: 6px;
+            transition: background 0.2s, color 0.2s;
         }
         
         .modal-close:hover {
-            background-color: #e0e0e0;
+            background: #f0f0f0;
             color: #333;
         }
         
         .modal-body {
-            padding: 20px;
+            padding: 25px;
             overflow-y: auto;
             flex: 1;
         }
@@ -565,30 +1006,35 @@
         .modal-footer {
             display: flex;
             justify-content: flex-end;
-            padding: 16px 20px;
+            padding: 20px 25px;
             border-top: 1px solid #e0e0e0;
-            background-color: #f9f9f9;
-            gap: 10px;
+            background: #fafafa;
+            gap: 12px;
         }
         
         .item-detail-container {
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 16px;
+            padding: 20px;
+            background: #fff;
         }
         
         .item-preview-large {
             width: 100%;
-            max-height: 300px;
+            max-height: 350px;
             object-fit: cover;
-            border-radius: 4px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
         
         .item-info-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 16px;
+            gap: 16px;
+            margin-bottom: 20px;
         }
         
         .item-info-item {
@@ -596,173 +1042,515 @@
         }
         
         .item-info-label {
-            font-weight: bold;
-            color: #1b2838;
+            font-weight: 600;
+            color: #334155;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
         }
         
         .item-description {
-            margin-top: 16px;
-            line-height: 1.6;
+            margin-top: 20px;
+            line-height: 1.7;
+            color: #475569;
+            padding: 16px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #f1f5f9;
         }
         
-        .info-box {
-            background-color: #e1f5fe;
-            border-left: 4px solid #0288d1;
-            padding: 12px 16px;
-            margin: 16px 0;
-            border-radius: 4px;
+        /* 浏览器通知样式 */
+        .workshop-integration-info {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
         }
         
-        .info-box p {
-            margin: 0;
-            color: #01579b;
+        .workshop-integration-info h4 {
+            color: #334155;
+            margin: 0 0 12px 0;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .workshop-integration-info .info-text {
+            font-size: 14px;
+            color: #64748b;
+        }
+        
+        .workshop-integration-info .info-text p {
+            margin: 6px 0;
+            line-height: 1.5;
+        }
+        
+        /* 响应式调整 */
+        @media (max-width: 1024px) {
+            .layout-container {
+                flex-direction: column;
+                margin: 10px;
+                padding: 0;
+            }
+            
+            #sidebar {
+                width: auto;
+                min-width: auto;
+            }
+            
+            .cards-container {
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .filter-controls {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 15px;
+            }
+            
+            .filter-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .item-info-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .modal-footer {
+                flex-direction: column-reverse;
+            }
+            
+            .modal-footer .btn {
+                width: 100%;
+            }
+        }
+        
+        /* 水平标签页样式 */
+        .tabs {
+            display: flex;
+            flex-wrap: nowrap;
+            border-radius: 8px;
+            background: #f0f4f8;
+            padding: 2px;
+            margin-bottom: 15px;
+            justify-content: space-between;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: #666;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+            text-align: center;
+            white-space: nowrap;
+            /* 响应式宽度设置 */
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* 媒体查询 - 当窗口宽度小于特定尺寸时调整标签样式 */
+        @media (max-width: 600px) {
+            .tab {
+                flex: none;
+                width: auto;
+                min-width: 90px;
+                padding: 10px 15px;
+                font-size: 13px;
+            }
+            
+            .tabs {
+                justify-content: flex-start;
+            }
+        }
+        
+        /* 小窗口特定样式类 */
+        .tabs.compact .tab {
+            flex: none;
+            width: auto;
+            min-width: 90px;
+            padding: 10px 15px;
+        }
+        
+        .tabs.compact {
+            justify-content: flex-start;
+            gap: 4px;
+        }
+        
+        /* 恢复大窗口样式的类 */
+        .tabs.normal .tab {
+            flex: 1;
+            min-width: 0;
+            padding: 10px 20px;
+        }
+        
+        .tabs.normal {
+            justify-content: space-between;
+        }
+        
+        .tab:hover {
+            background: #e1e8ed;
+            color: #333;
+        }
+        
+        .tab.active {
+            background: #44b7fe;
+            color: white;
+            box-shadow: 0 2px 4px rgba(68, 183, 254, 0.3);
+        }
+        
+        /* 页面控制按钮 */
+        .page-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+        
+        /* 状态文本样式 */
+        #status {
+            color: #4f8cff;
+            font-size: 14px;
+            font-weight: 500;
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Steam创意工坊管理</h1>
-        
-        <!-- 页面控制区 -->
-        <div class="page-controls">
-            <button id="upload-toggle-button" class="upload-toggle-button" onclick="toggleUploadSection()">上传内容到创意工坊</button>
-            <button id="local-items-toggle-button" class="upload-toggle-button" onclick="toggleLocalItemsSection()">管理本地物品</button>
+    <!-- 侧边栏 -->
+    <!-- 布局容器 -->
+    <div class="layout-container">
+        <!-- 侧边栏 -->
+        <div id="sidebar">
+            <!-- 主要操作组 -->
+            <div class="menu-section">
+                <!-- 标签切换按钮组 -->
+                <div class="tabs compact" id="workshop-tabs">
+                    <button class="tab active" onclick="switchTab('subscriptions-content')">订阅内容</button>
+                    <button class="tab" onclick="switchTab('local-items-content')">本地内容</button>
+                    <button class="tab" onclick="switchTab('upload-content')">上传内容</button>
+                </div>
+                
+                <!-- 修复的自定义tooltip实现 -->
+                <style>
+                /* 确保侧边栏作为定位容器 */
+                #sidebar {
+                    position: relative;
+                    overflow: visible;
+                }
+                
+                /* 标签按钮基础样式 */
+                .tabs button {
+                    position: relative;
+                    cursor: pointer;
+                    /* 禁用浏览器默认tooltip */
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+                
+                /* 移除可能存在的title属性 */
+                .tabs button { title: ""; }
+                
+                /* 完全重写的tooltip实现 */
+                .tabs button:hover {
+                    /* 移除默认的title提示行为 */
+                    pointer-events: auto;
+                }
+                
+                /* 添加安全的工具提示实现 */
+                .tabs {
+                    position: relative;
+                    /* 确保tooltip在容器内 */
+                    contain: layout;
+                }
+                
+                /* 替代方案：通过JavaScript控制tooltip，完全避免CSS定位问题 */
+                </style>
+                
+                <script>
+                // JavaScript控制的tooltip实现
+                document.addEventListener('DOMContentLoaded', function() {
+                    const tabButtons = document.querySelectorAll('.tabs button');
+                    
+                    // 创建tooltip元素
+                    let tooltip = document.createElement('div');
+                    tooltip.id = 'custom-tooltip';
+                    tooltip.style.cssText = `
+                        position: absolute;
+                        background: rgba(0, 0, 0, 0.8);
+                        color: white;
+                        padding: 5px 10px;
+                        border-radius: 4px;
+                        font-size: 12px;
+                        white-space: nowrap;
+                        pointer-events: none;
+                        z-index: 1000;
+                        display: none;
+                    `;
+                    document.body.appendChild(tooltip);
+                    
+                    // 为每个标签按钮添加事件监听
+                    tabButtons.forEach(button => {
+                        // 获取按钮文本作为tooltip内容
+                        const tooltipText = button.textContent.trim();
+                        
+                        button.addEventListener('mouseenter', function(e) {
+                            // 计算tooltip位置
+                            const buttonRect = button.getBoundingClientRect();
+                            const sidebarRect = document.getElementById('sidebar').getBoundingClientRect();
+                            
+                            // 计算tooltip尺寸
+                            tooltip.textContent = tooltipText;
+                            tooltip.style.display = 'block';
+                            const tooltipRect = tooltip.getBoundingClientRect();
+                            
+                            // 确保tooltip在侧边栏内显示
+                            let left = buttonRect.left + buttonRect.width / 2 - tooltipRect.width / 2;
+                            
+                            // 检查并修正左侧位置
+                            if (left < sidebarRect.left + 10) {
+                                left = sidebarRect.left + 10;
+                            }
+                            // 检查并修正右侧位置
+                            if (left + tooltipRect.width > sidebarRect.right - 10) {
+                                left = sidebarRect.right - tooltipRect.width - 10;
+                            }
+                            
+                            // 设置tooltip位置
+                            tooltip.style.left = left + 'px';
+                            tooltip.style.top = (buttonRect.top - tooltipRect.height - 5) + 'px';
+                        });
+                        
+                        button.addEventListener('mouseleave', function() {
+                            tooltip.style.display = 'none';
+                        });
+                        
+                        // 阻止默认的title提示
+                        button.addEventListener('mouseover', function(e) {
+                            e.preventDefault();
+                        });
+                    });
+                });
+                </script>
+                <script>
+                // 响应式标签页处理
+                function updateTabsLayout() {
+                    const tabs = document.getElementById('workshop-tabs');
+                    const containerWidth = tabs.parentElement.clientWidth;
+                    
+                    // 定义切换阈值
+                    const thresholdWidth = 400;
+                    
+                    if (containerWidth < thresholdWidth) {
+                        tabs.classList.remove('normal');
+                        tabs.classList.add('compact');
+                    } else {
+                        tabs.classList.remove('compact');
+                        tabs.classList.add('normal');
+                    }
+                }
+                
+                // 初始化时调用一次
+                window.addEventListener('DOMContentLoaded', updateTabsLayout);
+                // 监听窗口大小变化
+                window.addEventListener('resize', updateTabsLayout);
+                </script>
+            </div>
+            
+
+            
+            <!-- 关于创意工坊集成说明 -->
+            <div class="menu-section workshop-integration-info">
+                <div class="info-text">
+                    <p>通过此页面，您可以浏览、订阅、下载和管理Steam创意工坊中的Live2D模型和场景。</p>
+                    <p>您还可以将自己的创作发布到Steam创意工坊，与社区共享！</p>
+                </div>
+            </div>
+            
+            <div class="config-section">
+                <div class="control-group">
+                    <div class="control-label">每页显示</div>
+                    <select id="page-size" class="control-select" onchange="updatePageSize()">
+                        <option value="12">12</option>
+                        <option value="24">24</option>
+                        <option value="48">48</option>
+                    </select>
+                </div>
+            </div>
         </div>
         
-        <!-- 上传内容部分 -->
-        <div id="upload" class="upload-section-container" style="display: none;">
-            <div class="upload-section">
-                <h2>上传到创意工坊</h2>
+        <!-- 主内容区域 -->
+        <div class="main-content">
+        <!-- 标题已移除 -->
+        
+        <!-- 标签内容容器 -->
+        <div class="tab-contents">
+            <!-- 订阅内容标签页 -->
+            <div id="subscriptions-content" class="tab-content active">
+                <div class="section-card">
+                    <div class="section-header">
+                        <h2>我的订阅物品</h2>
+                    </div>
+                    
+                    <div class="filter-controls">
+                    <div class="filter-group">
+                        <div class="filter-label">搜索：</div>
+                        <input type="text" id="search-subscription" class="control-input" placeholder="搜索订阅内容...">
+                    </div>
+                    <div class="filter-group">
+                        <div class="filter-label">排序：</div>
+                        <select id="sort-subscription" class="control-select">
+                            <option value="name_asc">名称（升序）</option>
+                            <option value="name_desc">名称（降序）</option>
+                            <option value="date_asc">订阅日期（升序）</option>
+                            <option value="date_desc">订阅日期（降序）</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <button class="btn btn-primary" onclick="loadSubscriptions()">刷新订阅内容</button>
+                    </div>
+                </div>
+                
+                <div id="subscriptions-result">
+                    <!-- 卡片容器 -->
+                    <div id="subscriptions-list" class="cards-container">
+                        <!-- 空状态 -->
+                        <div class="empty-state">
+                            <p>正在加载您的订阅物品...</p>
+                            <button class="btn btn-secondary" onclick="loadSubscriptions()">重新加载</button>
+                        </div>
+                    </div>
+                    
+                    <div class="pagination">
+                        <button class="btn btn-secondary" disabled>上一页</button>
+                        <span>第 1 页，共 0 页</span>
+                        <button class="btn btn-secondary" disabled>下一页</button>
+                    </div>
+                </div>
+                </div>
+            </div>
+            <!-- 本地内容标签页 -->
+            <div id="local-items-content" class="tab-content" style="display: none;">
+                <div class="section-card">
+                    <div class="section-header">
+                        <h2>管理本地物品</h2>
+                    </div>
+                    
+                    <!-- 搜索和排序功能区域 -->
+                    <div class="filter-controls">
+                        <div class="filter-group">
+                            <div class="filter-label">搜索：</div>
+                            <input type="text" id="search-local-items" class="control-input" placeholder="搜索本地物品...">
+                        </div>
+                        <div class="filter-group">
+                            <div class="filter-label">排序：</div>
+                            <select id="sort-local-items" class="control-select">
+                                <option value="name_asc">名称（升序）</option>
+                                <option value="name_desc">名称（降序）</option>
+                                <option value="date_asc">创建日期（升序）</option>
+                                <option value="date_desc">创建日期（降序）</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <button class="btn btn-primary" onclick="scanLocalItems()" style="min-width: 160px;">
+                                扫描本地物品
+                            </button>
+                            <button class="btn btn-primary" onclick="toggleSettingsPanel()" style="min-width: 180px;">
+                                <span id="settings-toggle-icon">⚙️</span> 配置默认路径
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 默认路径配置区域 - 可折叠 -->
+                    <div class="settings-container">
+                        
+                        <div id="settings-panel" class="config-section" style="display: none;">
+                            <h3>创意工坊默认路径配置</h3>
+                            
+                            <div class="control-group">
+                                <div class="control-label">默认创意工坊文件夹路径</div>
+                                <input type="text" id="default-workshop-folder" class="control-input" placeholder="默认创意工坊文件夹路径">
+                                <div class="help-text">未指定扫描路径时将使用此默认路径</div>
+                                <div class="help-text success">提示：默认路径通常在 我的文档/N.E.K.O./live2d</div>
+                            </div>
+                            
+
+                            
+                            <div class="button-group" style="gap: 10px;">
+                                <button class="btn btn-secondary" onclick="loadDefaultConfig()">加载当前配置</button>
+                                <button class="btn btn-success" onclick="saveDefaultConfig()">保存配置</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="local-items-list" class="cards-container">
+                        <div class="empty-state">
+                            <p>请输入并扫描一个包含本地文件的文件夹</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+            <!-- 上传内容标签页 -->
+            <div id="upload-content" class="tab-content" style="display: none;">
+                <div class="section-card">
+                    <div class="section-header">
+                        <h2>上传到创意工坊</h2>
+                    </div>
                 <div class="info-box">
                     <p>请先在"管理本地物品"区域选择一个未发布的物品，然后点击"准备上传"按钮。内容文件夹路径和预览图片路径将自动填充。</p>
                 </div>
                 
                 <div id="message-area"></div>
                 
-                <div class="form-group">
-                    <label for="item-title">标题 *</label>
-                    <input type="text" id="item-title" placeholder="输入您的创作标题">
+                <div class="control-group">
+                    <div class="control-label">标题 *</div>
+                    <input type="text" id="item-title" class="control-input" placeholder="输入您的创作标题">
                 </div>
                 
-                <div class="form-group">
-                    <label for="item-description">描述</label>
-                    <textarea id="item-description" placeholder="详细描述您的创作内容..."></textarea>
+                <div class="control-group">
+                    <div class="control-label">描述</div>
+                    <textarea id="item-description" class="control-input" placeholder="详细描述您的创作内容..."></textarea>
                 </div>
                 
-                <div class="form-group">
-                    <label for="content-folder">内容文件夹路径 *</label>
-                    <input type="text" id="content-folder" placeholder="从本地物品中获取的内容文件夹路径" aria-describedby="content-folder-help" readonly>
-                    <small id="content-folder-help">此路径从您选择的本地物品中自动获取，不可手动修改。请先在"管理本地物品"中选择要上传的物品。</small>
+                <div class="control-group">
+                    <div class="control-label">内容文件夹路径 *</div>
+                    <input type="text" id="content-folder" class="control-input" placeholder="从本地物品中获取的内容文件夹路径" readonly>
                 </div>
                 
-                <div class="form-group">
-                    <label for="preview-image">预览图片路径 *</label>
-                    <input type="text" id="preview-image" placeholder="从本地物品中获取的预览图片路径" aria-describedby="preview-image-help" readonly>
-                    <small id="preview-image-help">此路径从您选择的本地物品中自动获取，不可手动修改。</small>
+                <div class="control-group">
+                    <div class="control-label">预览图片路径 *</div>
+                    <input type="text" id="preview-image" class="control-input" placeholder="从本地物品中获取的预览图片路径" readonly>
                 </div>
                 
-                <div class="form-group">
-                    <label for="item-tags">标签</label>
-                    <input type="text" id="item-tags" placeholder="输入标签，按回车添加">
+                <div class="control-group">
+                    <div class="control-label">标签</div>
+                    <input type="text" id="item-tags" class="control-input" placeholder="输入标签，按回车添加">
                     <div id="tags-container" class="tags-container"></div>
                 </div>
                 
-                <div class="form-group">
-                    <label for="visibility">可见性</label>
-                    <select id="visibility">
-                        <option value="public">公开</option>
-                        <option value="friends">仅好友可见</option>
-                        <option value="private">私有</option>
-                    </select>
+                <div class="control-group checkbox">
+                    <div class="checkbox-label">允许评论</div>
+                    <input type="checkbox" id="allow-comments" checked>
                 </div>
                 
-                <div class="form-group">
-                    <label for="allow-comments">
-                        <input type="checkbox" id="allow-comments" checked>
-                        允许评论
-                    </label>
+                <div class="button-group">
+                    <button class="btn btn-primary" onclick="uploadItem()">上传到创意工坊</button>
                 </div>
-                
-                <button class="button" onclick="uploadItem()">上传到创意工坊</button>
+            </div>
             </div>
         </div>
-        
-        <!-- 本地物品管理部分 -->
-        <div id="local-items" class="upload-section-container" style="display: none;">
-            <div class="local-items-section">
-                <h2>管理本地物品</h2>
-                
-                <div style="display: flex; justify-content: flex-start; margin-bottom: 20px;">
-                    <button class="button" onclick="scanLocalItems()">扫描本地物品（使用默认路径）</button>
-                </div>
-                
-                <!-- 默认路径配置区域 -->
-                <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6;">
-                    <h3 style="margin-top: 0; margin-bottom: 15px;">创意工坊默认路径配置</h3>
-                    
-                    <div style="margin-bottom: 10px;">
-                        <label style="display: block; margin-bottom: 5px;">默认创意工坊文件夹路径</label>
-                        <input type="text" id="default-workshop-folder" placeholder="默认创意工坊文件夹路径" style="width: 100%; padding: 8px;">
-                        <small style="color: #6c757d; font-size: 0.85rem; display: block; margin-top: 3px;">未指定扫描路径时将使用此默认路径</small>
-                        <small style="color: #28a745; font-size: 0.85rem; display: block; margin-top: 3px;">提示：默认路径通常在 我的文档/Xiao8</small>
-                    </div>
-                    
-                    <div style="margin-bottom: 15px;">
-                        <input type="checkbox" id="auto-create-folder" style="margin-right: 8px;">
-                        <label for="auto-create-folder">自动创建默认文件夹</label>
-                        <small style="color: #6c757d; font-size: 0.85rem; display: block; margin-top: 3px; margin-left: 24px;">当默认文件夹不存在时自动创建</small>
-                    </div>
-                    
-                    <div style="display: flex; gap: 10px;">
-                        <button class="button button-sm" onclick="loadDefaultConfig()">加载当前配置</button>
-                        <button class="button button-sm" style="background-color: #28a745; color: white;" onclick="saveDefaultConfig()">保存配置</button>
-                    </div>
-                </div>
-                
-                <div id="local-items-list" class="cards-container">
-                    <div class="empty-state">
-                        <p>请输入并扫描一个包含本地文件的文件夹</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- 我的订阅部分 -->
-        <div id="subscriptions">
-            <h2>我的订阅物品</h2>
-            
-            <div class="filter-controls">
-                <div class="filter-group">
-                    <label for="search-subscription">搜索：</label>
-                    <input type="text" id="search-subscription" placeholder="搜索订阅内容...">
-                </div>
-                <div class="filter-group">
-                    <label for="sort-subscription">排序：</label>
-                    <select id="sort-subscription">
-                        <option value="name_asc">名称（升序）</option>
-                        <option value="name_desc">名称（降序）</option>
-                        <option value="date_asc">订阅日期（升序）</option>
-                        <option value="date_desc">订阅日期（降序）</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div id="subscriptions-result">
-                <!-- 卡片容器 -->
-                <div id="subscriptions-list" class="cards-container">
-                    <!-- 空状态 -->
-                    <div class="empty-state">
-                        <p>正在加载您的订阅物品...</p>
-                        <button class="button" onclick="loadSubscriptions()">重新加载</button>
-                    </div>
-                </div>
-                <!-------------------------------------待做------------------------------------>
-                <div class="pagination">
-                    <button class="button" disabled>上一页</button>
-                    <span>第 1 页，共 0 页</span>
-                    <button class="button" disabled>下一页</button>
-                </div>
-            </div>
+    </div>
     </div>
     
     <!-- 物品详情模态框 -->
@@ -781,44 +1569,120 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="button" onclick="closeModal()">关闭</button>
+                <button class="btn btn-secondary" onclick="closeModal()">关闭</button>
             </div>
         </div>
     </div>
 
     <script>
-        // 上传区域切换功能
+        // 上传区域切换功能 - 修改为标签页切换
         function toggleUploadSection() {
-            const uploadSection = document.getElementById('upload');
-            const toggleButton = document.getElementById('upload-toggle-button');
+            // 检查当前是否显示的是上传内容标签页
+            const uploadContentTab = document.getElementById('upload-content');
+            const isUploadTabVisible = uploadContentTab && uploadContentTab.style.display !== 'none';
             
-            // 切换上传区域的显示/隐藏
-            if (uploadSection.style.display === 'none') {
-                uploadSection.style.display = 'block';
-                toggleButton.textContent = '隐藏上传内容';
-                // 平滑滚动到上传区域
-                uploadSection.scrollIntoView({ behavior: 'smooth' });
+            if (isUploadTabVisible) {
+                // 如果当前是上传标签页，则切换到订阅内容标签页
+                switchTab('subscriptions-content');
             } else {
-                uploadSection.style.display = 'none';
+                // 否则切换到上传内容标签页
+                switchTab('upload-content');
             }
         }
         
         // 本地物品区域切换功能
-        // 检查文件是否存在
-            
-            function toggleLocalItemsSection() {
+        function toggleLocalItemsSection() {
             const localItemsSection = document.getElementById('local-items');
             const toggleButton = document.getElementById('local-items-toggle-button');
             
+            // 确保本地物品内容标签页可见
+            const localItemsContent = document.getElementById('local-items-content');
+            if (localItemsContent && localItemsContent.style.display === 'none') {
+                switchTab('local-items-content');
+                return;
+            }
+            
             // 切换本地物品区域的显示/隐藏
-            if (localItemsSection.style.display === 'none') {
+            if (localItemsSection && localItemsSection.style.display === 'none') {
+                // 先扫描本地物品
+                scanLocalItems();
                 localItemsSection.style.display = 'block';
-                toggleButton.textContent = '隐藏本地物品';
+                if (toggleButton) {
+                    toggleButton.textContent = '隐藏本地物品';
+                }
                 // 平滑滚动到本地物品区域
                 localItemsSection.scrollIntoView({ behavior: 'smooth' });
-            } else {
+            } else if (localItemsSection) {
                 localItemsSection.style.display = 'none';
-                toggleButton.textContent = '管理本地物品';
+                if (toggleButton) {
+                    toggleButton.textContent = '管理本地物品';
+                }
+            }
+        }
+        
+        // 标签页切换功能
+        function switchTab(tabId) {
+            // 隐藏所有标签内容
+            const tabContents = document.querySelectorAll('.tab-content');
+            tabContents.forEach(content => {
+                content.style.display = 'none';
+            });
+            
+            // 移除所有标签按钮的活动状态
+            const tabButtons = document.querySelectorAll('.tab');
+            tabButtons.forEach(button => {
+                button.classList.remove('active');
+            });
+            
+            // 为当前点击的标签按钮添加活动状态
+            if (event && event.target) {
+                const clickedButton = event.target;
+                clickedButton.classList.add('active');
+            } else {
+                // 非点击事件调用时，通过tabId找到对应的标签按钮
+                const matchingTab = Array.from(tabButtons).find(btn => 
+                    btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(tabId)
+                );
+                if (matchingTab) {
+                    matchingTab.classList.add('active');
+                }
+            }
+            
+            // 显示选中的标签内容
+            const selectedTab = document.getElementById(tabId);
+            if (selectedTab) {
+                selectedTab.style.display = 'block';
+            }
+            
+            // 设置选中的标签按钮为活动状态（兼容旧的标签按钮）
+            tabButtons.forEach(button => {
+                if (button.getAttribute('onclick') && button.getAttribute('onclick').includes(tabId)) {
+                    button.classList.add('active');
+                }
+            });
+            
+            // 设置侧边栏中对应的按钮为活动状态
+            const sidebarButtons = document.querySelectorAll('.sidebar-tab-button');
+            if (sidebarButtons.length > 0) {
+                sidebarButtons.forEach(button => {
+                    if (button.getAttribute('onclick') && button.getAttribute('onclick').includes(tabId)) {
+                        button.classList.add('active');
+                    }
+                });
+            }
+            
+            // 如果切换到本地内容，确保本地物品列表可见
+            if (tabId === 'local-items-content') {
+                const localItemsSection = document.getElementById('local-items');
+                if (localItemsSection && localItemsSection.style.display === 'none') {
+                    // 先扫描本地物品再显示
+                    scanLocalItems();
+                    localItemsSection.style.display = 'block';
+                    const toggleButton = document.getElementById('local-items-toggle-button');
+                    if (toggleButton) {
+                        toggleButton.textContent = '隐藏本地物品';
+                    }
+                }
             }
         }
         
@@ -844,10 +1708,8 @@
                 if (data.success) {
                     // 填充表单
                     const defaultFolder = data.config.default_workshop_folder || '';
-                    const autoCreate = data.config.auto_create_folder !== false; // 默认true
                     
                     document.getElementById('default-workshop-folder').value = defaultFolder;
-                    document.getElementById('auto-create-folder').checked = autoCreate;
                     
                     showMessage('配置加载成功', 'success');
                 } else {
@@ -863,7 +1725,6 @@
         // 保存默认配置
         function saveDefaultConfig() {
             const defaultFolder = document.getElementById('default-workshop-folder').value.trim();
-            const autoCreate = document.getElementById('auto-create-folder').checked;
             
             // 验证默认文件夹路径格式（如果提供了）
             if (defaultFolder && defaultFolder.length < 3) {
@@ -879,8 +1740,7 @@
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    default_workshop_folder: defaultFolder,
-                    auto_create_folder: autoCreate
+                    default_workshop_folder: defaultFolder
                 })
             })
             .then(response => {
@@ -901,6 +1761,48 @@
                 showMessage(`保存配置时出错: ${error.message}`, 'error');
             });
         }
+        
+        // 切换设置面板的显示/隐藏
+        function toggleSettingsPanel() {
+            const panel = document.getElementById('settings-panel');
+            const icon = document.getElementById('settings-toggle-icon');
+            // 使用icon的父元素作为toggleButton，因为按钮的类已经更改
+            const toggleButton = icon.parentElement;
+            
+            if (panel.style.display === 'none') {
+                // 显示面板，添加简单动画效果
+                panel.style.display = 'block';
+                panel.style.opacity = '0';
+                panel.style.transition = 'opacity 0.3s ease-in-out';
+                
+                // 强制重绘
+                void panel.offsetWidth;
+                
+                // 设置透明度为1，触发过渡动画
+                panel.style.opacity = '1';
+                
+                // 更新按钮文字和图标
+                icon.textContent = '▼';
+                toggleButton.classList.remove('btn-secondary');
+                toggleButton.classList.add('btn-primary');
+            } else {
+                // 隐藏面板，添加简单动画效果
+                panel.style.opacity = '0';
+                panel.style.transition = 'opacity 0.3s ease-in-out';
+                
+                // 动画结束后隐藏
+                setTimeout(() => {
+                    panel.style.display = 'none';
+                }, 300);
+                
+                // 更新按钮文字和图标
+                icon.textContent = '⚙️';
+                toggleButton.classList.remove('btn-primary');
+                toggleButton.classList.add('btn-secondary');
+            }
+        }
+
+        
         
         // 扫描本地物品 - 现在仅使用默认路径
         function scanLocalItems() {
@@ -1096,18 +1998,21 @@
                 // 生成卡片HTML，对所有用户输入进行转义以防止XSS攻击
                 return `
                     <div class="workshop-card">
-                        <img src="${previewUrl}" alt="${escapeHtml(item.name || '本地物品')}" class="card-image">
+                        <div class="card-header">
+                            <img src="${previewUrl}" alt="${escapeHtml(item.name || '本地物品')}" class="card-image">
+                            <div class="status-badge ${statusClass}">${statusText}</div>
+                        </div>
                         <div class="card-content">
                             <h3 class="card-title">${escapeHtml(item.name || '未命名物品')}</h3>
-                            <div class="status-badge ${statusClass}">${statusText}</div>
-                            <div class="card-info">路径: ${escapeHtml(item.path)}</div>
-                            <div class="card-info">修改日期: ${formatDate(item.lastModified)}</div>
-                            <div class="card-info">大小: ${formatFileSize(item.size)}</div>
+                            <div class="card-info-grid">
+                                <div class="card-info-item"><span class="info-label">修改日期:</span> <span class="info-value">${formatDate(item.lastModified)}</span></div>
+                                <div class="card-info-item"><span class="info-label">大小:</span> <span class="info-value">${formatFileSize(item.size)}</span></div>
+                            </div>
+
                             
                             ${!isPublished ? `
                                 <div class="card-actions">
-                                    <button class="button" onclick="prepareItemForUpload('${escapeHtml(item.id).replace(/'/g, '&#39;')}', '${encodeURIComponent(item.path.replace(/\\/g, '/'))}')">准备上传</button>
-                                    <button class="button button-primary" onclick="quickUploadItem(event, '${escapeHtml(item.id).replace(/'/g, '&#39;')}', '${encodeURIComponent(item.path.replace(/\\/g, '/'))}')">快速上传</button>
+                                    <button class="button button-primary" onclick="prepareItemForUpload('${escapeHtml(item.id).replace(/'/g, '&#39;')}', '${encodeURIComponent(item.path.replace(/\\/g, '/'))}')">准备上传</button>
                                 </div>` : `
                                 <div class="card-actions">
                                     <button class="button button-disabled" disabled>已发布</button>
@@ -1836,21 +2741,22 @@
                              
                             return `
                                 <div class="workshop-card">
-                                    <img src="${formattedItem.installedFolder ? `/api/proxy-image?image_path=${encodeURIComponent(formattedItem.installedFolder + '/preview.png')}` : `/api/proxy-image?image_path=${encodeURIComponent(formattedItem.previewUrl)}`}" alt="${formattedItem.name}" class="card-image">
+                                    <div class="card-header">
+                                        <img src="${formattedItem.installedFolder ? `/api/proxy-image?image_path=${encodeURIComponent(formattedItem.installedFolder + '/preview.png')}` : `/api/proxy-image?image_path=${encodeURIComponent(formattedItem.previewUrl)}`}" alt="${formattedItem.name}" class="card-image">
+                                        <div class="status-badge ${statusClass}">${statusText}</div>
+                                    </div>
                                     <div class="card-content">
                                         <h3 class="card-title">${formattedItem.name}</h3>
-                                        <div class="status-badge ${statusClass}">${statusText}</div>
                                         <div class="author-info">
-                                                <div class="author-avatar">${formattedItem.author.substring(0, 2).toUpperCase()}</div>
-                                                <span>作者: ${formattedItem.author}</span>
-                                            </div>
-                                        <div class="card-info">订阅日期: ${formattedItem.subscribedDate}</div>
-                                        <div class="card-info">上次更新: ${formattedItem.lastUpdated}</div>
-                                        <div class="card-info">大小: ${formattedItem.size}</div>
-                                        ${formattedItem.installedFolder ? 
-                                            `<div class="card-info card-path">安装路径: <span class="path-text" title="${formattedItem.installedFolder}">${formattedItem.installedFolder}</span></div>` : ''
-                                        }
-                                        ${formattedItem.state.downloading && item.downloadProgress ? 
+                                            <div class="author-avatar">${formattedItem.author.substring(0, 2).toUpperCase()}</div>
+                                            <span>作者: ${formattedItem.author}</span>
+                                        </div>
+                                        <div class="card-info-grid">
+                                            <div class="card-info-item"><span class="info-label">订阅日期:</span> <span class="info-value">${formattedItem.subscribedDate}</span></div>
+                                            <div class="card-info-item"><span class="info-label">上次更新:</span> <span class="info-value">${formattedItem.lastUpdated}</span></div>
+                                            <div class="card-info-item"><span class="info-label">大小:</span> <span class="info-value">${formattedItem.size}</span></div>
+                                        </div>
+                                        ${formattedItem.state && formattedItem.state.downloading && item.downloadProgress ? 
                                             `<div class="download-progress">
                                                 <div class="progress-bar">
                                                     <div class="progress-fill" style="width: ${item.downloadProgress.percentage}%">
@@ -1860,7 +2766,7 @@
                                             </div>` : ''
                                         }
                                         <div class="card-actions">
-                        
+                                            <button class="button button-primary" onclick="viewItemDetails('${formattedItem.id}')">查看详情</button>
                                             <button class="button button-danger" onclick="unsubscribeItem('${formattedItem.id}', '${formattedItem.name}')">取消订阅</button>
                                         </div>
                                     </div>
