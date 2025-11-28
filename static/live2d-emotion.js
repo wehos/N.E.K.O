@@ -515,20 +515,23 @@ Live2DManager.prototype.setEmotion = async function(emotion) {
     
     // 获取将要使用的表情文件（用于精确比较）
     let targetExpressionFile = null;
-    try {
-        let expressionFiles = (this.emotionMapping.expressions && this.emotionMapping.expressions[emotion]) || [];
-        
-        // 兼容旧结构：从 FileReferences.Expressions 里按前缀分组
-        if ((!expressionFiles || expressionFiles.length === 0) && this.fileReferences && Array.isArray(this.fileReferences.Expressions)) {
+    
+    // 使用防御性模式计算expressionFiles
+    let expressionFiles = (this.emotionMapping && this.emotionMapping.expressions && this.emotionMapping.expressions[emotion]) || [];
+    
+    // 如果为空，回退到检查FileReferences并按前缀推导
+    if (expressionFiles.length === 0) {
+        if (this.fileReferences && Array.isArray(this.fileReferences.Expressions)) {
             const candidates = this.fileReferences.Expressions.filter(e => (e.Name || '').startsWith(emotion));
-            expressionFiles = candidates.map(e => e.File).filter(Boolean);
+            expressionFiles = (candidates.map(e => e.File) || []).filter(Boolean);
+        } else {
+            expressionFiles = [];
         }
-        
-        if (expressionFiles && expressionFiles.length > 0) {
-            targetExpressionFile = this.getRandomElement(expressionFiles);
-        }
-    } catch (e) {
-        console.warn('获取目标表情文件失败:', e);
+    }
+    
+    // 如果有可用文件，随机选择一个
+    if (expressionFiles.length > 0) {
+        targetExpressionFile = this.getRandomElement(expressionFiles);
     }
     
     // 检查是否需要重置：如果情绪和表情都相同，则跳过重置
