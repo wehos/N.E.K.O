@@ -1222,9 +1222,8 @@ Live2DManager.prototype._setupDragging = function(hud) {
         
         const touch = e.touches[0];
         const rect = hud.getBoundingClientRect();
-        // 修复bug：触摸拖拽使用正确的偏移量变量
-        dragOffsetX = touch.clientX - rect.left;
-        dragOffsetY = touch.clientY - rect.top;
+        touchOffsetX = touch.clientX - rect.left;
+        touchOffsetY = touch.clientY - rect.top;
         
         e.preventDefault();
     };
@@ -2647,16 +2646,15 @@ Live2DManager.prototype._setupCollapseFunctionality = function(emptyState, colla
     // 触摸设备优化
     collapseButton.addEventListener('touchstart', (e) => {
         e.stopPropagation();
-        // 防止双重触发：在触摸开始时就阻止后续的click事件
+        // 阻止默认行为，防止后续click事件
         e.preventDefault();
-        
         collapseButton.style.background = 'rgba(100, 116, 139, 0.7)';
         collapseButton.style.transform = 'scale(1.1)';
     }, { passive: false });
     
     collapseButton.addEventListener('touchend', (e) => {
         e.stopPropagation();
-        // 双重保险：再次阻止click事件的触发
+        // 阻止click事件的触发
         e.preventDefault();
         
         // 设置标志，阻止后续的click事件
