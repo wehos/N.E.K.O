@@ -7,6 +7,7 @@ import logging
 from typing import Optional, Callable, Dict, Any, Awaitable
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from openai import RateLimitError, APIError
 from config import MODELS_WITH_EXTRA_BODY
 
 # Setup logger for this module
@@ -180,45 +181,73 @@ class OmniOfflineClient:
         if self.on_input_transcript:
             await self.on_input_transcript(text.strip())
         
+        # Retry策略：重试2次，间隔1秒、2秒
+        max_retries = 3
+        retry_delays = [1, 2]
+        assistant_message = ""
+        success = False
+        
         try:
             self._is_responding = True
             
-            assistant_message = ""
-            is_first_chunk = True
-            
-            # Stream response using langchain
-            async for chunk in self.llm.astream(self._conversation_history):
-                if not self._is_responding:
-                    # Interrupted
+            for attempt in range(max_retries):
+                try:
+                    assistant_message = ""
+                    is_first_chunk = True
+                    
+                    # Stream response using langchain
+                    async for chunk in self.llm.astream(self._conversation_history):
+                        if not self._is_responding:
+                            # Interrupted
+                            break
+                            
+                        content = chunk.content if hasattr(chunk, 'content') else str(chunk)
+                        
+                        # 只处理非空内容，从源头过滤空文本
+                        if content and content.strip():
+                            assistant_message += content
+                            
+                            # 文本模式只调用 on_text_delta，不调用 on_output_transcript
+                            # 这与 OmniRealtimeClient 的行为一致：
+                            # - 文本响应使用 on_text_delta
+                            # - 语音转录使用 on_output_transcript
+                            if self.on_text_delta:
+                                await self.on_text_delta(content, is_first_chunk)
+                            
+                            is_first_chunk = False
+                        elif content and not content.strip():
+                            # 记录被过滤的空内容（仅包含空白字符）
+                            logger.debug(f"OmniOfflineClient: 过滤空白内容 - content_repr: {repr(content)[:100]}")
+                    
+                    # Add assistant response to history
+                    if assistant_message:
+                        self._conversation_history.append(AIMessage(content=assistant_message))
+                    
+                    # 成功则退出重试循环
+                    success = True
                     break
-                    
-                content = chunk.content if hasattr(chunk, 'content') else str(chunk)
-                
-                # 只处理非空内容，从源头过滤空文本
-                if content and content.strip():
-                    assistant_message += content
-                    
-                    # 文本模式只调用 on_text_delta，不调用 on_output_transcript
-                    # 这与 OmniRealtimeClient 的行为一致：
-                    # - 文本响应使用 on_text_delta
-                    # - 语音转录使用 on_output_transcript
-                    if self.on_text_delta:
-                        await self.on_text_delta(content, is_first_chunk)
-                    
-                    is_first_chunk = False
-                elif content and not content.strip():
-                    # 记录被过滤的空内容（仅包含空白字符）
-                    logger.debug(f"OmniOfflineClient: 过滤空白内容 - content_repr: {repr(content)[:100]}")
-            
-            # Add assistant response to history
-            if assistant_message:
-                self._conversation_history.append(AIMessage(content=assistant_message))
-                    
-        except Exception as e:
-            error_msg = f"Error in text streaming: {str(e)}"
-            logger.error(error_msg)
-            if self.handle_connection_error:
-                await self.handle_connection_error(error_msg)
+                            
+                except (RateLimitError, APIError) as e:
+                    if attempt < max_retries - 1:
+                        wait_time = retry_delays[attempt]
+                        logger.warning(f"OmniOfflineClient: LLM调用失败 (尝试 {attempt + 1}/{max_retries})，{wait_time}秒后重试: {e}")
+                        # 通知前端正在重试
+                        if self.handle_connection_error:
+                            await self.handle_connection_error(f"连接问题，正在重试...（第{attempt + 1}次）")
+                        await asyncio.sleep(wait_time)
+                        continue  # 继续下一次重试
+                    else:
+                        error_msg = f"LLM调用失败，已重试{max_retries}次: {str(e)}"
+                        logger.error(error_msg)
+                        if self.handle_connection_error:
+                            await self.handle_connection_error(error_msg)
+                        break
+                except Exception as e:
+                    error_msg = f"Error in text streaming: {str(e)}"
+                    logger.error(error_msg)
+                    if self.handle_connection_error:
+                        await self.handle_connection_error(error_msg)
+                    break  # 非重试类错误直接退出
         finally:
             self._is_responding = False
             # Call response done callback

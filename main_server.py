@@ -70,7 +70,8 @@ from utils.workshop_utils import (
     save_workshop_config,
     ensure_workshop_folder_exists,
     get_workshop_root,
-    get_workshop_path
+    get_workshop_path,
+    extract_workshop_root_from_items
 )
 
 # 确定 templates 目录位置（使用 _get_app_root）
@@ -148,10 +149,10 @@ else:
     steamworks = None
 
 
-# Configure logging
+# Configure logging (子进程静默初始化，避免重复打印初始化消息)
 from utils.logger_config import setup_logging
 
-logger, log_config = setup_logging(service_name="Main", log_level=logging.INFO)
+logger, log_config = setup_logging(service_name="Main", log_level=logging.INFO, silent=not _IS_MAIN_PROCESS)
 
 _config_manager = get_config_manager()
 
@@ -385,20 +386,19 @@ static_dir = os.path.join(_get_app_root(), 'static')
 
 app.mount("/static", CustomStaticFiles(directory=static_dir), name="static")
 
-# 挂载用户文档下的live2d目录
-_config_manager.ensure_live2d_directory()
-user_live2d_path = str(_config_manager.live2d_dir)
-if os.path.exists(user_live2d_path):
-    app.mount("/user_live2d", CustomStaticFiles(directory=user_live2d_path), name="user_live2d")
-    logger.info(f"已挂载用户Live2D目录: {user_live2d_path}")
+# 挂载用户文档下的live2d目录（只在主进程中执行，子进程不提供HTTP服务）
+if _IS_MAIN_PROCESS:
+    _config_manager.ensure_live2d_directory()
+    user_live2d_path = str(_config_manager.live2d_dir)
+    if os.path.exists(user_live2d_path):
+        app.mount("/user_live2d", CustomStaticFiles(directory=user_live2d_path), name="user_live2d")
+        logger.info(f"已挂载用户Live2D目录: {user_live2d_path}")
 
-# 挂载用户mod路径
-user_mod_path = _config_manager.get_workshop_path()
-if os.path.exists(user_mod_path) and os.path.isdir(user_mod_path):
-    app.mount("/user_mods", CustomStaticFiles(directory=user_mod_path), name="user_mods")
-    logger.info(f"已挂载用户mod路径: {user_mod_path}")
-else:
-    logger.warning(f"用户mod路径不存在或不是目录: {user_mod_path}")
+    # 挂载用户mod路径
+    user_mod_path = _config_manager.get_workshop_path()
+    if os.path.exists(user_mod_path) and os.path.isdir(user_mod_path):
+        app.mount("/user_mods", CustomStaticFiles(directory=user_mod_path), name="user_mods")
+        logger.info(f"已挂载用户mod路径: {user_mod_path}")
 # 使用 FastAPI 的 app.state 来管理启动配置
 def get_start_config():
     """从 app.state 获取启动配置"""
@@ -874,6 +874,15 @@ async def update_core_config(request: Request):
 @app.on_event("startup")
 async def startup_event():
     global sync_process
+    logger.info("Starting main server...")
+    
+    # ========== 初始化创意工坊目录 ==========
+    # 依赖方向: main_server → utils → config (单向)
+    # main 层只负责调用 utils，不维护任何 workshop 状态
+    # 路径由 utils 层管理并持久化到 config 层
+    await _init_and_mount_workshop()
+    
+    # ========== 启动同步连接器进程 ==========
     logger.info("Starting sync connector processes")
     # 启动同步连接器进程（确保所有角色都有进程）
     for k in list(sync_message_queue.keys()):
@@ -1148,6 +1157,7 @@ async def proactive_chat(request: Request):
             # 直接使用langchain ChatOpenAI发送请求
             from langchain_openai import ChatOpenAI
             from langchain_core.messages import SystemMessage
+            from openai import RateLimitError, APIError
             
             llm = ChatOpenAI(
                 model=core_config['CORRECTION_MODEL'],
@@ -1157,13 +1167,38 @@ async def proactive_chat(request: Request):
                 streaming=False  # 不需要流式，直接获取完整响应
             )
             
-            # 发送请求获取AI决策
+            # 发送请求获取AI决策 - Retry策略：重试2次，间隔1秒、2秒
             print(system_prompt)
-            response = await asyncio.wait_for(
-                llm.ainvoke([SystemMessage(content=system_prompt)]),
-                timeout=10.0
-            )
-            response_text = response.content.strip()
+            max_retries = 3
+            retry_delays = [1, 2]
+            response_text = ""
+            
+            for attempt in range(max_retries):
+                try:
+                    response = await asyncio.wait_for(
+                        llm.ainvoke([SystemMessage(content=system_prompt)]),
+                        timeout=10.0
+                    )
+                    response_text = response.content.strip()
+                    break  # 成功则退出重试循环
+                except (RateLimitError, APIError) as e:
+                    if attempt < max_retries - 1:
+                        wait_time = retry_delays[attempt]
+                        logger.warning(f"[{lanlan_name}] 主动搭话LLM调用失败 (尝试 {attempt + 1}/{max_retries})，{wait_time}秒后重试: {e}")
+                        # 向前端发送状态提示
+                        if mgr.websocket:
+                            try:
+                                await mgr.send_status(f"正在重试中...（第{attempt + 1}次）")
+                            except:
+                                pass
+                        await asyncio.sleep(wait_time)
+                    else:
+                        logger.error(f"[{lanlan_name}] 主动搭话LLM调用失败，已达到最大重试次数: {e}")
+                        return JSONResponse({
+                            "success": False,
+                            "error": f"AI调用失败，已重试{max_retries}次",
+                            "detail": str(e)
+                        }, status_code=503)
             
             logger.info(f"[{lanlan_name}] AI决策结果: {response_text[:100]}...")
             
@@ -1787,29 +1822,41 @@ async def get_subscribed_workshop_items():
             "error": f"获取订阅物品失败: {str(e)}"
         }, status_code=500)
 
-# 使用get_subscribed_workshop_items获取第一个物品的installedFolder
-# 使用从文件开头导入的get_workshop_root函数
-# 调用时传入当前模块的globals()，以便在workshop_utils中访问get_subscribed_workshop_items函数
-WORKSHOP_PATH = get_workshop_root(globals())
-
-# 确保WORKSHOP_PATH是有效路径后再挂载
-if os.path.exists(WORKSHOP_PATH) and os.path.isdir(WORKSHOP_PATH):
+async def _init_and_mount_workshop():
+    """
+    初始化并挂载创意工坊目录
+    
+    设计原则：
+    - main 层只负责调用，不维护状态
+    - 路径由 utils 层计算并持久化到 config 层
+    - 其他代码需要路径时调用 get_workshop_path() 获取
+    """
     try:
-        # 直接挂载，不使用嵌套函数装饰器
-        workshop_mount = app.mount("/workshop", StaticFiles(directory=WORKSHOP_PATH), name="workshop")
-        logger.info(f"成功挂载创意工坊目录: {WORKSHOP_PATH}")
+        # 1. 获取订阅的创意工坊物品列表
+        workshop_items_result = await get_subscribed_workshop_items()
         
-        # 保存WORKSHOP_PATH到配置文件
-        from utils.workshop_utils import save_workshop_config, load_workshop_config
-        workshop_config_data = load_workshop_config()
-        workshop_config_data["WORKSHOP_PATH"] = WORKSHOP_PATH
-        save_workshop_config(workshop_config_data)
-        logger.info(f"已保存WORKSHOP_PATH到配置文件: {WORKSHOP_PATH}")
+        # 2. 提取物品列表传给 utils 层
+        subscribed_items = []
+        if isinstance(workshop_items_result, dict) and workshop_items_result.get('success', False):
+            subscribed_items = workshop_items_result.get('items', [])
         
+        # 3. 调用 utils 层函数获取/计算路径（路径会被持久化到 config）
+        workshop_path = get_workshop_root(subscribed_items)
+        
+        # 4. 挂载静态文件目录
+        if workshop_path and os.path.exists(workshop_path) and os.path.isdir(workshop_path):
+            try:
+                app.mount("/workshop", StaticFiles(directory=workshop_path), name="workshop")
+                logger.info(f"✅ 成功挂载创意工坊目录: {workshop_path}")
+            except Exception as e:
+                logger.error(f"挂载创意工坊目录失败: {e}")
+        else:
+            logger.warning(f"创意工坊目录不存在或不是有效的目录: {workshop_path}，跳过挂载")
     except Exception as e:
-        logger.error(f"挂载创意工坊目录失败: {e}")
-else:
-    logger.warning(f"创意工坊目录不存在或不是有效的目录: {WORKSHOP_PATH}，跳过挂载")
+        logger.error(f"初始化创意工坊目录时出错: {e}")
+        # 降级：确保至少有一个默认路径可用
+        workshop_path = get_workshop_path()
+        logger.info(f"使用配置中的默认路径: {workshop_path}")
 
 
 
@@ -3365,7 +3412,8 @@ async def get_model_files_by_id(model_id: str):
 
 # Steam 创意工坊管理相关API路由
 # 确保这个路由被正确注册
-logger.info('注册Steam创意工坊扫描API路由')
+if _IS_MAIN_PROCESS:
+    logger.info('注册Steam创意工坊扫描API路由')
 @app.post('/api/steam/workshop/local-items/scan')
 async def scan_local_workshop_items(request: Request):
     try:
