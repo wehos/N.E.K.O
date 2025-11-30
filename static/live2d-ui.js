@@ -228,23 +228,25 @@ Live2DManager.prototype.setupFloatingButtons = function(model) {
             width: '48px',
             height: '48px',
             borderRadius: '50%',
-            background: 'rgba(255, 255, 255, 0.7)',  // 白色背景，70透明度（30透明度）
-            backdropFilter: 'blur(10px)',  // 保留模糊效果
+            background: 'rgba(255, 255, 255, 0.65)',  // Fluent Design Acrylic
+            backdropFilter: 'saturate(180%) blur(20px)',  // Fluent 标准模糊
+            border: '1px solid rgba(255, 255, 255, 0.18)',  // 微妙高光边框
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '24px',
             cursor: 'pointer',
             userSelect: 'none',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',  // 保留阴影
-            transition: 'all 0.2s ease',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.04), 0 4px 8px rgba(0, 0, 0, 0.08)',  // Fluent 多层阴影
+            transition: 'all 0.1s ease',  // Fluent 快速响应
             pointerEvents: 'auto'
         });
 
-        // 鼠标悬停效果：通过opacity切换图标，实现淡入淡出
+        // 鼠标悬停效果 - Fluent Design
         btn.addEventListener('mouseenter', () => {
-            btn.style.transform = 'scale(1.1)';
-            btn.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
+            btn.style.transform = 'scale(1.05)';  // 更微妙的缩放
+            btn.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.08), 0 8px 16px rgba(0, 0, 0, 0.08)';
+            btn.style.background = 'rgba(255, 255, 255, 0.8)';  // 悬停时更亮
             // 淡出off图标，淡入on图标
             if (imgOff && imgOn) {
                 imgOff.style.opacity = '0';
@@ -253,17 +255,17 @@ Live2DManager.prototype.setupFloatingButtons = function(model) {
         });
         btn.addEventListener('mouseleave', () => {
             btn.style.transform = 'scale(1)';
-            btn.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.2)';
+            btn.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.04), 0 4px 8px rgba(0, 0, 0, 0.08)';
             // 恢复原始背景色（根据按钮状态）
             const isActive = btn.dataset.active === 'true';
             const popup = document.getElementById(`live2d-popup-${config.id}`);
             const isPopupVisible = popup && popup.style.display === 'flex' && popup.style.opacity === '1';
             
             if (isActive || isPopupVisible) {
-                // 保持和悬停时一样的背景色（白色）
-                btn.style.background = 'rgba(255, 255, 255, 0.7)';
+                // 激活状态：稍亮的背景
+                btn.style.background = 'rgba(255, 255, 255, 0.75)';
             } else {
-                btn.style.background = 'rgba(255, 255, 255, 0.7)';
+                btn.style.background = 'rgba(255, 255, 255, 0.65)';  // Fluent Acrylic
             }
             
             // 根据按钮激活状态决定显示哪个图标
@@ -395,35 +397,38 @@ Live2DManager.prototype.setupFloatingButtons = function(model) {
                 }
                 const popup = this.createPopup(config.id);
                 
-                // 创建三角按钮（用于触发弹出框）
+                // 创建三角按钮（用于触发弹出框）- Fluent Design
                 const triggerBtn = document.createElement('div');
                 triggerBtn.innerText = '▶';
                 Object.assign(triggerBtn.style, {
                     width: '24px',
                     height: '24px',
                     borderRadius: '50%',
-                    background: 'rgba(255, 255, 255, 0.7)',  // 与其他按钮一致的不透明度
-                    backdropFilter: 'blur(10px)',
+                    background: 'rgba(255, 255, 255, 0.65)',  // Fluent Acrylic
+                    backdropFilter: 'saturate(180%) blur(20px)',
+                    border: '1px solid rgba(255, 255, 255, 0.18)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '13px',
-                    color: '#44b7fe',  // 设置图标颜色
+                    color: '#44b7fe',  // 主题浅蓝色
                     cursor: 'pointer',
                     userSelect: 'none',
-                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-                    transition: 'all 0.2s ease',
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.04), 0 4px 8px rgba(0, 0, 0, 0.08)',
+                    transition: 'all 0.1s ease',
                     pointerEvents: 'auto',
                     marginLeft: '-10px'
                 });
                 
                 triggerBtn.addEventListener('mouseenter', () => {
-                    triggerBtn.style.transform = 'scale(1.1)';
-                    triggerBtn.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
+                    triggerBtn.style.transform = 'scale(1.05)';
+                    triggerBtn.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.08), 0 8px 16px rgba(0, 0, 0, 0.08)';
+                    triggerBtn.style.background = 'rgba(255, 255, 255, 0.8)';
                 });
                 triggerBtn.addEventListener('mouseleave', () => {
                     triggerBtn.style.transform = 'scale(1)';
-                    triggerBtn.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.2)';
+                    triggerBtn.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.04), 0 4px 8px rgba(0, 0, 0, 0.08)';
+                    triggerBtn.style.background = 'rgba(255, 255, 255, 0.65)';
                 });
                 
                 triggerBtn.addEventListener('click', async (e) => {
@@ -515,30 +520,33 @@ Live2DManager.prototype.setupFloatingButtons = function(model) {
         width: '64px',
         height: '64px',
         borderRadius: '50%',
-        background: 'rgba(255, 255, 255, 0.8)',
-        backdropFilter: 'blur(10px)',
+        background: 'rgba(255, 255, 255, 0.65)',  // Fluent Acrylic
+        backdropFilter: 'saturate(180%) blur(20px)',
+        border: '1px solid rgba(255, 255, 255, 0.18)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         cursor: 'pointer',
         userSelect: 'none',
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)',
-        transition: 'all 0.3s ease',
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.04), 0 8px 16px rgba(0, 0, 0, 0.08), 0 16px 32px rgba(0, 0, 0, 0.04)',
+        transition: 'all 0.1s ease',
         pointerEvents: 'auto',
         position: 'relative'
     });
 
-    // 悬停效果
+    // 悬停效果 - Fluent Design
     returnBtn.addEventListener('mouseenter', () => {
-        returnBtn.style.transform = 'scale(1.1)';
-        returnBtn.style.boxShadow = '0 6px 20px rgba(0, 0, 0, 0.4)';
+        returnBtn.style.transform = 'scale(1.05)';
+        returnBtn.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.08), 0 16px 32px rgba(0, 0, 0, 0.08)';
+        returnBtn.style.background = 'rgba(255, 255, 255, 0.8)';
         imgOff.style.opacity = '0';
         imgOn.style.opacity = '1';
     });
 
     returnBtn.addEventListener('mouseleave', () => {
         returnBtn.style.transform = 'scale(1)';
-        returnBtn.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.3)';
+        returnBtn.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.04), 0 8px 16px rgba(0, 0, 0, 0.08), 0 16px 32px rgba(0, 0, 0, 0.04)';
+        returnBtn.style.background = 'rgba(255, 255, 255, 0.65)';
         imgOff.style.opacity = '1';
         imgOn.style.opacity = '0';
     });
@@ -635,11 +643,12 @@ Live2DManager.prototype.createPopup = function(buttonId) {
         left: '100%',
         top: '0',
         marginLeft: '8px',
-        background: 'rgba(255, 255, 255, 0.7)',  // 与按钮一致的70%不透明度
-        backdropFilter: 'blur(10px)',
-        borderRadius: '12px',
+        background: 'rgba(255, 255, 255, 0.65)',  // Fluent Acrylic
+        backdropFilter: 'saturate(180%) blur(20px)',  // Fluent 标准模糊
+        border: '1px solid rgba(255, 255, 255, 0.18)',  // 微妙高光边框
+        borderRadius: '8px',  // Fluent 标准圆角
         padding: '8px',
-        boxShadow: '0 2px 12px rgba(0, 0, 0, 0.2)',
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.04), 0 8px 16px rgba(0, 0, 0, 0.08), 0 16px 32px rgba(0, 0, 0, 0.04)',  // Fluent 多层阴影
         display: 'none',
         flexDirection: 'column',
         gap: '6px',
@@ -649,7 +658,7 @@ Live2DManager.prototype.createPopup = function(buttonId) {
         pointerEvents: 'auto',
         opacity: '0',
         transform: 'translateX(-10px)',
-        transition: 'opacity 0.2s ease, transform 0.2s ease'
+        transition: 'opacity 0.2s cubic-bezier(0.1, 0.9, 0.2, 1), transform 0.2s cubic-bezier(0.1, 0.9, 0.2, 1)'  // Fluent 动画曲线
     });
 
     // 根据不同按钮创建不同的弹出内容
@@ -669,15 +678,15 @@ Live2DManager.prototype.createPopup = function(buttonId) {
 
 // 创建Agent弹出框内容
 Live2DManager.prototype._createAgentPopupContent = function(popup) {
-    // 添加状态显示栏
+    // 添加状态显示栏 - Fluent Design
     const statusDiv = document.createElement('div');
     statusDiv.id = 'live2d-agent-status';
     Object.assign(statusDiv.style, {
         fontSize: '12px',
-        color: '#4f8cff',
+        color: '#44b7fe',  // 主题浅蓝色
         padding: '6px 8px',
-        borderRadius: '6px',
-        background: 'rgba(79, 140, 255, 0.05)',
+        borderRadius: '4px',
+        background: 'rgba(68, 183, 254, 0.05)',  // 浅蓝背景
         marginBottom: '8px',
         minHeight: '20px',
         textAlign: 'center'
@@ -1187,33 +1196,67 @@ Live2DManager.prototype._createToggleItem = function(toggle, popup) {
             const statusEl = document.getElementById('live2d-agent-status');
             if (statusEl) statusEl.textContent = checkbox.title;
         } else if (!checkbox.disabled) {
-            toggleItem.style.background = 'rgba(79, 140, 255, 0.1)';
+            toggleItem.style.background = 'rgba(68, 183, 254, 0.1)';
         }
     });
     toggleItem.addEventListener('mouseleave', () => {
         toggleItem.style.background = 'transparent';
     });
-    
-    // 点击切换（点击整个项目都可以切换）
-    // 使用 _processing 标志防止快速重复点击导致的竞态条件
-    toggleItem.addEventListener('click', (e) => {
+
+    // 点击切换（点击除复选框本身外的任何区域）
+    const handleToggle = (event) => {
         if (checkbox.disabled) return;
-        // 如果正在处理中，忽略点击
+        
+        // 防止重复点击
         if (checkbox._processing) {
-            console.log('[Live2D] Agent开关正在处理中，忽略重复点击');
+            console.log('[Live2D] Agent开关正在处理中，忽略重复点击:', toggle.id);
+            event?.preventDefault();
+            event?.stopPropagation();
             return;
         }
-        // 立即设置处理中标志，防止在 dispatchEvent 之前的快速重复点击
+        
+        // 立即设置处理中标志
         checkbox._processing = true;
+        checkbox._processingEvent = event;
+        checkbox._processingTime = Date.now();
+        
         const newChecked = !checkbox.checked;
         checkbox.checked = newChecked;
         checkbox.dispatchEvent(new Event('change', { bubbles: true }));
         updateStyle();
-        // 注意：_processing 标志会在 app.js 的 change 处理完成后被清除
-        // 如果 app.js 没有处理这个 checkbox（比如不是 agent 开关），这里设置一个备用清除
-        if (!checkbox._hasExternalHandler) {
-            checkbox._processing = false;
+        
+        // 备用清除机制（如果外部没有处理）
+        setTimeout(() => {
+            if (checkbox._processing && Date.now() - checkbox._processingTime > 50) {
+                checkbox._processing = false;
+                checkbox._processingEvent = null;
+                checkbox._processingTime = null;
+            }
+        }, 100);
+        
+        // 防止默认行为和事件冒泡
+        event?.preventDefault();
+        event?.stopPropagation();
+    };
+
+    // 点击整个项目区域（除了复选框和指示器）
+    toggleItem.addEventListener('click', (e) => {
+        if (e.target !== checkbox && e.target !== indicator && e.target !== label) {
+            handleToggle(e);
         }
+    });
+
+    // 点击指示器也可以切换
+    indicator.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleToggle(e);
+    });
+
+    // 防止标签点击的默认行为
+    label.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleToggle(e);
     });
 
     return toggleItem;
@@ -1299,10 +1342,10 @@ Live2DManager.prototype._createSettingsToggleItem = function(toggle, popup) {
     label.style.lineHeight = '1';
     label.style.height = '20px';  // 与指示器高度一致，确保垂直居中
     
-    // 根据 checkbox 状态更新指示器颜色（文本颜色保持不变）
+    // 根据 checkbox 状态更新指示器颜色
     const updateStyle = () => {
         if (checkbox.checked) {
-            // 选中状态：蓝色填充，蓝色边框，显示对勾，背景颜色突出
+            // 选中状态：蓝色填充，显示对勾，背景颜色突出
             indicator.style.backgroundColor = '#44b7fe';
             indicator.style.borderColor = '#44b7fe';
             checkmark.style.opacity = '1';
@@ -1324,11 +1367,11 @@ Live2DManager.prototype._createSettingsToggleItem = function(toggle, popup) {
     toggleItem.appendChild(label);
     
     toggleItem.addEventListener('mouseenter', () => {
-        // 如果已选中，使用更深的背景色；如果未选中，使用浅色背景
+        // 悬停效果
         if (checkbox.checked) {
             toggleItem.style.background = 'rgba(68, 183, 254, 0.15)';
         } else {
-            toggleItem.style.background = 'rgba(79, 140, 255, 0.1)';
+            toggleItem.style.background = 'rgba(68, 183, 254, 0.08)';
         }
     });
     toggleItem.addEventListener('mouseleave', () => {
@@ -1336,11 +1379,8 @@ Live2DManager.prototype._createSettingsToggleItem = function(toggle, popup) {
         updateStyle();
     });
     
-    // 点击切换（直接更新全局状态并保存）
-    checkbox.addEventListener('change', (e) => {
-        e.stopPropagation();
-        const isChecked = checkbox.checked;
-        
+    // 统一的切换处理函数
+    const handleToggleChange = (isChecked) => {
         // 更新样式
         updateStyle();
         
@@ -1371,23 +1411,40 @@ Live2DManager.prototype._createSettingsToggleItem = function(toggle, popup) {
             }
             console.log(`主动搭话已${isChecked ? '开启' : '关闭'}`);
         }
+    };
+
+    // 点击切换（直接更新全局状态并保存）
+    checkbox.addEventListener('change', (e) => {
+        e.stopPropagation();
+        handleToggleChange(checkbox.checked);
     });
     
-    // 点击整行也能切换
+    // 点击整行也能切换（除了复选框本身）
     toggleItem.addEventListener('click', (e) => {
-        if (e.target !== checkbox) {
-            checkbox.checked = !checkbox.checked;
-            checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-            updateStyle();  // 更新样式
+        if (e.target !== checkbox && e.target !== indicator) {
+            e.preventDefault();
+            e.stopPropagation();
+            const newChecked = !checkbox.checked;
+            checkbox.checked = newChecked;
+            handleToggleChange(newChecked);
         }
     });
     
     // 点击指示器也可以切换
     indicator.addEventListener('click', (e) => {
         e.stopPropagation();
-        checkbox.checked = !checkbox.checked;
-        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
-        updateStyle();
+        const newChecked = !checkbox.checked;
+        checkbox.checked = newChecked;
+        handleToggleChange(newChecked);
+    });
+    
+    // 防止标签点击的默认行为
+    label.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const newChecked = !checkbox.checked;
+        checkbox.checked = newChecked;
+        handleToggleChange(newChecked);
     });
 
     return toggleItem;
@@ -1462,7 +1519,7 @@ Live2DManager.prototype._createSettingsMenuItems = function(popup) {
         }
         
         menuItem.addEventListener('mouseenter', () => {
-            menuItem.style.background = 'rgba(79, 140, 255, 0.1)';
+            menuItem.style.background = 'rgba(68, 183, 254, 0.1)';
         });
         menuItem.addEventListener('mouseleave', () => {
             menuItem.style.background = 'transparent';
@@ -1564,7 +1621,7 @@ Live2DManager.prototype.closePopupById = function(buttonId) {
     const buttonEntry = this._floatingButtons[buttonId];
     if (buttonEntry && buttonEntry.button) {
         buttonEntry.button.dataset.active = 'false';
-        buttonEntry.button.style.background = 'rgba(255, 255, 255, 0.7)';
+        buttonEntry.button.style.background = 'rgba(255, 255, 255, 0.65)';  // Fluent Acrylic
 
         if (buttonEntry.imgOff && buttonEntry.imgOn) {
             buttonEntry.imgOff.style.opacity = '1';
@@ -1914,13 +1971,13 @@ Live2DManager.prototype.showPopup = function(buttonId, popup) {
             const checkmark = indicator.firstElementChild;
             
             if (checkbox.checked) {
-                // 选中状态：蓝色填充，蓝色边框，显示对勾，背景颜色突出
+                // 选中状态
                 indicator.style.backgroundColor = '#44b7fe';
                 indicator.style.borderColor = '#44b7fe';
                 if (checkmark) checkmark.style.opacity = '1';
                 toggleItem.style.background = 'rgba(68, 183, 254, 0.1)';
             } else {
-                // 未选中状态：灰色边框，透明填充，隐藏对勾，无背景
+                // 未选中状态
                 indicator.style.backgroundColor = 'transparent';
                 indicator.style.borderColor = '#ccc';
                 if (checkmark) checkmark.style.opacity = '0';

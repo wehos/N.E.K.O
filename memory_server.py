@@ -31,6 +31,37 @@ semantic_manager = SemanticMemory(recent_history_manager)
 settings_manager = ImportantSettingsManager()
 time_manager = TimeIndexedMemory(recent_history_manager)
 
+# 用于保护重新加载操作的锁
+_reload_lock = asyncio.Lock()
+
+async def reload_memory_components():
+    """重新加载记忆组件配置（用于新角色创建后）
+    
+    使用锁保护重新加载操作，确保原子性交换，避免竞态条件。
+    先创建所有新实例，然后原子性地交换引用。
+    """
+    global recent_history_manager, semantic_manager, settings_manager, time_manager
+    async with _reload_lock:
+        logger.info("[MemoryServer] 开始重新加载记忆组件配置...")
+        try:
+            # 先创建所有新实例
+            new_recent = CompressedRecentHistoryManager()
+            new_semantic = SemanticMemory(new_recent)
+            new_settings = ImportantSettingsManager()
+            new_time = TimeIndexedMemory(new_recent)
+            
+            # 然后原子性地交换引用
+            recent_history_manager = new_recent
+            semantic_manager = new_semantic
+            settings_manager = new_settings
+            time_manager = new_time
+            
+            logger.info("[MemoryServer] ✅ 记忆组件配置重新加载完成")
+            return True
+        except Exception as e:
+            logger.error(f"[MemoryServer] ❌ 重新加载记忆组件配置失败: {e}", exc_info=True)
+            return False
+
 # 全局变量用于控制服务器关闭
 shutdown_event = asyncio.Event()
 # 全局变量控制是否响应退出请求
@@ -93,8 +124,18 @@ async def _run_review_in_background(lanlan_name: str):
 async def process_conversation(request: HistoryRequest, lanlan_name: str):
     global correction_tasks
     try:
+        # 检查角色是否存在于配置中，如果不存在则记录信息但继续处理（允许新角色）
+        try:
+            character_data = _config_manager.load_characters()
+            catgirl_names = list(character_data.get('猫娘', {}).keys())
+            if lanlan_name not in catgirl_names:
+                logger.info(f"[MemoryServer] 角色 '{lanlan_name}' 不在配置中，但继续处理（可能是新创建的角色）")
+        except Exception as e:
+            logger.warning(f"检查角色配置失败: {e}，继续处理")
+        
         uid = str(uuid4())
         input_history = convert_to_messages(json.loads(request.input_history))
+        logger.info(f"[MemoryServer] 收到 {lanlan_name} 的对话历史处理请求，消息数: {len(input_history)}")
         await recent_history_manager.update_history(input_history, lanlan_name)
         """
         下面屏蔽了两个模块，因为这两个模块需要消耗token，但当前版本实用性近乎于0。尤其是，Qwen与GPT等旗舰模型相比性能差距过大。
@@ -125,8 +166,18 @@ async def process_conversation(request: HistoryRequest, lanlan_name: str):
 async def process_conversation_for_renew(request: HistoryRequest, lanlan_name: str):
     global correction_tasks
     try:
+        # 检查角色是否存在于配置中，如果不存在则记录信息但继续处理（允许新角色）
+        try:
+            character_data = _config_manager.load_characters()
+            catgirl_names = list(character_data.get('猫娘', {}).keys())
+            if lanlan_name not in catgirl_names:
+                logger.info(f"[MemoryServer] renew: 角色 '{lanlan_name}' 不在配置中，但继续处理（可能是新创建的角色）")
+        except Exception as e:
+            logger.warning(f"检查角色配置失败: {e}，继续处理")
+        
         uid = str(uuid4())
         input_history = convert_to_messages(json.loads(request.input_history))
+        logger.info(f"[MemoryServer] renew: 收到 {lanlan_name} 的对话历史处理请求，消息数: {len(input_history)}")
         await recent_history_manager.update_history(input_history, lanlan_name, detailed=True)
         # await settings_manager.extract_and_update_settings(input_history, lanlan_name)
         # await semantic_manager.store_conversation(uid, input_history, lanlan_name)
@@ -151,6 +202,17 @@ async def process_conversation_for_renew(request: HistoryRequest, lanlan_name: s
 
 @app.get("/get_recent_history/{lanlan_name}")
 def get_recent_history(lanlan_name: str):
+    # 检查角色是否存在于配置中
+    try:
+        character_data = _config_manager.load_characters()
+        catgirl_names = list(character_data.get('猫娘', {}).keys())
+        if lanlan_name not in catgirl_names:
+            logger.warning(f"角色 '{lanlan_name}' 不在配置中，返回空历史记录")
+            return "开始聊天前，没有历史记录。\n"
+    except Exception as e:
+        logger.error(f"检查角色配置失败: {e}")
+        return "开始聊天前，没有历史记录。\n"
+    
     history = recent_history_manager.get_recent_history(lanlan_name)
     _, _, _, _, name_mapping, _, _, _, _, _ = _config_manager.get_character_data()
     name_mapping['ai'] = lanlan_name
@@ -170,12 +232,47 @@ async def get_memory(query: str, lanlan_name:str):
 
 @app.get("/get_settings/{lanlan_name}")
 def get_settings(lanlan_name: str):
+    # 检查角色是否存在于配置中
+    try:
+        character_data = _config_manager.load_characters()
+        catgirl_names = list(character_data.get('猫娘', {}).keys())
+        if lanlan_name not in catgirl_names:
+            logger.warning(f"角色 '{lanlan_name}' 不在配置中，返回空设置")
+            return f"{lanlan_name}记得{{}}"
+    except Exception as e:
+        logger.error(f"检查角色配置失败: {e}")
+        return f"{lanlan_name}记得{{}}"
+    
     result = f"{lanlan_name}记得{json.dumps(settings_manager.get_settings(lanlan_name), ensure_ascii=False)}"
     return result
+
+@app.post("/reload")
+async def reload_config():
+    """重新加载记忆服务器配置（用于新角色创建后）"""
+    try:
+        success = await reload_memory_components()
+        if success:
+            return {"status": "success", "message": "配置已重新加载"}
+        else:
+            return {"status": "error", "message": "配置重新加载失败"}
+    except Exception as e:
+        logger.error(f"重新加载配置时出错: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}
 
 @app.get("/new_dialog/{lanlan_name}")
 async def new_dialog(lanlan_name: str):
     global correction_tasks, correction_cancel_flags
+    
+    # 检查角色是否存在于配置中
+    try:
+        character_data = _config_manager.load_characters()
+        catgirl_names = list(character_data.get('猫娘', {}).keys())
+        if lanlan_name not in catgirl_names:
+            logger.warning(f"角色 '{lanlan_name}' 不在配置中，返回空上下文")
+            return ""
+    except Exception as e:
+        logger.error(f"检查角色配置失败: {e}")
+        return ""
     
     # 中断正在进行的correction任务
     if lanlan_name in correction_tasks and not correction_tasks[lanlan_name].done():

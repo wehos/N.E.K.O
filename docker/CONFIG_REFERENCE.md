@@ -118,7 +118,53 @@
 - `EMOTION_MODEL` - 情感模型
 - `VISION_MODEL` - 视觉模型
 
-### 7. 自定义模型配置（高级）
+### 7. Computer Use（键鼠控制）配置
+
+Computer Use 功能允许 AI 控制鼠标和键盘操作。此功能需要视觉模型支持。
+
+#### 配置文件字段（core_config.json）
+
+| 配置项 | 配置文件字段 | 说明 |
+|-------|------------|------|
+| 规划模型 | `computerUseModel` | 用于理解任务并生成操作序列的视觉模型 |
+| 规划模型 URL | `computerUseModelUrl` | 规划模型的 API 端点 |
+| 规划模型 API Key | `computerUseModelApiKey` | 规划模型的 API 密钥 |
+| 定位模型 | `computerUseGroundModel` | 用于在屏幕上定位元素坐标的视觉模型 |
+| 定位模型 URL | `computerUseGroundUrl` | 定位模型的 API 端点 |
+| 定位模型 API Key | `computerUseGroundApiKey` | 定位模型的 API 密钥 |
+
+#### 各提供商的默认配置
+
+Computer Use 会根据 `assistApi` 自动选择对应提供商的视觉模型：
+
+| 提供商 | 规划/定位模型 | API URL |
+|-------|-------------|---------|
+| qwen | qwen3-vl-plus-2025-09-23 | https://dashscope.aliyuncs.com/compatible-mode/v1 |
+| openai | gpt-4o | https://api.openai.com/v1 |
+| glm | glm-4.5v | https://open.bigmodel.cn/api/paas/v4 |
+| step | step-1o-turbo-vision | https://api.stepfun.com/v1 |
+| silicon | Qwen/Qwen3-VL-235B-A22B-Instruct | https://api.siliconflow.cn/v1 |
+| free | 不支持 | - |
+
+#### 配置示例
+
+如果您想使用与 `assistApi` 不同的提供商进行 Computer Use，可以在 `core_config.json` 中自定义：
+
+```json
+{
+  "assistApi": "qwen",
+  "computerUseModel": "glm-4.5v",
+  "computerUseModelUrl": "https://open.bigmodel.cn/api/paas/v4",
+  "computerUseModelApiKey": "your-glm-api-key",
+  "computerUseGroundModel": "glm-4.5v",
+  "computerUseGroundUrl": "https://open.bigmodel.cn/api/paas/v4",
+  "computerUseGroundApiKey": "your-glm-api-key"
+}
+```
+
+> **注意**：如果不指定 API Key，系统会自动使用 `assistApi` 对应提供商的 API Key。
+
+### 8. 自定义模型配置（高级）
 
 这些配置允许为每个模型指定不同的提供商、URL 和 API Key。
 

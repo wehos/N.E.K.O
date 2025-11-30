@@ -10,8 +10,9 @@ Live2DManager.prototype.loadModel = async function(modelPath, options = {}) {
 
     // 移除当前模型
     if (this.currentModel) {
-        // 先清空常驻表情记录
+        // 先清空常驻表情记录和初始参数
         this.teardownPersistentExpressions();
+        this.initialParameters = {};
 
         // 尝试还原之前覆盖的 updateParameters，避免旧引用在新模型上报错
         try {
@@ -96,6 +97,9 @@ Live2DManager.prototype.loadModel = async function(modelPath, options = {}) {
             }
 
             if (typeof urlString !== 'string') throw new TypeError('modelPath/url is not a string');
+
+            // 记录用于保存偏好的原始模型路径（供 beforeunload 使用）
+            try { this._lastLoadedModelPath = urlString; } catch (_) {}
 
             const cleanPath = urlString.split('#')[0].split('?')[0];
             const lastSlash = cleanPath.lastIndexOf('/');
@@ -189,6 +193,9 @@ Live2DManager.prototype.loadModel = async function(modelPath, options = {}) {
         // 设置常驻表情（根据 EmotionMapping.expressions.常驻 或 FileReferences 前缀推导）
         await this.setupPersistentExpressions();
 
+        // 记录模型的初始参数（用于expression重置）
+        this.recordInitialParameters();
+
         // 调用回调函数
         if (this.onModelLoaded) {
             this.onModelLoaded(model, modelPath);
@@ -215,6 +222,7 @@ Live2DManager.prototype.loadModel = async function(modelPath, options = {}) {
                     const parts = rootDir.split('/').filter(Boolean);
                     this.modelName = parts.length > 0 ? parts[parts.length - 1] : null;
                     console.log('回退模型根路径解析:', { modelUrl: defaultModelPath, modelName: this.modelName, modelRootPath: this.modelRootPath });
+                    try { this._lastLoadedModelPath = defaultModelPath; } catch (_) {}
                 } catch (e) {
                     console.warn('解析回退模型根路径失败，将使用默认值', e);
                     this.modelRootPath = '/static';
@@ -440,16 +448,19 @@ Live2DManager.prototype.applyModelSettings = function(model, options) {
             model.x = preferences.position.x;
             model.y = preferences.position.y;
         } else {
-            // 使用默认设置
+            // 使用默认设置（改为靠屏幕右侧）
             const scale = Math.min(
                 0.5,
                 (window.innerHeight * 0.75) / 7000,
                 (window.innerWidth * 0.6) / 7000
             );
             model.scale.set(scale);
-            model.x = this.pixi_app.renderer.width * 0.5;
-            model.y = this.pixi_app.renderer.height * 0.5;
+            // 将默认 x 调整到屏幕靠右位置，使用 0.85 作为右侧偏移比例
+            // 向右下角进一步偏移，靠近屏幕右下
+            model.x = this.pixi_app.renderer.width;
+            model.y = this.pixi_app.renderer.height;
         }
+        // 增大 anchor.x 以便模型更靠近右侧边缘
         model.anchor.set(0.65, 0.75);
     }
 };

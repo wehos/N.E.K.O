@@ -611,6 +611,12 @@ class ConfigManager:
             DEFAULT_TTS_MODEL_PROVIDER,
             DEFAULT_TTS_MODEL_URL,
             DEFAULT_TTS_MODEL_API_KEY,
+            DEFAULT_COMPUTER_USE_MODEL,
+            DEFAULT_COMPUTER_USE_MODEL_URL,
+            DEFAULT_COMPUTER_USE_MODEL_API_KEY,
+            DEFAULT_COMPUTER_USE_GROUND_MODEL,
+            DEFAULT_COMPUTER_USE_GROUND_URL,
+            DEFAULT_COMPUTER_USE_GROUND_API_KEY,
         )
 
         config = {
@@ -630,12 +636,12 @@ class ConfigManager:
             'ASSIST_API_KEY_GLM': DEFAULT_CORE_API_KEY,
             'ASSIST_API_KEY_STEP': DEFAULT_CORE_API_KEY,
             'ASSIST_API_KEY_SILICON': DEFAULT_CORE_API_KEY,
-            'COMPUTER_USE_MODEL': 'glm-4.5v',
-            'COMPUTER_USE_GROUND_MODEL': 'glm-4.5v',
-            'COMPUTER_USE_MODEL_URL': 'https://open.bigmodel.cn/api/paas/v4',
-            'COMPUTER_USE_GROUND_URL': 'https://open.bigmodel.cn/api/paas/v4',
-            'COMPUTER_USE_MODEL_API_KEY': '',
-            'COMPUTER_USE_GROUND_API_KEY': '',
+            'COMPUTER_USE_MODEL': DEFAULT_COMPUTER_USE_MODEL,
+            'COMPUTER_USE_GROUND_MODEL': DEFAULT_COMPUTER_USE_GROUND_MODEL,
+            'COMPUTER_USE_MODEL_URL': DEFAULT_COMPUTER_USE_MODEL_URL,
+            'COMPUTER_USE_GROUND_URL': DEFAULT_COMPUTER_USE_GROUND_URL,
+            'COMPUTER_USE_MODEL_API_KEY': DEFAULT_COMPUTER_USE_MODEL_API_KEY,
+            'COMPUTER_USE_GROUND_API_KEY': DEFAULT_COMPUTER_USE_GROUND_API_KEY,
             'IS_FREE_VERSION': False,
             'VISION_MODEL': DEFAULT_VISION_MODEL,
             'OMNI_MODEL': DEFAULT_OMNI_MODEL,
@@ -691,8 +697,6 @@ class ConfigManager:
         if core_cfg.get('mcpToken'):
             config['MCP_ROUTER_API_KEY'] = core_cfg['mcpToken']
 
-        config['COMPUTER_USE_MODEL_API_KEY'] = config['COMPUTER_USE_GROUND_API_KEY'] = config['ASSIST_API_KEY_GLM']
-
         core_api_profiles = get_core_api_profiles()
         assist_api_profiles = get_assist_api_profiles()
         assist_api_key_fields = get_assist_api_key_fields()
@@ -724,6 +728,7 @@ class ConfigManager:
             config.update(assist_profile)
 
         key_field = assist_api_key_fields.get(assist_api_value)
+        derived_key = ''
         if key_field:
             derived_key = config.get(key_field, '')
             if derived_key:
@@ -734,6 +739,27 @@ class ConfigManager:
             config['AUDIO_API_KEY'] = config['CORE_API_KEY']
         if not config['OPENROUTER_API_KEY']:
             config['OPENROUTER_API_KEY'] = config['CORE_API_KEY']
+
+        # Computer Use 配置处理
+        # 1. 支持用户自定义配置覆盖 assist_profile 的默认值
+        if core_cfg.get('computerUseModel'):
+            config['COMPUTER_USE_MODEL'] = core_cfg['computerUseModel']
+        if core_cfg.get('computerUseModelUrl'):
+            config['COMPUTER_USE_MODEL_URL'] = core_cfg['computerUseModelUrl']
+        if core_cfg.get('computerUseModelApiKey'):
+            config['COMPUTER_USE_MODEL_API_KEY'] = core_cfg['computerUseModelApiKey']
+        if core_cfg.get('computerUseGroundModel'):
+            config['COMPUTER_USE_GROUND_MODEL'] = core_cfg['computerUseGroundModel']
+        if core_cfg.get('computerUseGroundUrl'):
+            config['COMPUTER_USE_GROUND_URL'] = core_cfg['computerUseGroundUrl']
+        if core_cfg.get('computerUseGroundApiKey'):
+            config['COMPUTER_USE_GROUND_API_KEY'] = core_cfg['computerUseGroundApiKey']
+
+        # 2. 如果 API Key 未设置，使用当前 assistApi 对应的 key
+        if not config.get('COMPUTER_USE_MODEL_API_KEY'):
+            config['COMPUTER_USE_MODEL_API_KEY'] = derived_key if derived_key else config['CORE_API_KEY']
+        if not config.get('COMPUTER_USE_GROUND_API_KEY'):
+            config['COMPUTER_USE_GROUND_API_KEY'] = derived_key if derived_key else config['CORE_API_KEY']
 
         return config
 

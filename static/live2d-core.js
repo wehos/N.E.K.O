@@ -25,6 +25,7 @@ class Live2DManager {
         this.emotionMapping = null; // { motions: {emotion: [string]}, expressions: {emotion: [string]} }
         this.fileReferences = null; // 保存原始 FileReferences（含 Motions/Expressions）
         this.currentEmotion = 'neutral';
+        this.currentExpressionFile = null; // 当前使用的表情文件（用于精确比较）
         this.pixi_app = null;
         this.isInitialized = false;
         this.motionTimer = null;
@@ -62,6 +63,13 @@ class Live2DManager {
         this._origUpdateParameters = null;
         this._origExpressionUpdateParameters = null;
         this._mouthTicker = null;
+        
+        // 记录最后一次加载模型的原始路径（用于保存偏好时使用）
+        this._lastLoadedModelPath = null;
+
+        // ⚠️ 已禁用自动保存功能：
+        // 不再在窗口关闭/刷新时自动保存模型位置
+        // 只有在模型设置页面手动点击"保存设置"按钮时才会保存位置和缩放
     }
 
     // 从 FileReferences 推导 EmotionMapping（用于兼容历史数据）
@@ -137,6 +145,25 @@ class Live2DManager {
     // 保存用户偏好
     async saveUserPreferences(modelPath, position, scale) {
         try {
+            // 验证位置和缩放值是否为有效的有限数值
+            if (!position || typeof position !== 'object' || 
+                !Number.isFinite(position.x) || !Number.isFinite(position.y)) {
+                console.error('位置值无效:', position);
+                return false;
+            }
+            
+            if (!scale || typeof scale !== 'object' || 
+                !Number.isFinite(scale.x) || !Number.isFinite(scale.y)) {
+                console.error('缩放值无效:', scale);
+                return false;
+            }
+            
+            // 验证缩放值必须为正数
+            if (scale.x <= 0 || scale.y <= 0) {
+                console.error('缩放值必须为正数:', scale);
+                return false;
+            }
+            
             const preferences = {
                 model_path: modelPath,
                 position: position,
@@ -189,6 +216,59 @@ class Live2DManager {
     // 获取 PIXI 应用
     getPIXIApp() {
         return this.pixi_app;
+    }
+
+    // 复位模型位置和缩放到初始状态
+    async resetModelPosition() {
+        if (!this.currentModel || !this.pixi_app) {
+            console.warn('无法复位：模型或PIXI应用未初始化');
+            return;
+        }
+
+        try {
+            this.currentModel.anchor.set(0.65, 0.75);
+            // 根据移动端/桌面端重置到默认位置和缩放
+            if (isMobileWidth()) {
+                // 移动端默认设置
+                const scale = Math.min(
+                    0.5,
+                    window.innerHeight * 1.3 / 4000,
+                    window.innerWidth * 1.2 / 2000
+                );
+                this.currentModel.scale.set(scale);
+                this.currentModel.x = this.pixi_app.renderer.width * 0.5;
+                this.currentModel.y = this.pixi_app.renderer.height * 0.28;
+            } else {
+                // 桌面端默认设置（靠右下）
+                const scale = Math.min(
+                    0.5,
+                    (window.innerHeight * 0.75) / 7000,
+                    (window.innerWidth * 0.6) / 7000
+                );
+                this.currentModel.scale.set(scale);
+                this.currentModel.x = this.pixi_app.renderer.width;
+                this.currentModel.y = this.pixi_app.renderer.height;
+            }
+
+            console.log('模型位置已复位到初始状态');
+
+            // 复位后自动保存位置
+            if (this._lastLoadedModelPath) {
+                const saveSuccess = await this.saveUserPreferences(
+                    this._lastLoadedModelPath,
+                    { x: this.currentModel.x, y: this.currentModel.y },
+                    { x: this.currentModel.scale.x, y: this.currentModel.scale.y }
+                );
+                if (saveSuccess) {
+                    console.log('模型位置已保存');
+                } else {
+                    console.warn('模型位置保存失败');
+                }
+            }
+        
+        } catch (error) {
+            console.error('复位模型位置时出错:', error);
+        }
     }
 }
 

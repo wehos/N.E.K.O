@@ -20,6 +20,7 @@ from brain.planner import TaskPlanner
 from brain.analyzer import ConversationAnalyzer
 from brain.computer_use import ComputerUseAdapter
 from brain.deduper import TaskDeduper
+from brain.task_executor import DirectTaskExecutor
 
 
 app = FastAPI(title="N.E.K.O Tool Server")
@@ -35,6 +36,7 @@ class Modules:
     analyzer: ConversationAnalyzer | None = None
     computer_use: ComputerUseAdapter | None = None
     deduper: TaskDeduper | None = None
+    task_executor: DirectTaskExecutor | None = None  # 新增：合并的任务执行器
     # Task tracking
     task_registry: Dict[str, Dict[str, Any]] = {}
     result_queue: Optional[mp.Queue] = None
@@ -96,50 +98,52 @@ async def _is_duplicate_task(query: str, lanlan_name: Optional[str] = None) -> t
 
 
 # ============ Workers (run in subprocess) ============
-def _worker_processor(task_id: str, query: str, queue: mp.Queue):
-    try:
-        # Lazy import to avoid heavy init in parent
-        from brain.processor import Processor as _Proc
-        import asyncio as _aio
-        proc = _Proc()
+# 注意: MCP processor 任务现在使用协程直接执行，不再需要子进程
+# 仅 ComputerUse 任务仍使用子进程（因为需要独占执行）
+# def _worker_processor(task_id: str, query: str, queue: mp.Queue):
+#     try:
+#         # Lazy import to avoid heavy init in parent
+#         from brain.processor import Processor as _Proc
+#         import asyncio as _aio
+#         proc = _Proc()
         
-        # Log MCP processing start
-        print(f"[MCP] Starting processor task {task_id} with query: {query[:100]}...")
+#         # Log MCP processing start
+#         print(f"[MCP] Starting processor task {task_id} with query: {query[:100]}...")
         
-        result = _aio.run(proc.process(query))
+#         result = _aio.run(proc.process(query))
         
-        # Log MCP processing result
-        if result.get('can_execute'):
-            server_id = result.get('server_id', 'unknown')
-            reason = result.get('reason', 'no reason provided')
-            tool_calls = result.get('tool_calls', [])
-            tool_results = result.get('tool_results', [])
+#         # Log MCP processing result
+#         if result.get('can_execute'):
+#             server_id = result.get('server_id', 'unknown')
+#             reason = result.get('reason', 'no reason provided')
+#             tool_calls = result.get('tool_calls', [])
+#             tool_results = result.get('tool_results', [])
             
-            if tool_calls:
-                tools_info = ", ".join([f"'{tool}'" for tool in tool_calls])
-                print(f"[MCP] ✅ Task {task_id} executed successfully using MCP server '{server_id}' with tools: {tools_info}")
+#             if tool_calls:
+#                 tools_info = ", ".join([f"'{tool}'" for tool in tool_calls])
+#                 print(f"[MCP] ✅ Task {task_id} executed successfully using MCP server '{server_id}' with tools: {tools_info}")
                 
-                # Log tool execution results
-                for tool_result in tool_results:
-                    tool_name = tool_result.get('tool', 'unknown')
-                    if tool_result.get('success'):
-                        result_text = tool_result.get('result', 'No result')
-                        print(f"[MCP] 🔧 Tool {tool_name} result: {result_text}")
-                    else:
-                        error_text = tool_result.get('error', 'Unknown error')
-                        print(f"[MCP] ❌ Tool {tool_name} failed: {error_text}")
-            else:
-                print(f"[MCP] ✅ Task {task_id} executed successfully using MCP server '{server_id}' (no specific tools called)")
+#                 # Log tool execution results
+#                 for tool_result in tool_results:
+#                     tool_name = tool_result.get('tool', 'unknown')
+#                     if tool_result.get('success'):
+#                         result_text = tool_result.get('result', 'No result')
+#                         print(f"[MCP] 🔧 Tool {tool_name} result: {result_text}")
+#                     else:
+#                         error_text = tool_result.get('error', 'Unknown error')
+#                         print(f"[MCP] ❌ Tool {tool_name} failed: {error_text}")
+#             else:
+#                 print(f"[MCP] ✅ Task {task_id} executed successfully using MCP server '{server_id}' (no specific tools called)")
             
-            print(f"[MCP]   Reason: {reason}")
-        else:
-            reason = result.get('reason', 'no reason provided')
-            print(f"[MCP] ❌ Task {task_id} failed to execute: {reason}")
+#             print(f"[MCP]   Reason: {reason}")
+#         else:
+#             reason = result.get('reason', 'no reason provided')
+#             print(f"[MCP] ❌ Task {task_id} failed to execute: {reason}")
         
-        queue.put({"task_id": task_id, "success": True, "result": result})
-    except Exception as e:
-        print(f"[MCP] 💥 Task {task_id} crashed with error: {str(e)}")
-        queue.put({"task_id": task_id, "success": False, "error": str(e)})
+#         queue.put({"task_id": task_id, "success": True, "result": result})
+#     except Exception as e:
+#         print(f"[MCP] 💥 Task {task_id} crashed with error: {str(e)}")
+#         queue.put({"task_id": task_id, "success": False, "error": str(e)})
 
 
 def _worker_computer_use(task_id: str, instruction: str, screenshot: Optional[bytes], queue: mp.Queue):
@@ -164,6 +168,10 @@ def _now_iso() -> str:
 
 
 def _spawn_task(kind: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    生成任务（仅用于 computer_use 任务）
+    注意: MCP processor 任务现在使用协程直接执行，不再通过此函数
+    """
     task_id = str(uuid.uuid4())
     info = {
         "id": task_id,
@@ -177,16 +185,8 @@ def _spawn_task(kind: str, args: Dict[str, Any]) -> Dict[str, Any]:
     # Ensure result queue exists lazily
     if Modules.result_queue is None:
         Modules.result_queue = mp.Queue()
-    if kind == "processor":
-        p = mp.Process(target=_worker_processor, args=(task_id, args.get("query", ""), Modules.result_queue))
-        info["pid"] = None
-        Modules.task_registry[task_id] = info
-        p.daemon = True
-        p.start()
-        info["pid"] = p.pid
-        info["_proc"] = p
-        return info
-    elif kind == "computer_use":
+    
+    if kind == "computer_use":
         # Queue the task for exclusive execution by the scheduler
         info["status"] = "queued"
         info["pid"] = None
@@ -201,7 +201,7 @@ def _spawn_task(kind: str, args: Dict[str, Any]) -> Dict[str, Any]:
         })
         return info
     else:
-        raise ValueError(f"Unknown task kind: {kind}")
+        raise ValueError(f"Unknown task kind: {kind}. Note: 'processor' tasks now use coroutines directly.")
 
 
 def _start_computer_use_process(task_info: Dict[str, Any]) -> None:
@@ -310,74 +310,113 @@ async def _computer_use_scheduler_loop():
 
 
 async def _background_analyze_and_plan(messages: list[dict[str, Any]], lanlan_name: Optional[str]):
-    """Run analyzer and planner in background and schedule executable work without blocking the request."""
-    if not Modules.analyzer or not Modules.planner:
+    """
+    [简化版] 使用 DirectTaskExecutor 一步完成：分析对话 + 判断执行方式 + 执行任务
+    
+    简化链条:
+    - 旧: Analyzer(LLM#1) → Planner(LLM#2) → 子进程Processor(LLM#3) → MCP调用
+    - 新: DirectTaskExecutor(LLM#1) → MCP调用
+    """
+    if not Modules.task_executor:
+        logger.warning("[TaskExecutor] task_executor not initialized, skipping")
         return
+    
     try:
-        # Analyzer.analyze is now async, no need for executor
-        analysis = await Modules.analyzer.analyze(messages)
-    except Exception:
-        return
-    try:
-        import uuid as _uuid
-        tasks = analysis.get("tasks", []) if isinstance(analysis, dict) else []
-
-        for q in tasks:
-            try:
-                # Do NOT register into task_pool before dedup/scheduling
-                t = await Modules.planner.assess_and_plan(str(_uuid.uuid4()), q, register=False)
-            except Exception:
-                continue
-            # Mirror /plan scheduling behavior
-            try:
-                # Attach lanlan context
+        # 一步完成：分析 + 执行
+        result = await Modules.task_executor.analyze_and_execute(
+            messages=messages,
+            lanlan_name=lanlan_name,
+            agent_flags=Modules.agent_flags
+        )
+        
+        if result is None:
+            # 没有检测到任务
+            return
+        
+        if not result.has_task:
+            logger.debug(f"[TaskExecutor] No actionable task found")
+            return
+        
+        logger.info(f"[TaskExecutor] Task: {result.task_description}, method: {result.execution_method}")
+        
+        # 处理 MCP 任务（已在 DirectTaskExecutor 中执行完成）
+        if result.execution_method == 'mcp':
+            if result.success:
+                # MCP 任务已成功执行，通知 main_server
+                summary = f'你的任务"{result.task_description}"已完成'
+                if result.result:
+                    # 尝试提取结果摘要
+                    try:
+                        if isinstance(result.result, dict):
+                            detail = result.result.get('content', [])
+                            if detail and isinstance(detail, list):
+                                text_parts = [item.get('text', '') for item in detail if isinstance(item, dict)]
+                                detail_text = ' '.join(text_parts)[:150]
+                                if detail_text:
+                                    summary = f'你的任务"{result.task_description}"已完成：{detail_text}'
+                        elif isinstance(result.result, str):
+                            summary = f'你的任务"{result.task_description}"已完成：{result.result[:150]}'
+                    except Exception:
+                        pass
+                
+                # 通知 main_server
                 try:
-                    t.meta["lanlan_name"] = lanlan_name
-                except Exception:
-                    pass
-                if t.meta.get("mcp", {}).get("can_execute") and Modules.agent_flags.get("mcp_enabled", False):
-                    for step in t.steps:
-                        dup, matched = await _is_duplicate_task(step, lanlan_name)
-                        if dup:
-                            continue
-                        ti = _spawn_task("processor", {"query": step})
-                        ti["lanlan_name"] = lanlan_name
-                elif t.meta.get("mcp", {}).get("can_execute") and not Modules.agent_flags.get("mcp_enabled", False):
-                    logger.info(f"[MCP] ⚠️ Task {t.id} can be executed by MCP but mcp_enabled=False, skipping")
+                    import requests as _rq
+                    _rq.post(
+                        f"http://localhost:{MAIN_SERVER_PORT}/api/notify_task_result",
+                        json={"text": summary[:240], "lanlan_name": lanlan_name},
+                        timeout=0.5,
+                    )
+                    logger.info(f"[TaskExecutor] ✅ MCP task completed and notified: {result.task_description}")
+                except Exception as e:
+                    logger.warning(f"[TaskExecutor] Failed to notify main_server: {e}")
+            else:
+                logger.error(f"[TaskExecutor] ❌ MCP task failed: {result.error}")
+        
+        # 处理 ComputerUse 任务（需要通过子进程调度）
+        elif result.execution_method == 'computer_use':
+            if Modules.agent_flags.get("computer_use_enabled", False):
+                # 检查重复
+                dup, matched = await _is_duplicate_task(result.task_description, lanlan_name)
+                if not dup:
+                    ti = _spawn_task("computer_use", {"instruction": result.task_description, "screenshot": None})
+                    ti["lanlan_name"] = lanlan_name
+                    logger.info(f"[ComputerUse] 🚀 Scheduled task {ti['id']}: {result.task_description[:50]}...")
                 else:
-                    cu_dec = t.meta.get("computer_use_decision") or {}
-                    if cu_dec.get("use_computer") and Modules.agent_flags.get("computer_use_enabled", False):
-                        dup, matched = await _is_duplicate_task(t.original_query, lanlan_name)
-                        if not dup:
-                            ti = _spawn_task("computer_use", {"instruction": t.original_query, "screenshot": None})
-                            ti["lanlan_name"] = lanlan_name
-                            logger.info(f"[ComputerUse] 🚀 Scheduled task {ti['id']} for execution: {t.original_query[:50]}...")
-                    elif cu_dec.get("use_computer") and not Modules.agent_flags.get("computer_use_enabled", False):
-                        logger.warning(f"[ComputerUse] ⚠️ Task {t.id} can be executed by ComputerUse but computer_use_enabled=False, skipping. Please enable '键鼠控制' in the UI.")
-                    elif not cu_dec.get("use_computer"):
-                        logger.info(f"[ComputerUse] ❌ Task {t.id} was not scheduled - ComputerUse decision: {cu_dec.get('reason', 'no reason')}")
-            except Exception:
-                continue
-    except Exception:
-        return
+                    logger.info(f"[ComputerUse] Duplicate task detected, matched with {matched}")
+            else:
+                logger.warning(f"[ComputerUse] ⚠️ Task requires ComputerUse but it's disabled")
+        
+        else:
+            logger.info(f"[TaskExecutor] No suitable execution method: {result.reason}")
+    
+    except Exception as e:
+        logger.error(f"[TaskExecutor] Background task error: {e}", exc_info=True)
 
 @app.on_event("startup")
 async def startup():
-    Modules.processor = Processor()
+    # 初始化新的合并执行器（推荐使用）
     Modules.computer_use = ComputerUseAdapter()
+    Modules.task_executor = DirectTaskExecutor(computer_use=Modules.computer_use)
+    Modules.deduper = TaskDeduper()
+    
+    # 保留旧模块用于兼容（/process, /plan 端点仍然可用）
+    Modules.processor = Processor()
     Modules.planner = TaskPlanner(computer_use=Modules.computer_use)
     Modules.analyzer = ConversationAnalyzer()
-    Modules.deduper = TaskDeduper()
+    
     # Warm up router discovery
     try:
-        await Modules.planner.refresh_capabilities()
+        await Modules.task_executor.refresh_capabilities()
     except Exception:
         pass
-    # Start result poller
+    # Start result poller (for computer_use tasks)
     if Modules.poller_task is None:
         Modules.poller_task = asyncio.create_task(_poll_results_loop())
     # Start computer-use scheduler
     asyncio.create_task(_computer_use_scheduler_loop())
+    
+    logger.info("[Agent] ✅ Agent server started with simplified task executor")
 
 
 @app.get("/health")
@@ -385,7 +424,7 @@ async def health():
     return {"status": "ok", "agent_flags": Modules.agent_flags}
 
 
-# 1) 处理器模块：接受自然语言query，交给MCP client处理
+# 1) 处理器模块：接受自然语言query，直接执行MCP工具（不再使用子进程）
 @app.post("/process")
 async def process_query(payload: Dict[str, Any]):
     if not Modules.processor:
@@ -403,11 +442,50 @@ async def process_query(payload: Dict[str, Any]):
     if dup:
         logger.info(f"[MCP] Duplicate task detected, matched with {matched}")
         return JSONResponse(content={"success": False, "duplicate": True, "matched_id": matched}, status_code=409)
-    info = _spawn_task("processor", {"query": query})
-    info["lanlan_name"] = lanlan_name
     
-    logger.info(f"[MCP] Spawned processor task {info['id']} for {lanlan_name}")
-    return {"success": True, "task_id": info["id"], "status": info["status"], "start_time": info["start_time"]}
+    # 直接使用协程执行（不再启动子进程）
+    task_id = str(uuid.uuid4())
+    info = {
+        "id": task_id,
+        "type": "processor",
+        "status": "running",
+        "start_time": _now_iso(),
+        "params": {"query": query},
+        "lanlan_name": lanlan_name,
+        "result": None,
+        "error": None,
+    }
+    Modules.task_registry[task_id] = info
+    
+    # 后台执行（保持原有的异步行为）
+    async def _run_processor():
+        try:
+            result = await Modules.processor.process(query)
+            info["status"] = "completed" if result.get('can_execute') else "failed"
+            info["result"] = result
+            
+            # 通知 main_server
+            if result.get('can_execute'):
+                summary = f'你的任务"{query[:50]}"已完成'
+                try:
+                    import requests as _rq
+                    _rq.post(
+                        f"http://localhost:{MAIN_SERVER_PORT}/api/notify_task_result",
+                        json={"text": summary[:240], "lanlan_name": lanlan_name},
+                        timeout=0.5,
+                    )
+                except Exception:
+                    pass
+            logger.info(f"[MCP] ✅ Process task {task_id} completed")
+        except Exception as e:
+            info["status"] = "failed"
+            info["error"] = str(e)
+            logger.error(f"[MCP] ❌ Process task {task_id} failed: {e}")
+    
+    asyncio.create_task(_run_processor())
+    
+    logger.info(f"[MCP] Started processor task {task_id} for {lanlan_name}")
+    return {"success": True, "task_id": task_id, "status": info["status"], "start_time": info["start_time"]}
 
 
 # 2) 规划器模块：预载server能力，评估可执行性，入池并分解步骤

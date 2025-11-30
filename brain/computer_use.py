@@ -314,25 +314,26 @@ class ComputerUseAdapter:
             "ready": ok,
             "reasons": reasons,
             "provider": "openai",
-            "model": self._config_manager.get_core_config().get('COMPUTER_USE_MODEL', 'glm-4.5v'),
+            "model": self._config_manager.get_core_config().get('COMPUTER_USE_MODEL', ''),
             "ground_provider": "openai",
-            "ground_model": self._config_manager.get_core_config().get('COMPUTER_USE_GROUND_MODEL', 'glm-4.5v'),
+            "ground_model": self._config_manager.get_core_config().get('COMPUTER_USE_GROUND_MODEL', ''),
         }
 
     def _build_params(self) -> Dict[str, Any]:
+        core_config = self._config_manager.get_core_config()
         engine_params = {
             "engine_type": "openai",
-            "model": self._config_manager.get_core_config().get('COMPUTER_USE_MODEL', 'glm-4.5v'),
-            "base_url": self._config_manager.get_core_config().get('COMPUTER_USE_MODEL_URL', '') or "",
-            "api_key": self._config_manager.get_core_config().get('COMPUTER_USE_MODEL_API_KEY', '') or "",
+            "model": core_config.get('COMPUTER_USE_MODEL', ''),
+            "base_url": core_config.get('COMPUTER_USE_MODEL_URL', '') or "",
+            "api_key": core_config.get('COMPUTER_USE_MODEL_API_KEY', '') or "",
             "thinking": False,
             "extra_body": {"thinking": { "type": "disabled"}}
         }
         engine_params_for_grounding = {
             "engine_type": "openai",
-            "model": self._config_manager.get_core_config().get('COMPUTER_USE_GROUND_MODEL', 'glm-4.5v'),
-            "base_url": self._config_manager.get_core_config().get('COMPUTER_USE_GROUND_URL', ''),
-            "api_key": self._config_manager.get_core_config().get('COMPUTER_USE_GROUND_API_KEY', '') or "",
+            "model": core_config.get('COMPUTER_USE_GROUND_MODEL', ''),
+            "base_url": core_config.get('COMPUTER_USE_GROUND_URL', ''),
+            "api_key": core_config.get('COMPUTER_USE_GROUND_API_KEY', '') or "",
             "grounding_width": self.scaled_width,
             "grounding_height": self.scaled_height,
             "thinking": False,

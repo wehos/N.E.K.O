@@ -546,7 +546,20 @@ window.deleteCatgirl = async function(key) {
         return;
     }
     
-    const confirmMsg = window.t ? window.t('character.confirmDeleteCatgirl', {name: key}) : `确定要删除猫娘"${key}"？`;
+    // 确保角色名称正确显示
+    // 确保角色名称正确显示，如果翻译函数返回包含 {name} 占位符，则使用默认消息
+    let confirmMsg;
+    if (window.t) {
+        const translated = window.t('character.confirmDeleteCatgirl', {name: key});
+        // 如果翻译结果包含未替换的占位符，使用默认消息
+        if (translated && translated.includes('{name}')) {
+            confirmMsg = `确定要删除猫娘"${key}"？`;
+        } else {
+            confirmMsg = translated || `确定要删除猫娘"${key}"？`;
+        }
+    } else {
+        confirmMsg = `确定要删除猫娘"${key}"？`;
+    }
     const confirmTitle = window.t ? window.t('character.deleteCatgirlTitle') : '删除猫娘';
     if (!await showConfirm(confirmMsg, confirmTitle, {danger: true})) return;
     await fetch('/api/characters/catgirl/' + encodeURIComponent(key), {method: 'DELETE'});
@@ -970,6 +983,19 @@ window.renameCatgirl = async function(oldName) {
             localStorage.setItem(newStorageKey, savedState);
             localStorage.removeItem(oldStorageKey);
         }
+        
+        // 更新记忆文件中的角色名称
+        try {
+            await fetch('/api/memory/update_catgirl_name', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({old_name: oldName, new_name: newName})
+            });
+        } catch (error) {
+            console.error('更新记忆文件中的角色名称失败:', error);
+            // 不阻止主流程，继续加载数据
+        }
+        
         await loadCharacterData();
     } else {
         await showAlert(result.error || (window.t ? window.t('character.renameFailed') : '重命名失败'));

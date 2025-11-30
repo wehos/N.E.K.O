@@ -49,6 +49,12 @@ DEFAULT_OMNI_MODEL_API_KEY = ""
 DEFAULT_TTS_MODEL_PROVIDER = ""
 DEFAULT_TTS_MODEL_URL = ""
 DEFAULT_TTS_MODEL_API_KEY = ""
+DEFAULT_COMPUTER_USE_MODEL = ""  # 空字符串表示使用 assistApi 对应的视觉模型
+DEFAULT_COMPUTER_USE_MODEL_URL = ""  # 空字符串表示使用 assistApi 对应的 URL
+DEFAULT_COMPUTER_USE_MODEL_API_KEY = ""  # 空字符串表示使用 assistApi 对应的 API Key
+DEFAULT_COMPUTER_USE_GROUND_MODEL = ""  # 空字符串表示使用 assistApi 对应的视觉模型
+DEFAULT_COMPUTER_USE_GROUND_URL = ""  # 空字符串表示使用 assistApi 对应的 URL
+DEFAULT_COMPUTER_USE_GROUND_API_KEY = ""  # 空字符串表示使用 assistApi 对应的 API Key
 
 # 模型配置常量（默认值）
 # 注：以下5个直接被导入使用的变量保留原名以保持向后兼容性
@@ -152,6 +158,11 @@ DEFAULT_ASSIST_API_PROFILES = {
         'AUDIO_API_KEY': "free-access",
         'OPENROUTER_API_KEY': "free-access",
         'IS_FREE_VERSION': True,
+        # Computer Use 不支持 free 版本
+        'COMPUTER_USE_MODEL': "",
+        'COMPUTER_USE_MODEL_URL': "",
+        'COMPUTER_USE_GROUND_MODEL': "",
+        'COMPUTER_USE_GROUND_URL': "",
     },
     'qwen': {
         'OPENROUTER_URL': "https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -159,6 +170,11 @@ DEFAULT_ASSIST_API_PROFILES = {
         'CORRECTION_MODEL': "qwen3-235b-a22b-instruct-2507",
         'EMOTION_MODEL': "qwen-flash-2025-07-28",
         'VISION_MODEL': "qwen3-vl-plus-2025-09-23",
+        # Qwen VL 模型支持 Computer Use
+        'COMPUTER_USE_MODEL': "qwen3-vl-235b-a22b-instruct",
+        'COMPUTER_USE_MODEL_URL': "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        'COMPUTER_USE_GROUND_MODEL': "qwen3-vl-30b-a3b-instruct",
+        'COMPUTER_USE_GROUND_URL': "https://dashscope.aliyuncs.com/compatible-mode/v1",
     },
     'openai': {
         'OPENROUTER_URL': "https://api.openai.com/v1",
@@ -166,6 +182,11 @@ DEFAULT_ASSIST_API_PROFILES = {
         'CORRECTION_MODEL': "gpt-5-chat-latest",
         'EMOTION_MODEL': "gpt-4.1-nano",
         'VISION_MODEL': "gpt-5-chat-latest",
+        # OpenAI 使用 GPT-4o 进行 Computer Use
+        'COMPUTER_USE_MODEL': "gpt-5-chat-latest",
+        'COMPUTER_USE_MODEL_URL': "https://api.openai.com/v1",
+        'COMPUTER_USE_GROUND_MODEL': "gpt-5-chat-latest",
+        'COMPUTER_USE_GROUND_URL': "https://api.openai.com/v1",
     },
     'glm': {
         'OPENROUTER_URL': "https://open.bigmodel.cn/api/paas/v4",
@@ -173,6 +194,11 @@ DEFAULT_ASSIST_API_PROFILES = {
         'CORRECTION_MODEL': "glm-4.5-air",
         'EMOTION_MODEL': "glm-4.5-flash",
         'VISION_MODEL': "glm-4v-plus-0111",
+        # 智谱 GLM-4.5V 支持 Grounding
+        'COMPUTER_USE_MODEL': "glm-4.5v",
+        'COMPUTER_USE_MODEL_URL': "https://open.bigmodel.cn/api/paas/v4",
+        'COMPUTER_USE_GROUND_MODEL': "glm-4.5v",
+        'COMPUTER_USE_GROUND_URL': "https://open.bigmodel.cn/api/paas/v4",
     },
     'step': {
         'OPENROUTER_URL': "https://api.stepfun.com/v1",
@@ -180,6 +206,11 @@ DEFAULT_ASSIST_API_PROFILES = {
         'CORRECTION_MODEL': "step-2-mini",
         'EMOTION_MODEL': "step-2-mini",
         'VISION_MODEL': "step-1o-turbo-vision",
+        # 阶跃星辰视觉模型
+        'COMPUTER_USE_MODEL': "step-1o-turbo-vision",
+        'COMPUTER_USE_MODEL_URL': "https://api.stepfun.com/v1",
+        'COMPUTER_USE_GROUND_MODEL': "step-1o-turbo-vision",
+        'COMPUTER_USE_GROUND_URL': "https://api.stepfun.com/v1",
     },
     'silicon': {
         'OPENROUTER_URL': "https://api.siliconflow.cn/v1",
@@ -187,6 +218,11 @@ DEFAULT_ASSIST_API_PROFILES = {
         'CORRECTION_MODEL': "deepseek-ai/DeepSeek-V3.2-Exp",
         'EMOTION_MODEL': "inclusionAI/Ling-mini-2.0",
         'VISION_MODEL': "Qwen/Qwen3-VL-235B-A22B-Instruct",
+        # 硅基流动使用 Qwen VL 模型
+        'COMPUTER_USE_MODEL': "Qwen/Qwen3-VL-235B-A22B-Instruct",
+        'COMPUTER_USE_MODEL_URL': "https://api.siliconflow.cn/v1",
+        'COMPUTER_USE_GROUND_MODEL': "Qwen/Qwen3-VL-30B-A3B-Instruct",
+        'COMPUTER_USE_GROUND_URL': "https://api.siliconflow.cn/v1",
     },
 }
 
@@ -279,5 +315,11 @@ __all__ = [
     'DEFAULT_TTS_MODEL_PROVIDER',
     'DEFAULT_TTS_MODEL_URL',
     'DEFAULT_TTS_MODEL_API_KEY',
+    'DEFAULT_COMPUTER_USE_MODEL',
+    'DEFAULT_COMPUTER_USE_MODEL_URL',
+    'DEFAULT_COMPUTER_USE_MODEL_API_KEY',
+    'DEFAULT_COMPUTER_USE_GROUND_MODEL',
+    'DEFAULT_COMPUTER_USE_GROUND_URL',
+    'DEFAULT_COMPUTER_USE_GROUND_API_KEY',
 ]
 

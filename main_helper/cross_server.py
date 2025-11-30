@@ -225,6 +225,8 @@ def sync_connector_process(message_queue, shutdown_event, lanlan_name, sync_serv
                                     logger.warning(f"[{lanlan_name}] 发送到analyzer超时")
                                 except Exception as e:
                                     logger.warning(f"[{lanlan_name}] 发送到analyzer失败: {e}")
+                                
+                                # Turn end时不保存聊天记录，只在session end或renew session时保存
 
                             elif message["data"] == 'session end': # 当前session结束了
                                 # 先处理未完成的用户输入缓存（如果有）
