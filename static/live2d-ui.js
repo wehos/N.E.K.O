@@ -1222,8 +1222,9 @@ Live2DManager.prototype._setupDragging = function(hud) {
         
         const touch = e.touches[0];
         const rect = hud.getBoundingClientRect();
-        touchOffsetX = touch.clientX - rect.left;
-        touchOffsetY = touch.clientY - rect.top;
+        // 修复bug：触摸拖拽使用正确的偏移量变量
+        dragOffsetX = touch.clientX - rect.left;
+        dragOffsetY = touch.clientY - rect.top;
         
         e.preventDefault();
     };
