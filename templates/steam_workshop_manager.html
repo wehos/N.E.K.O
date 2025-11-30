@@ -1325,13 +1325,6 @@
                 
                 <script>
                   // JavaScript控制的tooltip实现
-                  function translateText(key, fallback, params = {}) {
-                    if (window.t && typeof window.t === 'function') {
-                      return window.t(key, params);
-                    }
-                    // 如果window.t不可用，使用fallback或key
-                    return fallback || key;
-                  }
                   document.addEventListener('DOMContentLoaded', function() {
                     const tabButtons = document.querySelectorAll('.tabs button');
                     
