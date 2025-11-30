@@ -265,11 +265,11 @@ async def _poll_results_loop():
                         params = info.get("params") or {}
                         desc = params.get("query") or params.get("instruction") or ""
                         if detail and desc:
-                            summary = f"你的任务"{desc}"已完成：{detail}"[:240]
+                            summary = f"你的任务 “{desc}” 已完成：{detail}"[:240]
                         elif detail:
                             summary = f"你的任务已完成：{detail}"[:240]
                         elif desc:
-                            summary = f"你的任务"{desc}"已完成"[:240]
+                            summary = f"你的任务 “{desc}” 已完成"[:240]
                     except Exception:
                         pass
                     async with httpx.AsyncClient(timeout=0.5) as _client:
