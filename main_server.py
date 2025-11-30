@@ -230,28 +230,37 @@ async def initialize_character_data():
             # 2. 切换其他角色音色时，已跳过重新加载
             # 3. 其他场景不应该影响正在使用的session
             # 如果旧session_manager有活跃session，保留它，只更新配置相关的字段
-            if k in session_manager and session_manager[k].is_active:
+            
+            # 先检查会话状态（在锁内检查避免竞态条件）
+            has_active_session = k in session_manager and session_manager[k].is_active
+            
+            if has_active_session:
                 # 有活跃session，不重新创建session_manager，只更新配置
                 # 这是为了防止重新创建session_manager时破坏正在运行的session
-                old_mgr = session_manager[k]
-                # 更新prompt（如果需要）
-                old_mgr.lanlan_prompt = lanlan_prompt[k].replace('{LANLAN_NAME}', k).replace('{MASTER_NAME}', master_name)
-                # 重新读取角色配置以更新voice_id
-                (
-                    _,
-                    _,
-                    _,
-                    lanlan_basic_config_updated,
-                    _,
-                    _,
-                    _,
-                    _,
-                    _,
-                    _
-                ) = _config_manager.get_character_data()
-                # 更新voice_id（这是切换音色时需要的）
-                old_mgr.voice_id = lanlan_basic_config_updated[k].get('voice_id', '')
-                logger.info(f"{k} 有活跃session，只更新配置，不重新创建session_manager")
+                try:
+                    old_mgr = session_manager[k]
+                    # 更新prompt
+                    old_mgr.lanlan_prompt = lanlan_prompt[k].replace('{LANLAN_NAME}', k).replace('{MASTER_NAME}', master_name)
+                    # 重新读取角色配置以更新voice_id等字段
+                    (
+                        _,
+                        _,
+                        _,
+                        lanlan_basic_config_updated,
+                        _,
+                        _,
+                        _,
+                        _,
+                        _,
+                        _
+                    ) = _config_manager.get_character_data()
+                    # 更新voice_id（这是切换音色时需要的）
+                    old_mgr.voice_id = lanlan_basic_config_updated[k].get('voice_id', '')
+                    logger.info(f"{k} 有活跃session，只更新配置，不重新创建session_manager")
+                except Exception as e:
+                    logger.error(f"更新 {k} 的活跃session配置失败: {e}", exc_info=True)
+                    # 配置更新失败，但为了不影响正在运行的session，继续使用旧配置
+                    # 如果确实需要更新配置，可以考虑在下次session重启时再应用
             else:
                 # 没有活跃session，可以安全地重新创建session_manager
                 session_manager[k] = core.LLMSessionManager(
