@@ -954,6 +954,30 @@ async def shutdown_event():
 @app.websocket("/ws/{lanlan_name}")
 async def websocket_endpoint(websocket: WebSocket, lanlan_name: str):
     await websocket.accept()
+    
+    # 检查角色是否存在，如果不存在则通知前端并关闭连接
+    if lanlan_name not in session_manager:
+        logger.warning(f"❌ 角色 {lanlan_name} 不存在，当前可用角色: {list(session_manager.keys())}")
+        # 获取当前正确的角色名
+        current_catgirl = None
+        if session_manager:
+            current_catgirl = list(session_manager.keys())[0]
+        # 通知前端切换到正确的角色
+        if current_catgirl:
+            try:
+                await websocket.send_text(json.dumps({
+                    "type": "catgirl_switched",
+                    "new_catgirl": current_catgirl,
+                    "old_catgirl": lanlan_name
+                }))
+                logger.info(f"已通知前端切换到正确的角色: {current_catgirl}")
+                # 等待一下让客户端有时间处理消息，避免 onclose 在 onmessage 之前触发
+                await asyncio.sleep(0.5)
+            except Exception as e:
+                logger.warning(f"通知前端失败: {e}")
+        await websocket.close()
+        return
+    
     this_session_id = uuid.uuid4()
     async with lock:
         global session_id
@@ -962,15 +986,17 @@ async def websocket_endpoint(websocket: WebSocket, lanlan_name: str):
     
     # 立即设置websocket到session manager，以支持主动搭话
     # 注意：这里设置后，即使cleanup()被调用，websocket也会在start_session时重新设置
-    if lanlan_name in session_manager:
-        session_manager[lanlan_name].websocket = websocket
-        logger.info(f"✅ 已设置 {lanlan_name} 的WebSocket连接")
-    else:
-        logger.error(f"❌ 错误：{lanlan_name} 不在session_manager中！当前session_manager: {list(session_manager.keys())}")
+    session_manager[lanlan_name].websocket = websocket
+    logger.info(f"✅ 已设置 {lanlan_name} 的WebSocket连接")
 
     try:
         while True:
             data = await websocket.receive_text()
+            # 安全检查：如果角色已被重命名或删除，lanlan_name 可能不再存在
+            if lanlan_name not in session_id or lanlan_name not in session_manager:
+                logger.info(f"角色 {lanlan_name} 已被重命名或删除，关闭旧连接")
+                await websocket.close()
+                break
             if session_id[lanlan_name] != this_session_id:
                 await session_manager[lanlan_name].send_status(f"切换至另一个终端...")
                 await websocket.close()
@@ -1015,16 +1041,19 @@ async def websocket_endpoint(websocket: WebSocket, lanlan_name: str):
         error_message = f"WebSocket handler error: {e}"
         logger.error(f"💥 {error_message}")
         try:
-            await session_manager[lanlan_name].send_status(f"Server error: {e}")
+            if lanlan_name in session_manager:
+                await session_manager[lanlan_name].send_status(f"Server error: {e}")
         except:
             pass
     finally:
         logger.info(f"Cleaning up WebSocket resources: {websocket.client}")
-        await session_manager[lanlan_name].cleanup()
-        # 注意：cleanup() 会清空 websocket，但只在连接真正断开时调用
-        # 如果连接还在，websocket应该保持设置
-        if session_manager[lanlan_name].websocket == websocket:
-            session_manager[lanlan_name].websocket = None
+        # 安全检查：如果角色已被重命名或删除，lanlan_name 可能不再存在
+        if lanlan_name in session_manager:
+            await session_manager[lanlan_name].cleanup()
+            # 注意：cleanup() 会清空 websocket，但只在连接真正断开时调用
+            # 如果连接还在，websocket应该保持设置
+            if session_manager[lanlan_name].websocket == websocket:
+                session_manager[lanlan_name].websocket = None
 
 @app.post('/api/notify_task_result')
 async def notify_task_result(request: Request):
@@ -2881,14 +2910,36 @@ async def rename_catgirl(old_name: str, request: Request):
         return JSONResponse({'success': False, 'error': '原猫娘不存在'}, status_code=404)
     if new_name in characters['猫娘']:
         return JSONResponse({'success': False, 'error': '新档案名已存在'}, status_code=400)
+    
+    # 如果当前猫娘是被重命名的猫娘，需要先保存WebSocket连接并发送通知
+    # 必须在 initialize_character_data() 之前发送，因为那个函数会删除旧的 session_manager 条目
+    is_current_catgirl = characters.get('当前猫娘') == old_name
+    if is_current_catgirl:
+        logger.info(f"开始通知WebSocket客户端：猫娘从 {old_name} 重命名为 {new_name}")
+        message = json.dumps({
+            "type": "catgirl_switched",
+            "new_catgirl": new_name,
+            "old_catgirl": old_name
+        })
+        # 在 initialize_character_data() 之前发送消息，因为之后旧的 session_manager 会被删除
+        if old_name in session_manager:
+            ws = session_manager[old_name].websocket
+            if ws:
+                try:
+                    await ws.send_text(message)
+                    logger.info(f"已向 {old_name} 发送重命名通知")
+                except Exception as e:
+                    logger.warning(f"发送重命名通知给 {old_name} 失败: {e}")
+    
     # 重命名
     characters['猫娘'][new_name] = characters['猫娘'].pop(old_name)
     # 如果当前猫娘是被重命名的猫娘，也需要更新
-    if characters.get('当前猫娘') == old_name:
+    if is_current_catgirl:
         characters['当前猫娘'] = new_name
     _config_manager.save_characters(characters)
     # 自动重新加载配置
     await initialize_character_data()
+    
     return {"success": True}
 
 @app.post('/api/characters/catgirl/{name}/unregister_voice')
