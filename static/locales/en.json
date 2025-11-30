@@ -24,6 +24,7 @@
     },
   "steam": {
     "workshop": "Steam Workshop",
+    "workshopManager": "Steam Workshop Manager - Project N.E.K.O.",
     "itemId": "Item ID",
     "preparingUpload": "Preparing upload...",
     "mySubscriptions": "My Subscriptions",
