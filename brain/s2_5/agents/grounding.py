@@ -29,9 +29,10 @@ def agent_action(func):
 
 UBUNTU_APP_SETUP = f"""import subprocess;
 import difflib;
+import time;
 import pyautogui;
 pyautogui.press('escape');
-time.sleep(0.5);
+time.sleep(0.2);
 output = subprocess.check_output(['wmctrl', '-lx']);
 output = output.decode('utf-8').splitlines();
 window_titles = [line.split(None, 4)[2] for line in output];
@@ -392,11 +393,11 @@ class OSWorldACI(ACI):
             app_code:str the code name of the application to switch to from the provided list of open applications
         """
         if self.platform == "darwin":
-            return f"import pyautogui; import time; pyautogui.hotkey('command', 'space', interval=0.5); pyautogui.typewrite({repr(app_code)}); pyautogui.press('enter'); time.sleep(1.0)"
+            return f"import pyautogui; import time; pyautogui.hotkey('command', 'space', interval=0.5); pyautogui.typewrite({repr(app_code)}); pyautogui.press('enter'); time.sleep(0.5)"
         elif self.platform == "linux":
             return UBUNTU_APP_SETUP.replace("APP_NAME", app_code)
         elif self.platform == "windows":
-            return f"import pyautogui; import time; pyautogui.hotkey('win', 'd', interval=0.5); pyautogui.typewrite({repr(app_code)}); pyautogui.press('enter'); time.sleep(1.0)"
+            return f"import pyautogui; import time; pyautogui.hotkey('win', 'd', interval=0.5); pyautogui.typewrite({repr(app_code)}); pyautogui.press('enter'); time.sleep(0.5)"
 
     @agent_action
     def open(self, app_or_filename: str):
@@ -405,9 +406,9 @@ class OSWorldACI(ACI):
             app_or_filename:str, the name of the application or filename to open
         """
         if self.platform == "linux":
-            return f"import pyautogui; pyautogui.hotkey('win'); time.sleep(0.5); pyautogui.write({repr(app_or_filename)}); time.sleep(1.0); pyautogui.hotkey('enter'); time.sleep(0.5)"
+            return f"import pyautogui; pyautogui.hotkey('win'); time.sleep(0.2); pyautogui.write({repr(app_or_filename)}); time.sleep(0.5); pyautogui.hotkey('enter'); time.sleep(0.2)"
         elif self.platform == "darwin":
-            return f"import pyautogui; import time; pyautogui.hotkey('command', 'space', interval=0.5); pyautogui.typewrite({repr(app_or_filename)}); pyautogui.press('enter'); time.sleep(1.0)"
+            return f"import pyautogui; import time; pyautogui.hotkey('command', 'space', interval=0.5); pyautogui.typewrite({repr(app_or_filename)}); pyautogui.press('enter'); time.sleep(0.5)"
 
     @agent_action
     def type(
@@ -547,9 +548,9 @@ class OSWorldACI(ACI):
         x, y = self.resize_coordinates(self.coords1)
 
         if shift:
-            return f"import pyautogui; import time; pyautogui.moveTo({x}, {y}); time.sleep(0.5); pyautogui.hscroll({clicks})"
+            return f"import pyautogui; import time; pyautogui.moveTo({x}, {y}); time.sleep(0.2); pyautogui.hscroll({clicks})"
         else:
-            return f"import pyautogui; import time; pyautogui.moveTo({x}, {y}); time.sleep(0.5); pyautogui.vscroll({clicks})"
+            return f"import pyautogui; import time; pyautogui.moveTo({x}, {y}); time.sleep(0.2); pyautogui.vscroll({clicks})"
 
     @agent_action
     def hotkey(self, keys: List):

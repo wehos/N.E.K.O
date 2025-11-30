@@ -135,11 +135,25 @@ def _convert_assist_api_profile(json_profile: Dict[str, Any]) -> Dict[str, Any]:
         'audio_api_key': 'AUDIO_API_KEY',
         'openrouter_api_key': 'OPENROUTER_API_KEY',
         'is_free_version': 'IS_FREE_VERSION',
+        # Computer Use 相关字段
+        'computer_use_model': 'COMPUTER_USE_MODEL',
+        'computer_use_model_url': 'COMPUTER_USE_MODEL_URL',
+        'computer_use_ground_model': 'COMPUTER_USE_GROUND_MODEL',
+        'computer_use_ground_url': 'COMPUTER_USE_GROUND_URL',
     }
     
     for json_key, python_key in field_mapping.items():
         if json_key in json_profile:
             result[python_key] = json_profile[json_key]
+    
+    # 同时支持直接使用大写字段名（兼容 DEFAULT_ASSIST_API_PROFILES）
+    direct_fields = [
+        'COMPUTER_USE_MODEL', 'COMPUTER_USE_MODEL_URL',
+        'COMPUTER_USE_GROUND_MODEL', 'COMPUTER_USE_GROUND_URL',
+    ]
+    for field in direct_fields:
+        if field in json_profile and field not in result:
+            result[field] = json_profile[field]
     
     return result
 
@@ -200,16 +214,33 @@ def get_assist_api_profiles(force_reload: bool = False) -> Dict[str, Dict[str, A
     Returns:
         Dict: 辅助API配置字典，格式与 ASSIST_API_PROFILES 相同
     """
+    # 首先获取默认配置作为基础
+    defaults = _get_default_assist_api_profiles()
+    
     config = get_config(force_reload=force_reload)
     assist_providers = config.get('assist_api_providers', {})
+    
+    if not assist_providers:
+        return defaults
     
     result = {}
     for key, profile in assist_providers.items():
         # 转换为Python代码使用的格式
-        result[key] = _convert_assist_api_profile(profile)
+        converted = _convert_assist_api_profile(profile)
+        
+        # 与默认配置合并：默认配置作为基础，JSON配置覆盖
+        # 这确保 COMPUTER_USE_* 等字段能从默认配置中获取
+        if key in defaults:
+            merged = dict(defaults[key])  # 复制默认配置
+            merged.update(converted)  # JSON 配置覆盖
+            result[key] = merged
+        else:
+            result[key] = converted
     
-    if not result:
-        return _get_default_assist_api_profiles()
+    # 添加默认配置中有但 JSON 中没有的 provider
+    for key in defaults:
+        if key not in result:
+            result[key] = defaults[key]
     
     return result
 

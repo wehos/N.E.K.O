@@ -1,7 +1,7 @@
 /**
  * i18next 初始化文件
  * 使用成熟的 i18next 库管理本地化文本
- * 固定使用中文 (zh-CN)
+ * 优先使用 Steam 客户端语言设置，其次是浏览器设置
  * 包含本地文件加载、检查和容错机制
  * 
  * 使用方式：
@@ -12,7 +12,8 @@
  * 1. 加载本地 i18next 库（从 /static/libs/）
  * 2. 检查依赖加载状态
  * 3. 处理加载失败容错（重新加载或降级方案）
- * 4. 初始化 i18next
+ * 4. 从 Steam API 获取语言设置
+ * 5. 初始化 i18next
  */
 
 (function() {
@@ -27,8 +28,8 @@
     // 支持的语言列表
     const SUPPORTED_LANGUAGES = ['zh-CN', 'en'];
     
-    // 获取初始语言：优先从 localStorage，然后是浏览器设置，最后默认中文
-    function getInitialLanguage() {
+    // 获取浏览器语言（同步，作为 fallback）
+    function getBrowserLanguage() {
         // 1. 检查 localStorage
         const savedLanguage = localStorage.getItem('i18nextLng');
         if (savedLanguage && SUPPORTED_LANGUAGES.includes(savedLanguage)) {
@@ -56,7 +57,53 @@
         return 'zh-CN';
     }
     
-    const INITIAL_LANGUAGE = getInitialLanguage();
+    // 从 Steam API 获取语言设置（异步）
+    async function getSteamLanguage() {
+        try {
+            const response = await fetch('/api/steam_language', {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' },
+                // 设置超时，避免阻塞太久
+                signal: AbortSignal.timeout(2000)
+            });
+            
+            if (!response.ok) {
+                console.log('[i18n] Steam 语言 API 响应异常:', response.status);
+                return null;
+            }
+            
+            const data = await response.json();
+            console.log('[i18n] Steam API 返回语言设置:', data);
+            
+            if (data.success && data.i18n_language && SUPPORTED_LANGUAGES.includes(data.i18n_language)) {
+                return data.i18n_language;
+            }
+            
+            console.log('[i18n] Steam 语言 API 返回无效数据，回退到浏览器设置');
+            return null;
+        } catch (error) {
+            // 可能是超时或网络错误，静默处理
+            console.log('[i18n] 无法从 Steam 获取语言设置，使用浏览器设置:', error.message);
+            return null;
+        }
+    }
+    
+    // 获取初始语言：优先 Steam 设置，然后 localStorage，然后浏览器设置，最后默认中文
+    async function getInitialLanguage() {
+        // 1. 尝试从 Steam API 获取语言
+        const steamLanguage = await getSteamLanguage();
+        if (steamLanguage) {
+            // 保存到 localStorage，下次可以直接使用
+            localStorage.setItem('i18nextLng', steamLanguage);
+            return steamLanguage;
+        }
+        
+        // 2. 回退到浏览器语言
+        return getBrowserLanguage();
+    }
+    
+    // 先使用同步方式获取初始语言（用于快速显示）
+    let INITIAL_LANGUAGE = getBrowserLanguage();
     
     // ==================== CDN 动态加载 ====================
     
@@ -295,26 +342,40 @@
         }
         
         try {
-            // 加载所有支持的语言翻译文件
-            const resources = {};
-            const loadPromises = SUPPORTED_LANGUAGES.map(async (lang) => {
-                try {
-                    const response = await fetch(`/static/locales/${lang}.json`);
-                    if (response.ok) {
-                        const translations = await response.json();
-                        resources[lang] = {
-                            translation: translations
-                        };
-                        console.log(`[i18n] ✅ ${lang} 翻译文件加载成功`);
-                    } else {
-                        console.warn(`[i18n] ⚠️ ${lang} 翻译文件不存在或加载失败: ${response.status}`);
+            // 并行执行：获取 Steam 语言设置 + 加载翻译文件
+            const [steamLang, ...langResults] = await Promise.all([
+                getInitialLanguage(),  // 异步获取语言（优先 Steam）
+                ...SUPPORTED_LANGUAGES.map(async (lang) => {
+                    try {
+                        const response = await fetch(`/static/locales/${lang}.json`);
+                        if (response.ok) {
+                            const translations = await response.json();
+                            console.log(`[i18n] ✅ ${lang} 翻译文件加载成功`);
+                            return { lang, translations };
+                        } else {
+                            console.warn(`[i18n] ⚠️ ${lang} 翻译文件不存在或加载失败: ${response.status}`);
+                            return null;
+                        }
+                    } catch (error) {
+                        console.warn(`[i18n] ⚠️ ${lang} 翻译文件加载出错:`, error);
+                        return null;
                     }
-                } catch (error) {
-                    console.warn(`[i18n] ⚠️ ${lang} 翻译文件加载出错:`, error);
+                })
+            ]);
+            
+            // 使用获取到的语言设置
+            INITIAL_LANGUAGE = steamLang;
+            console.log(`[i18n] 使用语言: ${INITIAL_LANGUAGE}`);
+            
+            // 构建资源对象
+            const resources = {};
+            langResults.forEach(result => {
+                if (result) {
+                    resources[result.lang] = {
+                        translation: result.translations
+                    };
                 }
             });
-            
-            await Promise.all(loadPromises);
             
             // 确保至少有一个语言资源
             if (Object.keys(resources).length === 0) {
@@ -384,7 +445,7 @@
     /**
      * 初始化 i18next（使用 HTTP Backend）
      */
-    function initI18next() {
+    async function initI18next() {
         if (typeof i18next === 'undefined') {
             console.error('[i18n] ❌ i18next 核心库未加载，无法初始化');
             exportFallbackFunctions();
@@ -396,6 +457,10 @@
             initI18nextWithoutBackend();
             return;
         }
+        
+        // 获取语言设置（优先 Steam API）
+        const language = await getInitialLanguage();
+        INITIAL_LANGUAGE = language;
         
         // 初始化 i18next
         console.log('[i18n] 开始初始化 i18next...');
@@ -766,8 +831,4 @@
         return message;
     }
     
-    console.log('✅ i18next 诊断工具已加载！');
-    console.log('使用以下命令：');
-    console.log('  - window.diagnoseI18n()      // 诊断 i18next 状态');
-    console.log('  - window.testTranslation("voice.title")  // 测试翻译');
 })();

@@ -289,7 +289,11 @@
     let lanlan_config = {
         lanlan_name: ""
     };
+    window.lanlan_config = lanlan_config;
     let cubism4Model = "";
+    
+    // 标记为观看模式，禁用所有交互按钮
+    window.isViewerMode = true;
     
     // 异步获取页面配置
     async function loadPageConfig() {
@@ -317,7 +321,9 @@
             if (data.success) {
                 // 使用 URL 中的 lanlan_name（如果有），否则使用 API 返回的
                 lanlan_config.lanlan_name = lanlanNameFromUrl || data.lanlan_name || "";
+                window.lanlan_config = lanlan_config;
                 cubism4Model = data.model_path || "";
+                window.cubism4Model = cubism4Model;  // 设置全局变量供 live2d-init.js 使用
                 
                 // 动态设置页面标题
                 document.title = `${lanlan_config.lanlan_name} - Viewer`;

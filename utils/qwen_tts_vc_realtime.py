@@ -9,7 +9,7 @@ async def voice_clone(file: UploadFile = File(...), prefix: str = Form(...)):
     import os
     import base64
     import pathlib
-    import requests
+    import httpx
     import wave
     import struct
     import mimetypes
@@ -70,7 +70,7 @@ async def voice_clone(file: UploadFile = File(...), prefix: str = Form(...)):
         
         return mime_type, ""
     
-    def create_voice(file_path: str,
+    async def create_voice(file_path: str,
                      target_model: str = DEFAULT_TARGET_MODEL,
                      preferred_name: str = DEFAULT_PREFERRED_NAME,
                      audio_mime_type: str = "audio/wav") -> str:
@@ -105,14 +105,15 @@ async def voice_clone(file: UploadFile = File(...), prefix: str = Form(...)):
             "Content-Type": "application/json"
         }
 
-        resp = requests.post(url, json=payload, headers=headers)
-        if resp.status_code != 200:
-            raise RuntimeError(f"创建 voice 失败: {resp.status_code}, {resp.text}")
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code != 200:
+                raise RuntimeError(f"创建 voice 失败: {resp.status_code}, {resp.text}")
 
-        try:
-            return resp.json()["output"]["voice"]
-        except (KeyError, ValueError) as e:
-            raise RuntimeError(f"解析 voice 响应失败: {e}")
+            try:
+                return resp.json()["output"]["voice"]
+            except (KeyError, ValueError) as e:
+                raise RuntimeError(f"解析 voice 响应失败: {e}")
 
     temp_path = f'tmp_{file.filename}'
     try:
@@ -126,7 +127,7 @@ async def voice_clone(file: UploadFile = File(...), prefix: str = Form(...)):
             return JSONResponse({'error': error_msg}, status_code=400)
         
         # 使用新的create_voice函数直接处理音频文件
-        voice_id = create_voice(
+        voice_id = await create_voice(
             file_path=temp_path,
             target_model=DEFAULT_TARGET_MODEL,
             preferred_name=prefix,  # 使用用户提供的前缀作为preferred_name
@@ -159,7 +160,6 @@ import json
 import struct  # For packing audio data
 import threading
 import re
-import requests
 import logging
 from datetime import datetime
 from websockets import exceptions as web_exceptions
@@ -887,8 +887,10 @@ class LLMSessionManager:
 
         try:
             # 获取初始 prompt
-            initial_prompt = ("你是一个角色扮演大师，并且精通电脑操作。请按要求扮演以下角色（self.lanlan_name），不得透露角色扮演相关的信息。并且，在对方请求时、回答“我试试”并尝试操纵电脑。\n" if self._is_agent_enabled() else "你是一个角色扮演大师。请按要求扮演以下角色（self.lanlan_name）。不得透露角色扮演相关的信息。\n") + self.lanlan_prompt
-            initial_prompt += requests.get(f"http://localhost:{self.memory_server_port}/new_dialog/{self.lanlan_name}").text
+            initial_prompt = ("你是一个角色扮演大师，并且精通电脑操作。请按要求扮演以下角色（self.lanlan_name），不得透露角色扮演相关的信息。并且，在对方请求时、回答"我试试"并尝试操纵电脑。\n" if self._is_agent_enabled() else "你是一个角色扮演大师。请按要求扮演以下角色（self.lanlan_name）。不得透露角色扮演相关的信息。\n") + self.lanlan_prompt
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(f"http://localhost:{self.memory_server_port}/new_dialog/{self.lanlan_name}")
+                initial_prompt += resp.text
             # logger.info("====Initial Prompt=====")
             # logger.info(initial_prompt)
 

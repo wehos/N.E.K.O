@@ -257,34 +257,39 @@
             width: 400px;
             max-height: 500px;
             height: 500px;
-            background: #f7f8fa;
-            opacity: 0.9;
-            border-radius: 12px;
+            /* Fluent Design Acrylic 材质 */
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: saturate(180%) blur(20px);  /* Fluent Design 标准模糊值 */
+            -webkit-backdrop-filter: saturate(180%) blur(20px);
+            border-radius: 8px;  /* Fluent Design 标准圆角 */
+            border: 1px solid rgba(255, 255, 255, 0.18);  /* 微妙的高光边框 */
             padding: 0;
             box-sizing: border-box;
-            overflow: hidden; /* 重要：改为 hidden，滚动交给内部 wrapper */
+            overflow: hidden;
             z-index: 20;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+            /* Fluent Design 多层阴影创造深度 */
+            box-shadow: 
+                0 2px 4px rgba(0, 0, 0, 0.04),
+                0 8px 16px rgba(0, 0, 0, 0.08),
+                0 16px 32px rgba(0, 0, 0, 0.04);
             scroll-behavior: smooth;
-            display: flex; /* 使用 flex 布局 */
+            display: flex;
             flex-direction: column;
-            /* 添加过渡效果，让尺寸变化平滑 */
-            transition: width 0.3s ease, height 0.3s ease, max-height 0.3s ease, padding 0.3s ease;
+            transition: width 0.3s ease, height 0.3s ease, max-height 0.3s ease, padding 0.3s ease, box-shadow 0.2s ease;
         }
 
-        /* 内部内容包裹器，负责滚动 */
+        /* 内部内容包裹器，负责滚动 - Fluent Design */
         #chat-content-wrapper {
-            pointer-events: auto; /* 恢复鼠标交互 */
-            flex-grow: 1; /* 占据可用空间 */
-            padding: 16px; /* 内边距移到这里 */
-            padding-top: 48px; /* 为顶部按钮留空间 */
-            overflow-y: auto; /* 滚动条在这里 */
+            pointer-events: auto;
+            flex-grow: 1;
+            padding: 16px;
+            padding-top: 48px;
+            overflow-y: auto;
             scroll-behavior: smooth;
-            /* 添加过渡，让内容隐藏/显示更平滑 */
             transition: opacity 0.2s ease, visibility 0.2s ease;
             opacity: 1;
             visibility: visible;
-            background: #fff;
+            background: rgba(249, 249, 249, 0.7);  /* Fluent Design 背景层 */
         }
 
         /* 切换按钮样式 - 更醒目的设计 */
@@ -316,22 +321,22 @@
             transform: scale(1.1);
         }
         
-        /* 聊天框标题 */
+        /* 聊天框标题 - Fluent Design 风格 */
         #chat-header {
             position: absolute;
             top: 0;
             left: 0;
             right: 0;
             height: 48px;
-            background: #f7f8fa;
-            border-bottom: 1px solid #e0e0e0;
+            background: rgba(255, 255, 255, 0.5);  /* 更透明的 Mica 效果 */
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);  /* Fluent Design 中性分隔线 */
             display: flex;
             align-items: center;
             padding: 0 16px;
             box-sizing: border-box;
             z-index: 21;
-            cursor: grab; /* 拖动手柄样式 */
-            user-select: none; /* 防止拖动时选中文字 */
+            cursor: grab;
+            user-select: none;
             -webkit-user-select: none;
             -moz-user-select: none;
             -ms-user-select: none;
@@ -346,9 +351,9 @@
         }
         
         #chat-title {
-            font-size: 1rem;
+            font-size: 0.875rem;  /* Fluent Design 标准字号 14px */
             font-weight: 600;
-            color: #333;
+            color: rgba(0, 0, 0, 0.9);  /* Fluent Design 高对比度文本 */
             user-select: none;
             -webkit-user-select: none;
             -moz-user-select: none;
@@ -360,13 +365,13 @@
             position: absolute;
             top: 60px;
             left: 16px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: rgba(68, 183, 254, 0.95);  /* 与主色调一致 #44b7fe */
             color: white;
             padding: 12px 20px;
             border-radius: 8px;
             font-size: 0.95rem;
             font-weight: 500;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 4px 12px rgba(68, 183, 254, 0.4);
             z-index: 22;
             pointer-events: none;
             animation: slideInBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
@@ -388,7 +393,7 @@
             height: 0;
             border-left: 8px solid transparent;
             border-right: 8px solid transparent;
-            border-bottom: 8px solid #667eea;
+            border-bottom: 8px solid rgba(68, 183, 254, 0.95);
         }
 
         @keyframes slideInBounce {
@@ -425,7 +430,7 @@
         
         .message.user {
             align-self: flex-end;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #44b7fe;  /* 与按钮一致的浅蓝色 */
             color: #fff;
             margin-left: auto;
             border-bottom-right-radius: 4px;
@@ -433,7 +438,7 @@
         
         .message.gemini {
             align-self: flex-start;
-            background: #f0f0f0;
+            background: rgba(68, 183, 254, 0.12);  /* 与主色调协调的浅蓝背景 */
             color: #333;
             margin-right: auto;
             border-bottom-left-radius: 4px;
@@ -450,21 +455,20 @@
             }
         }
         
-        /* 文本输入区域样式 - 在聊天框底部 */
+        /* 文本输入区域样式 - Fluent Design */
         #text-input-area {
             pointer-events: auto;
             display: flex;
             flex-direction: column;
             gap: 8px;
             padding: 12px;
-            background: #fff;
-            border-top: 1px solid #e0e0e0;
-            background: transparent;
+            background: rgba(255, 255, 255, 0.5);  /* Fluent Acrylic */
+            border-top: 1px solid rgba(0, 0, 0, 0.06);  /* 中性分隔线 */
             box-sizing: border-box;
             transition: all 0.3s ease;
             position: relative;
             z-index: 25;
-            user-select: none; /* 默认区域内元素不可选中 */
+            user-select: none;
             -webkit-user-select: none;
             -moz-user-select: none;
             -ms-user-select: none;
@@ -489,9 +493,9 @@
             flex-direction: column;
             gap: 6px;
             padding: 8px;
-            background: #f5f5f5;
+            background: rgba(68, 183, 254, 0.05);
             border-radius: 8px;
-            border: 1px solid #e0e0e0;
+            border: 1px solid rgba(68, 183, 254, 0.2);
             animation: slideDown 0.3s ease;
         }
         
@@ -520,7 +524,7 @@
         
         #screenshots-title {
             font-size: 0.85rem;
-            color: #333;
+            color: #44b7fe;
             font-weight: 600;
         }
         
@@ -559,12 +563,12 @@
         }
         
         #screenshots-list::-webkit-scrollbar-thumb {
-            background: #ccc;
+            background: rgba(68, 183, 254, 0.4);
             border-radius: 3px;
         }
         
         #screenshots-list::-webkit-scrollbar-thumb:hover {
-            background: #999;
+            background: rgba(68, 183, 254, 0.6);
         }
         
         /* 单个截图卡片 */
@@ -613,7 +617,7 @@
         }
         
         .screenshot-thumbnail:hover {
-            border-color: #4f8cff;
+            border-color: #44b7fe;
             transform: scale(1.05);
         }
         
@@ -646,11 +650,11 @@
         
         .screenshot-index {
             font-size: 0.7rem;
-            color: #666;
+            color: #44b7fe;
             background: white;
             padding: 2px 6px;
             border-radius: 10px;
-            border: 1px solid #ddd;
+            border: 1px solid rgba(68, 183, 254, 0.3);
         }
         
         #text-input-row {
@@ -695,7 +699,7 @@
         
         #textInputBox:focus {
             outline: none;
-            border-color: #4f8cff;
+            border-color: #44b7fe;
             box-shadow: none;
         }
         
@@ -856,14 +860,14 @@
             padding: 8px 16px;
             border-radius: 6px;
             border: none;
-            background: #4f8cff;
+            background: #44b7fe;
             color: #fff;
             cursor: pointer;
             transition: background 0.2s;
         }
 
         #sendButton:active {
-            background: #2662c8;
+            background: #2ea0e0;
         }
 
         #sendButton:disabled {
@@ -913,15 +917,15 @@
                 padding-top: 44px;
                 /* 禁用内容区过渡，避免折叠时对子元素产生影响 */
                 transition: none !important;
-                background: transparent;
+                background: rgba(249, 249, 249, 0.5);  /* Fluent 背景层 */
             }
             
             #text-input-area {
                 padding: 8px;
                 /* 输入区不参与任何过渡动画 */
                 transition: none !important;
-                background: transparent;
-                border-top: none;
+                background: rgba(255, 255, 255, 0.4);  /* Fluent Acrylic */
+                border-top: 1px solid rgba(0, 0, 0, 0.06);  /* Fluent 分隔线 */
             }
             /* 输入区内部元素也不参与过渡，避免细微跳动 */
             #text-input-row,

@@ -14,7 +14,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 import uvicorn
 from fastapi.templating import Jinja2Templates
-from utils.frontend_utils import find_models, find_model_config_file
+from utils.frontend_utils import find_models, find_model_config_file, find_model_directory
+from utils.workshop_utils import get_default_workshop_folder
+from utils.preferences import load_user_preferences
 
 # Setup logger
 from utils.logger_config import setup_logging
@@ -43,6 +45,18 @@ app = FastAPI()
 # 挂载静态文件
 app.mount("/static", StaticFiles(directory=get_resource_path("static")), name="static")
 _config_manager = get_config_manager()
+
+# 挂载用户Live2D目录（与main_server.py保持一致）
+user_live2d_path = str(_config_manager.live2d_dir)
+if os.path.exists(user_live2d_path):
+    app.mount("/user_live2d", StaticFiles(directory=user_live2d_path), name="user_live2d")
+    logger.info(f"已挂载用户Live2D目录: {user_live2d_path}")
+
+# 挂载创意工坊目录（与main_server.py保持一致）
+workshop_path = get_default_workshop_folder()
+if workshop_path and os.path.exists(workshop_path):
+    app.mount("/workshop", StaticFiles(directory=workshop_path), name="workshop")
+    logger.info(f"已挂载创意工坊目录: {workshop_path}")
 
 @app.get("/subtitle")
 async def get_subtitle():
@@ -76,12 +90,18 @@ async def get_page_config(lanlan_name: str = ""):
         logger.error(f"获取页面配置失败: {e}")
         return {"success": False, "error": str(e)}
 
+@app.get("/api/preferences")
+async def get_preferences():
+    """获取用户偏好设置（与main_server.py保持一致）"""
+    preferences = load_user_preferences()
+    return preferences
+
 @app.get('/api/live2d/emotion_mapping/{model_name}')
 async def get_emotion_mapping(model_name: str):
     """获取情绪映射配置"""
     try:
-        # 在模型目录中查找.model3.json文件
-        model_dir = get_resource_path(os.path.join('static', model_name))
+        # 使用 find_model_directory 在 static、用户文档目录、创意工坊目录中查找模型
+        model_dir, url_prefix = find_model_directory(model_name)
         if not os.path.exists(model_dir):
             return JSONResponse(status_code=404, content={"success": False, "error": "模型目录不存在"})
         
