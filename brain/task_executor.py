@@ -55,13 +55,12 @@ class ComputerUseDecision:
 
 class DirectTaskExecutor:
     """
-    直接任务执行器：并行评估 MCP 和 ComputerUse 可行性
+    直接任务执行器：并行评估 MCP、UserPlugin 与 ComputerUse 可行性
     
     流程:
-    1. 并行调用两个 LLM：一个评估 MCP，一个评估 ComputerUse
-    2. 优先使用 MCP（如果可行）
-    3. 其次使用 ComputerUse（如果 MCP 不可行但 ComputerUse 可行）
-    4. 执行选中的方法
+    1. 并行调用多个评估器：_assess_mcp、_assess_user_plugin、_assess_computer_use
+    2. 优先使用 MCP（如果可行），其次 UserPlugin，再次 ComputerUse（优先级可调整）
+    3. 执行选中的方法
     """
     
     def __init__(self, computer_use: Optional[ComputerUseAdapter] = None):
@@ -69,7 +68,13 @@ class DirectTaskExecutor:
         self.catalog = McpToolCatalog(self.router)
         self.computer_use = computer_use or ComputerUseAdapter()
         self._config_manager = get_config_manager()
-    
+        # 插件管理点：暂不实现加载逻辑，调用时会传入 plugins 列表
+        # 保持可注入性：外部可在实例化后设置 self.plugin_list_provider
+        from typing import Callable
+        # plugin_list_provider: optional callable(force_refresh: bool=False) -> list|dict
+        self.plugin_list_provider: Optional[Callable[..., Any]] = None
+        self.user_plugin_enabled_default = False
+     
     def _get_client(self):
         """动态获取 OpenAI 客户端"""
         core_config = self._config_manager.get_core_config()
@@ -280,7 +285,7 @@ OUTPUT FORMAT (strict JSON):
                 return ComputerUseDecision(
                     has_task=decision.get('has_task', False),
                     can_execute=decision.get('can_execute', False),
-                    task_description=decision.get('task_description', ''),
+                    task_description=decision.get('task_description', ''), 
                     reason=decision.get('reason', '')
                 )
                 
@@ -295,6 +300,95 @@ OUTPUT FORMAT (strict JSON):
             except Exception as e:
                 logger.error(f"[ComputerUse Assessment] Failed: {e}")
                 return ComputerUseDecision(has_task=False, can_execute=False, reason=f"Assessment error: {e}")
+    
+    async def _assess_user_plugin(self, conversation: str, plugins: Any) -> Any:
+        """
+        评估本地用户插件可行性（plugins 为外部传入的插件列表）
+        返回结构与 MCP 决策类似，但包含 plugin_id/plugin_args
+        """
+        # 如果没有插件，快速返回
+        try:
+            if not plugins:
+                return type("UP", (), {"has_task": False, "can_execute": False, "task_description":"", "plugin_id": None, "plugin_args": None, "reason":"No plugins"})
+        except Exception:
+            return type("UP", (), {"has_task": False, "can_execute": False, "task_description":"", "plugin_id": None, "plugin_args": None, "reason":"Invalid plugins"})
+    
+        # 构建插件描述供 LLM 参考（只包含 id, description, input_schema）
+        lines = []
+        try:
+            # plugins can be dict or list
+            iterable = plugins.items() if isinstance(plugins, dict) else enumerate(plugins)
+            for _, p in iterable:
+                pid = p.get("id") if isinstance(p, dict) else getattr(p, "id", None)
+                desc = p.get("description", "") if isinstance(p, dict) else getattr(p, "description", "")
+                schema = p.get("input_schema", {}) if isinstance(p, dict) else getattr(p, "input_schema", {})
+                lines.append(f"- {pid}: {desc} | schema: {json.dumps(schema)}")
+        except Exception:
+            pass
+        
+        system_prompt = f"""You are a User Plugin selection agent. AVAILABLE PLUGINS:
+        INSTRUCTIONS:
+        1. Analyze the conversation and determine if any available plugin can handle the user's request.
+        2. If yes, return the plugin id and arguments matching the plugin's schema.
+        3. Output MUST be strict JSON.
+        
+        OUTPUT FORMAT:
+        {{
+            "has_task": boolean,
+            "can_execute": boolean,
+            "task_description": "brief description",
+            "plugin_id": "plugin id or null",
+            "plugin_args": {{...}} or null,
+            "reason": "why"
+        }}
+        """
+        user_prompt = f"Conversation:\\n{conversation}"
+        
+        max_retries = 3
+        retry_delays = [1, 2]
+        
+        for attempt in range(max_retries):
+            try:
+                client = self._get_client()
+                model = self._get_model()
+                
+                request_params = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": 0,
+                    "max_tokens": 400
+                }
+                
+                if model in MODELS_WITH_EXTRA_BODY:
+                    request_params["extra_body"] = {"enable_thinking": False}
+                
+                response = await client.chat.completions.create(**request_params)
+                text = response.choices[0].message.content.strip()
+                
+                if text.startswith("```"):
+                    text = text.replace("```json", "").replace("```", "").strip()
+                decision = json.loads(text)
+                
+                # return a simple object-like struct
+                return type("UP", (), {
+                    "has_task": decision.get("has_task", False),
+                    "can_execute": decision.get("can_execute", False),
+                    "task_description": decision.get("task_description", ""),
+                    "plugin_id": decision.get("plugin_id"),
+                    "plugin_args": decision.get("plugin_args"),
+                    "reason": decision.get("reason", "")
+                })
+                
+            except (APIConnectionError, InternalServerError, RateLimitError) as e:
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delays[attempt])
+                else:
+                    return type("UP", (), {"has_task": False, "can_execute": False, "reason": f"Assessment error: {e}"})
+            except Exception as e:
+                return type("UP", (), {"has_task": False, "can_execute": False, "reason": f"Assessment error: {e}"})
     
     async def analyze_and_execute(
         self, 
@@ -348,12 +442,25 @@ OUTPUT FORMAT (strict JSON):
             except Exception as e:
                 logger.warning(f"[TaskExecutor] Failed to check ComputerUse: {e}")
         
-        # 并行执行评估
+        # 并行执行评估（包含 user_plugin 分支）
         mcp_decision = None
         cu_decision = None
+        up_decision = None
         
         if mcp_enabled and capabilities:
             assessment_tasks.append(('mcp', self._assess_mcp(conversation, capabilities)))
+        
+        # user plugin 支路（由外部 provider 提供插件列表）
+        user_plugin_enabled = agent_flags.get("user_plugin_enabled", self.user_plugin_enabled_default)
+        plugins = None
+        if user_plugin_enabled and callable(self.plugin_list_provider):
+            try:
+                plugins = await asyncio.get_event_loop().run_in_executor(None, lambda: self.plugin_list_provider(False))
+            except Exception as e:
+                logger.warning(f"[TaskExecutor] Failed to get plugin list: {e}")
+        
+        if user_plugin_enabled and plugins:
+            assessment_tasks.append(('up', self._assess_user_plugin(conversation, plugins)))
         
         if computer_use_enabled and cu_available:
             assessment_tasks.append(('cu', self._assess_computer_use(conversation, cu_available)))
@@ -364,25 +471,24 @@ OUTPUT FORMAT (strict JSON):
         
         # 并行执行所有评估
         logger.info(f"[TaskExecutor] Running {len(assessment_tasks)} assessments in parallel...")
+        results = await asyncio.gather(*[task[1] for task in assessment_tasks], return_exceptions=True)
         
-        results = await asyncio.gather(
-            *[task[1] for task in assessment_tasks],
-            return_exceptions=True
-        )
-        
-        # 收集结果
+        # 收集结果（安全访问，先过滤异常）
         for i, (task_type, _) in enumerate(assessment_tasks):
             result = results[i]
             if isinstance(result, Exception):
                 logger.error(f"[TaskExecutor] {task_type} assessment failed: {result}")
                 continue
-            
+            # safe attribute access via getattr to avoid type issues
             if task_type == 'mcp':
                 mcp_decision = result
-                logger.info(f"[MCP] has_task={mcp_decision.has_task}, can_execute={mcp_decision.can_execute}, reason={mcp_decision.reason}")
+                logger.info(f"[MCP] has_task={getattr(mcp_decision,'has_task',None)}, can_execute={getattr(mcp_decision,'can_execute',None)}, reason={getattr(mcp_decision,'reason',None)}")
+            elif task_type == 'up':
+                up_decision = result
+                logger.info(f"[UserPlugin] has_task={getattr(up_decision,'has_task',None)}, can_execute={getattr(up_decision,'can_execute',None)}, reason={getattr(up_decision,'reason',None)}")
             elif task_type == 'cu':
                 cu_decision = result
-                logger.info(f"[ComputerUse] has_task={cu_decision.has_task}, can_execute={cu_decision.can_execute}, reason={cu_decision.reason}")
+                logger.info(f"[ComputerUse] has_task={getattr(cu_decision,'has_task',None)}, can_execute={getattr(cu_decision,'can_execute',None)}, reason={getattr(cu_decision,'reason',None)}")
         
         # 决策逻辑：MCP 优先
         # 1. 如果 MCP 可以执行，使用 MCP

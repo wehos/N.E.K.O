@@ -50,7 +50,7 @@ class Modules:
     computer_use_running: bool = False
     active_computer_use_task_id: Optional[str] = None
     # Agent feature flags (controlled by UI)
-    agent_flags: Dict[str, Any] = {"mcp_enabled": False, "computer_use_enabled": False}
+    agent_flags: Dict[str, Any] = {"mcp_enabled": False, "computer_use_enabled": False, "user_plugin_enabled": False}
     # 使用统一的速率限制日志记录器（业务逻辑层面）
     throttled_logger: "ThrottledLogger" = None  # 延迟初始化
 def _collect_existing_task_descriptions(lanlan_name: Optional[str] = None) -> list[tuple[str, str]]:
@@ -409,6 +409,15 @@ async def startup():
         await Modules.task_executor.refresh_capabilities()
     except Exception:
         pass
+
+    # Inject a placeholder plugin_list_provider into task_executor.
+    # This keeps the user_plugin code path callable; real provider can be injected later.
+    try:
+        # provider should be a callable(force_refresh=False) -> list/dict of plugins
+        Modules.task_executor.plugin_list_provider = (lambda force_refresh=False: [])
+    except Exception:
+        logger.warning("[Agent] Failed to set plugin_list_provider placeholder")
+
     # Start result poller (for computer_use tasks)
     if Modules.poller_task is None:
         Modules.poller_task = asyncio.create_task(_poll_results_loop())
@@ -573,10 +582,13 @@ async def capabilities():
 async def set_agent_flags(payload: Dict[str, Any]):
     mf = (payload or {}).get("mcp_enabled")
     cf = (payload or {}).get("computer_use_enabled")
+    uf = (payload or {}).get("user_plugin_enabled")
     if isinstance(mf, bool):
         Modules.agent_flags["mcp_enabled"] = mf
     if isinstance(cf, bool):
         Modules.agent_flags["computer_use_enabled"] = cf
+    if isinstance(uf, bool):
+        Modules.agent_flags["user_plugin_enabled"] = uf
     return {"success": True, "agent_flags": Modules.agent_flags}
 
 
@@ -770,6 +782,3 @@ if __name__ == "__main__":
     logging.getLogger("uvicorn.access").addFilter(create_agent_server_filter())
     
     uvicorn.run(app, host="0.0.0.0", port=TOOL_SERVER_PORT)
-
-
-
