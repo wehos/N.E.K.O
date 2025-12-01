@@ -498,7 +498,7 @@ OUTPUT FORMAT (strict JSON):
                 task_id=task_id,
                 decision=mcp_decision
             )
-        
+
         # 2. 如果 MCP 不行，但 ComputerUse 可以，返回 ComputerUse 任务
         if cu_decision and cu_decision.has_task and cu_decision.can_execute:
             logger.info(f"[TaskExecutor] ✅ Using ComputerUse: {cu_decision.task_description}")
@@ -511,6 +511,23 @@ OUTPUT FORMAT (strict JSON):
                 reason=cu_decision.reason
             )
         
+        # 3. 如果 MCP 不行，但 UserPlugin 可用且可执行，优先调用 UserPlugin
+        if up_decision and getattr(up_decision, "has_task", False) and getattr(up_decision, "can_execute", False):
+            logger.info(f"[TaskExecutor] ✅ Using UserPlugin: {up_decision.task_description}, plugin_id={getattr(up_decision, 'plugin_id', None)}")
+            try:
+                return await self._execute_user_plugin(task_id=task_id, up_decision=up_decision)
+            except Exception as e:
+                logger.error(f"[TaskExecutor] UserPlugin execution failed: {e}")
+                return TaskResult(
+                    task_id=task_id,
+                    has_task=True,
+                    task_description=getattr(up_decision, "task_description", ""),
+                    execution_method='user_plugin',
+                    success=False,
+                    error=str(e),
+                    reason=getattr(up_decision, "reason", "") or "UserPlugin execution error"
+                )
+          
         # 3. 两者都不行
         reason_parts = []
         if mcp_decision:
@@ -600,6 +617,103 @@ OUTPUT FORMAT (strict JSON):
                 tool_name=tool_name,
                 tool_args=tool_args,
                 reason=decision.reason
+            )
+    
+    async def _execute_user_plugin(self, task_id: str, up_decision: Any) -> TaskResult:
+        """
+        Execute a user plugin via HTTP endpoint.
+        up_decision is expected to have attributes: plugin_id, plugin_args, task_description
+        """
+        plugin_id = getattr(up_decision, "plugin_id", None)
+        plugin_args = getattr(up_decision, "plugin_args", {}) or {}
+        task_description = getattr(up_decision, "task_description", "")
+        
+        if not plugin_id:
+            return TaskResult(
+                task_id=task_id,
+                has_task=True,
+                task_description=task_description,
+                execution_method='user_plugin',
+                success=False,
+                error="No plugin_id provided",
+                reason=getattr(up_decision, "reason", "")
+            )
+        
+        # Fetch plugin metadata from user_plugin_server
+        try:
+            import httpx
+            url = f"http://localhost:18090/plugins"
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                resp = await client.get(url)
+                plugins = resp.json().get("plugins", []) if resp.status_code == 200 else []
+        except Exception as e:
+            logger.warning(f"[TaskExecutor] Failed to fetch plugins from user_plugin_server: {e}")
+            plugins = []
+        
+        # Find plugin entry
+        plugin_entry = None
+        for p in plugins:
+            if p.get("id") == plugin_id:
+                plugin_entry = p
+                break
+        
+        if plugin_entry is None:
+            raise RuntimeError(f"Plugin {plugin_id} not found")
+        
+        endpoint = plugin_entry.get("endpoint")
+        if not endpoint:
+            raise RuntimeError(f"Plugin {plugin_id} has no endpoint defined")
+        
+        logger.info(f"[TaskExecutor] Calling user plugin {plugin_id} at {endpoint} with args: {plugin_args}")
+        
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                r = await client.post(endpoint, json={"task_id": task_id, "args": plugin_args})
+                if r.status_code >= 200 and r.status_code < 300:
+                    try:
+                        data = r.json()
+                    except Exception:
+                        data = {"raw_text": r.text}
+                    logger.info(f"[TaskExecutor] ✅ Plugin {plugin_id} returned success")
+                    return TaskResult(
+                        task_id=task_id,
+                        has_task=True,
+                        task_description=task_description,
+                        execution_method='user_plugin',
+                        success=True,
+                        result=data,
+                        tool_name=plugin_id,
+                        tool_args=plugin_args,
+                        reason=getattr(up_decision, "reason", "")
+                    )
+                else:
+                    text = r.text
+                    logger.error(f"[TaskExecutor] ❌ Plugin {plugin_id} returned status {r.status_code}: {text}")
+                    return TaskResult(
+                        task_id=task_id,
+                        has_task=True,
+                        task_description=task_description,
+                        execution_method='user_plugin',
+                        success=False,
+                        error=f"Plugin returned status {r.status_code}",
+                        result={"status_code": r.status_code, "text": r.text},
+                        tool_name=plugin_id,
+                        tool_args=plugin_args,
+                        reason=getattr(up_decision, "reason", "")
+                    )
+        except Exception as e:
+            logger.error(f"[TaskExecutor] Plugin call error: {e}")
+            return TaskResult(
+                task_id=task_id,
+                has_task=True,
+                task_description=task_description,
+                execution_method='user_plugin',
+                success=False,
+                error=str(e),
+                tool_name=plugin_id,
+                tool_args=plugin_args,
+                reason=getattr(up_decision, "reason", "")
             )
     
     async def refresh_capabilities(self) -> Dict[str, Dict[str, Any]]:

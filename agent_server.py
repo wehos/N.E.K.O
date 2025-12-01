@@ -15,7 +15,7 @@ import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
-from config import TOOL_SERVER_PORT, MAIN_SERVER_PORT
+from config import TOOL_SERVER_PORT, MAIN_SERVER_PORT ,USER_PLUGIN_SERVER_PORT
 from brain.processor import Processor
 from brain.planner import TaskPlanner
 from brain.analyzer import ConversationAnalyzer
@@ -417,6 +417,26 @@ async def startup():
         Modules.task_executor.plugin_list_provider = (lambda force_refresh=False: [])
     except Exception:
         logger.warning("[Agent] Failed to set plugin_list_provider placeholder")
+
+    # Attempt to set a real plugin_list_provider that queries the local user_plugin_server.
+    # This provider will perform a GET /plugins call to the user plugin server (default port 18090).
+    try:
+        import httpx
+        async def _http_plugin_provider(force_refresh: bool = False):
+            url = f"http://localhost:{USER_PLUGIN_SERVER_PORT}/plugins"
+            try:
+                async with httpx.AsyncClient(timeout=1.0) as client:
+                    r = await client.get(url)
+                    if r.status_code == 200:
+                        data = r.json()
+                        return data.get("plugins", []) or []
+            except Exception as e:
+                logger.debug(f"[Agent] plugin_list_provider http fetch failed: {e}")
+            return []
+        # Wrap to a sync-callable for backward compatibility with run_in_executor usage in task_executor
+        Modules.task_executor.plugin_list_provider = (lambda force_refresh=False: asyncio.get_event_loop().run_until_complete(_http_plugin_provider(force_refresh)))
+    except Exception as e:
+        logger.warning(f"[Agent] Failed to set http plugin_list_provider: {e}")
 
     # Start result poller (for computer_use tasks)
     if Modules.poller_task is None:

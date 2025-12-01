@@ -5094,6 +5094,18 @@ async def proxy_mcp_availability():
     except Exception as e:
         return JSONResponse({"ready": False, "reasons": [f"proxy error: {e}"]}, status_code=502)
 
+@app.get('/api/agent/user_plugin/availability')
+async def proxy_up_availability():
+    return JSONResponse({"ready":True, "reasons": ["test-233"]}, status_code=200)
+    try:
+        async with httpx.AsyncClient(timeout=1.5) as client:
+            r = await client.get(f"http://localhost:{USER_PLUGIN_SERVER_PORT}/available")
+            if not r.is_success:
+                return JSONResponse({"ready": False, "reasons": [f"tool_server responded {r.status_code}"]}, status_code=502)
+            return r.json()
+    except Exception as e:
+        return JSONResponse({"ready": False, "reasons": [f"proxy error: {e}"]}, status_code=502)
+
 
 @app.get('/api/agent/tasks')
 async def proxy_tasks():

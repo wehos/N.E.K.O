@@ -2707,7 +2707,8 @@ function init_app(){
     async function checkCapability(kind, showError = true) {
         const apis = {
             computer_use: { url: '/api/agent/computer_use/availability', name: '键鼠控制' },
-            mcp: { url: '/api/agent/mcp/availability', name: 'MCP工具' }
+            mcp: { url: '/api/agent/mcp/availability', name: 'MCP工具' },
+            user_plugin: { url: '/api/agent/user_plugin/availability', name: '用户插件'}
         };
         const config = apis[kind];
         if (!config) return false;
