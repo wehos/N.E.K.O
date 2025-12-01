@@ -36,9 +36,96 @@ import socket
 import time
 import threading
 import itertools
-from typing import List, Dict
+import tempfile
+import atexit
+from typing import List, Dict, TYPE_CHECKING
 from multiprocessing import Process, freeze_support, Event
+
+if TYPE_CHECKING:
+    from multiprocessing.synchronize import Event as EventType
 from config import MAIN_SERVER_PORT, MEMORY_SERVER_PORT, TOOL_SERVER_PORT
+
+# ===== 单实例检测机制 =====
+# 使用锁文件来防止多次双击运行导致启动多个应用实例
+LOCK_FILE_PATH = os.path.join(tempfile.gettempdir(), "neko_launcher.lock")
+_lock_file_handle = None
+
+def acquire_single_instance_lock() -> bool:
+    """
+    尝试获取单实例锁。
+    如果成功获取锁，返回 True；如果已有另一个实例在运行，返回 False。
+    """
+    global _lock_file_handle
+    
+    try:
+        # 尝试以独占模式打开锁文件
+        if sys.platform == 'win32':
+            import msvcrt
+            # Windows 使用 msvcrt.locking
+            _lock_file_handle = open(LOCK_FILE_PATH, 'w')
+            try:
+                # 尝试获取独占锁（非阻塞模式）
+                msvcrt.locking(_lock_file_handle.fileno(), msvcrt.LK_NBLCK, 1)
+                # 写入当前进程 PID
+                _lock_file_handle.write(str(os.getpid()))
+                _lock_file_handle.flush()
+                return True
+            except IOError:
+                # 无法获取锁，说明已有实例在运行
+                _lock_file_handle.close()
+                _lock_file_handle = None
+                return False
+        else:
+            import fcntl
+            # Unix/Linux/macOS 使用 fcntl.flock
+            _lock_file_handle = open(LOCK_FILE_PATH, 'w')
+            try:
+                fcntl.flock(_lock_file_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                _lock_file_handle.write(str(os.getpid()))
+                _lock_file_handle.flush()
+                return True
+            except IOError:
+                _lock_file_handle.close()
+                _lock_file_handle = None
+                return False
+    except Exception as e:
+        print(f"警告: 单实例检测时出错: {e}")
+        # 如果锁文件机制出错，允许继续运行（降级策略）
+        return True
+
+def release_single_instance_lock():
+    """释放单实例锁"""
+    global _lock_file_handle
+    
+    if _lock_file_handle:
+        try:
+            if sys.platform == 'win32':
+                import msvcrt
+                try:
+                    msvcrt.locking(_lock_file_handle.fileno(), msvcrt.LK_UNLCK, 1)
+                except:
+                    pass
+            else:
+                import fcntl
+                try:
+                    fcntl.flock(_lock_file_handle.fileno(), fcntl.LOCK_UN)
+                except:
+                    pass
+            _lock_file_handle.close()
+        except:
+            pass
+        finally:
+            _lock_file_handle = None
+    
+    # 尝试删除锁文件
+    try:
+        if os.path.exists(LOCK_FILE_PATH):
+            os.remove(LOCK_FILE_PATH)
+    except:
+        pass
+
+# 注册退出时自动释放锁
+atexit.register(release_single_instance_lock)
 
 # 服务器配置
 SERVERS = [
@@ -67,7 +154,7 @@ SERVERS = [
 
 # 不再启动主程序，用户自己启动 lanlan_frd.exe
 
-def run_memory_server(ready_event: Event):
+def run_memory_server(ready_event: "EventType"):
     """运行 Memory Server"""
     try:
         # 确保工作目录正确
@@ -129,7 +216,7 @@ def run_memory_server(ready_event: Event):
         import traceback
         traceback.print_exc()
 
-def run_agent_server(ready_event: Event):
+def run_agent_server(ready_event: "EventType"):
     """运行 Agent Server (不需要等待初始化)"""
     try:
         # 确保工作目录正确
@@ -160,7 +247,7 @@ def run_agent_server(ready_event: Event):
         import traceback
         traceback.print_exc()
 
-def run_main_server(ready_event: Event):
+def run_main_server(ready_event: "EventType"):
     """运行 Main Server"""
     try:
         # 确保工作目录正确
@@ -349,6 +436,21 @@ def main():
     print("N.E.K.O. 服务器启动器", flush=True)
     print("=" * 60, flush=True)
     
+    # 单实例检测：防止多次双击运行启动多个应用
+    if not acquire_single_instance_lock():
+        print("\n" + "=" * 60, flush=True)
+        print("⚠️  检测到 N.E.K.O. 已在运行中！", flush=True)
+        print("=" * 60, flush=True)
+        print("\n请勿重复启动。如需重新启动，请先关闭已运行的实例。", flush=True)
+        print("如果确认没有其他实例运行，请删除临时文件后重试：", flush=True)
+        print(f"  {LOCK_FILE_PATH}", flush=True)
+        print("\n按任意键退出...", flush=True)
+        try:
+            input()
+        except:
+            pass
+        return 1
+    
     try:
         # 1. 启动所有服务器
         print("\n正在启动服务器...\n", flush=True)
@@ -398,6 +500,7 @@ def main():
         print(f"\n发生错误: {e}", flush=True)
     finally:
         cleanup_servers()
+        release_single_instance_lock()  # 释放单实例锁
         print("\n所有服务器已关闭", flush=True)
         print("再见！\n", flush=True)
     
