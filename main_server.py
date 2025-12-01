@@ -43,6 +43,8 @@ import time
 from urllib.parse import quote, unquote
 from steamworks.exceptions import SteamNotLoadedException
 from steamworks.enums import EWorkshopFileType, EItemUpdateStatus
+
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, File, UploadFile, Form, Body
 from fastapi.staticfiles import StaticFiles
 from main_helper import core as core, cross_server as cross_server
@@ -51,7 +53,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from urllib.parse import unquote
 from utils.preferences import load_user_preferences, update_model_preferences, validate_model_preferences, move_model_to_top
 from utils.frontend_utils import find_models, find_model_config_file, find_model_directory, find_model_by_workshop_item_id, find_workshop_item_by_id
-from multiprocessing import Process, Queue, Event
+from threading import Thread, Event as ThreadEvent
+from queue import Queue
 import atexit
 import dashscope
 from dashscope.audio.tts_v2 import VoiceEnrollmentService
@@ -68,7 +71,8 @@ from utils.workshop_utils import (
     save_workshop_config,
     ensure_workshop_folder_exists,
     get_workshop_root,
-    get_workshop_path
+    get_workshop_path,
+    extract_workshop_root_from_items
 )
 
 # 确定 templates 目录位置（使用 _get_app_root）
@@ -146,20 +150,22 @@ else:
     steamworks = None
 
 
-# Configure logging
+# Configure logging (子进程静默初始化，避免重复打印初始化消息)
 from utils.logger_config import setup_logging
 
-logger, log_config = setup_logging(service_name="Main", log_level=logging.INFO)
+logger, log_config = setup_logging(service_name="Main", log_level=logging.INFO, silent=not _IS_MAIN_PROCESS)
 
 _config_manager = get_config_manager()
 
 def cleanup():
     logger.info("Starting cleanup process")
     for k in sync_message_queue:
-        while sync_message_queue[k] and not sync_message_queue[k].empty():
-            sync_message_queue[k].get_nowait()
-        sync_message_queue[k].close()
-        sync_message_queue[k].join_thread()
+        # 清空队列（queue.Queue 没有 close/join_thread 方法）
+        try:
+            while sync_message_queue[k] and not sync_message_queue[k].empty():
+                sync_message_queue[k].get_nowait()
+        except:
+            pass
     logger.info("Cleanup completed")
 
 # 只在主进程中注册 cleanup 函数，防止子进程退出时执行清理
@@ -206,7 +212,7 @@ async def initialize_character_data():
         is_new_character = False
         if k not in sync_message_queue:
             sync_message_queue[k] = Queue()
-            sync_shutdown_event[k] = Event()
+            sync_shutdown_event[k] = ThreadEvent()
             session_id[k] = None
             sync_process[k] = None
             logger.info(f"为角色 {k} 初始化新资源")
@@ -277,70 +283,68 @@ async def initialize_character_data():
                     session_manager[k].websocket = old_websocket
                     logger.info(f"已恢复 {k} 的WebSocket连接")
         
-        # 检查并启动同步连接器进程
-        # 如果是新角色，或者进程不存在/已停止，需要启动进程
+        # 检查并启动同步连接器线程
+        # 如果是新角色，或者线程不存在/已停止，需要启动线程
         if k not in sync_process:
             sync_process[k] = None
         
-        need_start_process = False
+        need_start_thread = False
         if is_new_character:
-            # 新角色，需要启动进程
-            need_start_process = True
+            # 新角色，需要启动线程
+            need_start_thread = True
         elif sync_process[k] is None:
-            # 进程为None，需要启动
-            need_start_process = True
+            # 线程为None，需要启动
+            need_start_thread = True
         elif hasattr(sync_process[k], 'is_alive') and not sync_process[k].is_alive():
-            # 进程已停止，需要重启
-            need_start_process = True
+            # 线程已停止，需要重启
+            need_start_thread = True
             try:
                 sync_process[k].join(timeout=0.1)
             except:
                 pass
         
-        if need_start_process:
+        if need_start_thread:
             try:
-                sync_process[k] = Process(
+                sync_process[k] = Thread(
                     target=cross_server.sync_connector_process,
-                    args=(sync_message_queue[k], sync_shutdown_event[k], k, f"ws://localhost:{MONITOR_SERVER_PORT}", {'bullet': False, 'monitor': True})
+                    args=(sync_message_queue[k], sync_shutdown_event[k], k, f"ws://localhost:{MONITOR_SERVER_PORT}", {'bullet': False, 'monitor': True}),
+                    daemon=True,
+                    name=f"SyncConnector-{k}"
                 )
                 sync_process[k].start()
-                logger.info(f"✅ 已为角色 {k} 启动同步连接器进程 (PID: {sync_process[k].pid})")
-                await asyncio.sleep(0.2)
+                logger.info(f"✅ 已为角色 {k} 启动同步连接器线程 ({sync_process[k].name})")
+                await asyncio.sleep(0.1)  # 线程启动更快，减少等待时间
                 if not sync_process[k].is_alive():
-                    logger.error(f"❌ 同步连接器进程 {k} (PID: {sync_process[k].pid}) 启动后立即退出！退出码: {sync_process[k].exitcode}")
+                    logger.error(f"❌ 同步连接器线程 {k} ({sync_process[k].name}) 启动后立即退出！")
                 else:
-                    logger.info(f"✅ 同步连接器进程 {k} (PID: {sync_process[k].pid}) 正在运行")
+                    logger.info(f"✅ 同步连接器线程 {k} ({sync_process[k].name}) 正在运行")
             except Exception as e:
-                logger.error(f"❌ 启动角色 {k} 的同步连接器进程失败: {e}", exc_info=True)
+                logger.error(f"❌ 启动角色 {k} 的同步连接器线程失败: {e}", exc_info=True)
     
     # 清理已删除角色的资源
     removed_names = [k for k in session_manager.keys() if k not in catgirl_names]
     for k in removed_names:
         logger.info(f"清理已删除角色 {k} 的资源")
         
-        # 先停止同步连接器进程
+        # 先停止同步连接器线程（线程只能协作式终止，不能强制kill）
         if k in sync_process and sync_process[k] is not None:
             try:
-                logger.info(f"正在停止已删除角色 {k} 的同步连接器进程...")
+                logger.info(f"正在停止已删除角色 {k} 的同步连接器线程...")
                 if k in sync_shutdown_event:
                     sync_shutdown_event[k].set()
-                sync_process[k].join(timeout=3)
+                sync_process[k].join(timeout=3)  # 等待线程正常结束
                 if sync_process[k].is_alive():
-                    sync_process[k].terminate()
-                    sync_process[k].join(timeout=1)
-                    if sync_process[k].is_alive():
-                        sync_process[k].kill()
-                logger.info(f"✅ 已停止角色 {k} 的同步连接器进程")
+                    logger.warning(f"⚠️ 同步连接器线程 {k} 未能在超时内停止，将作为daemon线程自动清理")
+                else:
+                    logger.info(f"✅ 已停止角色 {k} 的同步连接器线程")
             except Exception as e:
-                logger.warning(f"停止角色 {k} 的同步连接器进程时出错: {e}")
+                logger.warning(f"停止角色 {k} 的同步连接器线程时出错: {e}")
         
-        # 清理队列
+        # 清理队列（queue.Queue 没有 close/join_thread 方法）
         if k in sync_message_queue:
             try:
                 while not sync_message_queue[k].empty():
                     sync_message_queue[k].get_nowait()
-                sync_message_queue[k].close()
-                sync_message_queue[k].join_thread()
             except:
                 pass
             del sync_message_queue[k]
@@ -383,20 +387,19 @@ static_dir = os.path.join(_get_app_root(), 'static')
 
 app.mount("/static", CustomStaticFiles(directory=static_dir), name="static")
 
-# 挂载用户文档下的live2d目录
-_config_manager.ensure_live2d_directory()
-user_live2d_path = str(_config_manager.live2d_dir)
-if os.path.exists(user_live2d_path):
-    app.mount("/user_live2d", CustomStaticFiles(directory=user_live2d_path), name="user_live2d")
-    logger.info(f"已挂载用户Live2D目录: {user_live2d_path}")
+# 挂载用户文档下的live2d目录（只在主进程中执行，子进程不提供HTTP服务）
+if _IS_MAIN_PROCESS:
+    _config_manager.ensure_live2d_directory()
+    user_live2d_path = str(_config_manager.live2d_dir)
+    if os.path.exists(user_live2d_path):
+        app.mount("/user_live2d", CustomStaticFiles(directory=user_live2d_path), name="user_live2d")
+        logger.info(f"已挂载用户Live2D目录: {user_live2d_path}")
 
-# 挂载用户mod路径
-user_mod_path = _config_manager.get_workshop_path()
-if os.path.exists(user_mod_path) and os.path.isdir(user_mod_path):
-    app.mount("/user_mods", CustomStaticFiles(directory=user_mod_path), name="user_mods")
-    logger.info(f"已挂载用户mod路径: {user_mod_path}")
-else:
-    logger.warning(f"用户mod路径不存在或不是目录: {user_mod_path}")
+    # 挂载用户mod路径
+    user_mod_path = _config_manager.get_workshop_path()
+    if os.path.exists(user_mod_path) and os.path.isdir(user_mod_path):
+        app.mount("/user_mods", CustomStaticFiles(directory=user_mod_path), name="user_mods")
+        logger.info(f"已挂载用户mod路径: {user_mod_path}")
 # 使用 FastAPI 的 app.state 来管理启动配置
 def get_start_config():
     """从 app.state 获取启动配置"""
@@ -872,31 +875,42 @@ async def update_core_config(request: Request):
 @app.on_event("startup")
 async def startup_event():
     global sync_process
-    logger.info("Starting sync connector processes")
-    # 启动同步连接器进程（确保所有角色都有进程）
+    logger.info("Starting main server...")
+    
+    # ========== 初始化创意工坊目录 ==========
+    # 依赖方向: main_server → utils → config (单向)
+    # main 层只负责调用 utils，不维护任何 workshop 状态
+    # 路径由 utils 层管理并持久化到 config 层
+    await _init_and_mount_workshop()
+    
+    # ========== 启动同步连接器线程 ==========
+    logger.info("Starting sync connector threads")
+    # 启动同步连接器线程（确保所有角色都有线程）
     for k in list(sync_message_queue.keys()):
         if k not in sync_process or sync_process[k] is None or (hasattr(sync_process.get(k), 'is_alive') and not sync_process[k].is_alive()):
             if k in sync_process and sync_process[k] is not None:
-                # 清理已停止的进程
+                # 清理已停止的线程
                 try:
                     sync_process[k].join(timeout=0.1)
                 except:
                     pass
             try:
-                sync_process[k] = Process(
+                sync_process[k] = Thread(
                     target=cross_server.sync_connector_process,
-                    args=(sync_message_queue[k], sync_shutdown_event[k], k, f"ws://localhost:{MONITOR_SERVER_PORT}", {'bullet': False, 'monitor': True})
+                    args=(sync_message_queue[k], sync_shutdown_event[k], k, f"ws://localhost:{MONITOR_SERVER_PORT}", {'bullet': False, 'monitor': True}),
+                    daemon=True,
+                    name=f"SyncConnector-{k}"
                 )
                 sync_process[k].start()
-                logger.info(f"✅ 同步连接器进程已启动 (PID: {sync_process[k].pid}) for {k}")
-                # 检查进程是否成功启动
-                await asyncio.sleep(0.2)
+                logger.info(f"✅ 同步连接器线程已启动 ({sync_process[k].name}) for {k}")
+                # 检查线程是否成功启动
+                await asyncio.sleep(0.1)  # 线程启动更快
                 if not sync_process[k].is_alive():
-                    logger.error(f"❌ 同步连接器进程 {k} (PID: {sync_process[k].pid}) 启动后立即退出！退出码: {sync_process[k].exitcode}")
+                    logger.error(f"❌ 同步连接器线程 {k} ({sync_process[k].name}) 启动后立即退出！")
                 else:
-                    logger.info(f"✅ 同步连接器进程 {k} (PID: {sync_process[k].pid}) 正在运行")
+                    logger.info(f"✅ 同步连接器线程 {k} ({sync_process[k].name}) 正在运行")
             except Exception as e:
-                logger.error(f"❌ 启动角色 {k} 的同步连接器进程失败: {e}", exc_info=True)
+                logger.error(f"❌ 启动角色 {k} 的同步连接器线程失败: {e}", exc_info=True)
     
     # 如果启用了浏览器模式，在服务器启动完成后打开浏览器
     current_config = get_start_config()
@@ -925,15 +939,15 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """应用关闭时执行"""
-    logger.info("Shutting down sync connector processes")
-    # 关闭同步服务器连接
+    logger.info("Shutting down sync connector threads")
+    # 关闭同步服务器连接（线程只能协作式终止）
     for k in sync_process:
         if sync_process[k] is not None:
             sync_shutdown_event[k].set()
-            sync_process[k].join(timeout=3)  # 等待进程正常结束
+            sync_process[k].join(timeout=3)  # 等待线程正常结束
             if sync_process[k].is_alive():
-                sync_process[k].terminate()  # 如果超时，强制终止
-    logger.info("同步连接器进程已停止")
+                logger.warning(f"⚠️ 同步连接器线程 {k} 未能在超时内停止，将作为daemon线程随主进程退出")
+    logger.info("同步连接器线程已停止")
     
     # 向memory_server发送关闭信号
     try:
@@ -952,6 +966,30 @@ async def shutdown_event():
 @app.websocket("/ws/{lanlan_name}")
 async def websocket_endpoint(websocket: WebSocket, lanlan_name: str):
     await websocket.accept()
+    
+    # 检查角色是否存在，如果不存在则通知前端并关闭连接
+    if lanlan_name not in session_manager:
+        logger.warning(f"❌ 角色 {lanlan_name} 不存在，当前可用角色: {list(session_manager.keys())}")
+        # 获取当前正确的角色名
+        current_catgirl = None
+        if session_manager:
+            current_catgirl = list(session_manager.keys())[0]
+        # 通知前端切换到正确的角色
+        if current_catgirl:
+            try:
+                await websocket.send_text(json.dumps({
+                    "type": "catgirl_switched",
+                    "new_catgirl": current_catgirl,
+                    "old_catgirl": lanlan_name
+                }))
+                logger.info(f"已通知前端切换到正确的角色: {current_catgirl}")
+                # 等待一下让客户端有时间处理消息，避免 onclose 在 onmessage 之前触发
+                await asyncio.sleep(0.5)
+            except Exception as e:
+                logger.warning(f"通知前端失败: {e}")
+        await websocket.close()
+        return
+    
     this_session_id = uuid.uuid4()
     async with lock:
         global session_id
@@ -960,15 +998,17 @@ async def websocket_endpoint(websocket: WebSocket, lanlan_name: str):
     
     # 立即设置websocket到session manager，以支持主动搭话
     # 注意：这里设置后，即使cleanup()被调用，websocket也会在start_session时重新设置
-    if lanlan_name in session_manager:
-        session_manager[lanlan_name].websocket = websocket
-        logger.info(f"✅ 已设置 {lanlan_name} 的WebSocket连接")
-    else:
-        logger.error(f"❌ 错误：{lanlan_name} 不在session_manager中！当前session_manager: {list(session_manager.keys())}")
+    session_manager[lanlan_name].websocket = websocket
+    logger.info(f"✅ 已设置 {lanlan_name} 的WebSocket连接")
 
     try:
         while True:
             data = await websocket.receive_text()
+            # 安全检查：如果角色已被重命名或删除，lanlan_name 可能不再存在
+            if lanlan_name not in session_id or lanlan_name not in session_manager:
+                logger.info(f"角色 {lanlan_name} 已被重命名或删除，关闭旧连接")
+                await websocket.close()
+                break
             if session_id[lanlan_name] != this_session_id:
                 await session_manager[lanlan_name].send_status(f"切换至另一个终端...")
                 await websocket.close()
@@ -1013,16 +1053,19 @@ async def websocket_endpoint(websocket: WebSocket, lanlan_name: str):
         error_message = f"WebSocket handler error: {e}"
         logger.error(f"💥 {error_message}")
         try:
-            await session_manager[lanlan_name].send_status(f"Server error: {e}")
+            if lanlan_name in session_manager:
+                await session_manager[lanlan_name].send_status(f"Server error: {e}")
         except:
             pass
     finally:
         logger.info(f"Cleaning up WebSocket resources: {websocket.client}")
-        await session_manager[lanlan_name].cleanup()
-        # 注意：cleanup() 会清空 websocket，但只在连接真正断开时调用
-        # 如果连接还在，websocket应该保持设置
-        if session_manager[lanlan_name].websocket == websocket:
-            session_manager[lanlan_name].websocket = None
+        # 安全检查：如果角色已被重命名或删除，lanlan_name 可能不再存在
+        if lanlan_name in session_manager:
+            await session_manager[lanlan_name].cleanup()
+            # 注意：cleanup() 会清空 websocket，但只在连接真正断开时调用
+            # 如果连接还在，websocket应该保持设置
+            if session_manager[lanlan_name].websocket == websocket:
+                session_manager[lanlan_name].websocket = None
 
 @app.post('/api/notify_task_result')
 async def notify_task_result(request: Request):
@@ -1117,6 +1160,7 @@ async def proactive_chat(request: Request):
             # 直接使用langchain ChatOpenAI发送请求
             from langchain_openai import ChatOpenAI
             from langchain_core.messages import SystemMessage
+            from openai import APIConnectionError, InternalServerError, RateLimitError
             
             llm = ChatOpenAI(
                 model=core_config['CORRECTION_MODEL'],
@@ -1126,13 +1170,38 @@ async def proactive_chat(request: Request):
                 streaming=False  # 不需要流式，直接获取完整响应
             )
             
-            # 发送请求获取AI决策
+            # 发送请求获取AI决策 - Retry策略：重试2次，间隔1秒、2秒
             print(system_prompt)
-            response = await asyncio.wait_for(
-                llm.ainvoke([SystemMessage(content=system_prompt)]),
-                timeout=10.0
-            )
-            response_text = response.content.strip()
+            max_retries = 3
+            retry_delays = [1, 2]
+            response_text = ""
+            
+            for attempt in range(max_retries):
+                try:
+                    response = await asyncio.wait_for(
+                        llm.ainvoke([SystemMessage(content=system_prompt)]),
+                        timeout=10.0
+                    )
+                    response_text = response.content.strip()
+                    break  # 成功则退出重试循环
+                except (APIConnectionError, InternalServerError, RateLimitError) as e:
+                    if attempt < max_retries - 1:
+                        wait_time = retry_delays[attempt]
+                        logger.warning(f"[{lanlan_name}] 主动搭话LLM调用失败 (尝试 {attempt + 1}/{max_retries})，{wait_time}秒后重试: {e}")
+                        # 向前端发送状态提示
+                        if mgr.websocket:
+                            try:
+                                await mgr.send_status(f"正在重试中...（第{attempt + 1}次）")
+                            except:
+                                pass
+                        await asyncio.sleep(wait_time)
+                    else:
+                        logger.error(f"[{lanlan_name}] 主动搭话LLM调用失败，已达到最大重试次数: {e}")
+                        return JSONResponse({
+                            "success": False,
+                            "error": f"AI调用失败，已重试{max_retries}次",
+                            "detail": str(e)
+                        }, status_code=503)
             
             logger.info(f"[{lanlan_name}] AI决策结果: {response_text[:100]}...")
             
@@ -1756,32 +1825,48 @@ async def get_subscribed_workshop_items():
             "error": f"获取订阅物品失败: {str(e)}"
         }, status_code=500)
 
-# 使用get_subscribed_workshop_items获取第一个物品的installedFolder
-# 使用从文件开头导入的get_workshop_root函数
-# 调用时传入当前模块的globals()，以便在workshop_utils中访问get_subscribed_workshop_items函数
-WORKSHOP_PATH = get_workshop_root(globals())
-
-# 确保WORKSHOP_PATH是有效路径后再挂载
-if os.path.exists(WORKSHOP_PATH) and os.path.isdir(WORKSHOP_PATH):
+async def _init_and_mount_workshop():
+    """
+    初始化并挂载创意工坊目录
+    
+    设计原则：
+    - main 层只负责调用，不维护状态
+    - 路径由 utils 层计算并持久化到 config 层
+    - 其他代码需要路径时调用 get_workshop_path() 获取
+    """
     try:
-        # 直接挂载，不使用嵌套函数装饰器
-        workshop_mount = app.mount("/workshop", StaticFiles(directory=WORKSHOP_PATH), name="workshop")
-        logger.info(f"成功挂载创意工坊目录: {WORKSHOP_PATH}")
+        # 1. 获取订阅的创意工坊物品列表
+        workshop_items_result = await get_subscribed_workshop_items()
         
-        # 保存WORKSHOP_PATH到配置文件
-        from utils.workshop_utils import save_workshop_config, load_workshop_config
-        workshop_config_data = load_workshop_config()
-        workshop_config_data["WORKSHOP_PATH"] = WORKSHOP_PATH
-        save_workshop_config(workshop_config_data)
-        logger.info(f"已保存WORKSHOP_PATH到配置文件: {WORKSHOP_PATH}")
+        # 2. 提取物品列表传给 utils 层
+        subscribed_items = []
+        if isinstance(workshop_items_result, dict) and workshop_items_result.get('success', False):
+            subscribed_items = workshop_items_result.get('items', [])
         
+        # 3. 调用 utils 层函数获取/计算路径（路径会被持久化到 config）
+        workshop_path = get_workshop_root(subscribed_items)
+        
+        # 4. 挂载静态文件目录
+        if workshop_path and os.path.exists(workshop_path) and os.path.isdir(workshop_path):
+            try:
+                app.mount("/workshop", StaticFiles(directory=workshop_path), name="workshop")
+                logger.info(f"✅ 成功挂载创意工坊目录: {workshop_path}")
+            except Exception as e:
+                logger.error(f"挂载创意工坊目录失败: {e}")
+        else:
+            logger.warning(f"创意工坊目录不存在或不是有效的目录: {workshop_path}，跳过挂载")
     except Exception as e:
-        logger.error(f"挂载创意工坊目录失败: {e}")
-else:
-    logger.warning(f"创意工坊目录不存在或不是有效的目录: {WORKSHOP_PATH}，跳过挂载")
-
-
-
+        logger.error(f"初始化创意工坊目录时出错: {e}")
+        # 降级：确保至少有一个默认路径可用
+        workshop_path = get_workshop_path()
+        logger.info(f"使用配置中的默认路径: {workshop_path}")
+        if workshop_path and os.path.exists(workshop_path) and os.path.isdir(workshop_path):
+            try:
+                app.mount("/workshop", StaticFiles(directory=workshop_path), name="workshop")
+                logger.info(f"✅ 降级模式下成功挂载创意工坊目录: {workshop_path}")
+            except Exception as mount_err:
+                logger.error(f"降级模式挂载创意工坊目录仍然失败: {mount_err}")
+                
 @app.get('/api/steam/workshop/item/{item_id}/path')
 async def get_workshop_item_path(item_id: str):
     """
@@ -2879,14 +2964,36 @@ async def rename_catgirl(old_name: str, request: Request):
         return JSONResponse({'success': False, 'error': '原猫娘不存在'}, status_code=404)
     if new_name in characters['猫娘']:
         return JSONResponse({'success': False, 'error': '新档案名已存在'}, status_code=400)
+    
+    # 如果当前猫娘是被重命名的猫娘，需要先保存WebSocket连接并发送通知
+    # 必须在 initialize_character_data() 之前发送，因为那个函数会删除旧的 session_manager 条目
+    is_current_catgirl = characters.get('当前猫娘') == old_name
+    if is_current_catgirl:
+        logger.info(f"开始通知WebSocket客户端：猫娘从 {old_name} 重命名为 {new_name}")
+        message = json.dumps({
+            "type": "catgirl_switched",
+            "new_catgirl": new_name,
+            "old_catgirl": old_name
+        })
+        # 在 initialize_character_data() 之前发送消息，因为之后旧的 session_manager 会被删除
+        if old_name in session_manager:
+            ws = session_manager[old_name].websocket
+            if ws:
+                try:
+                    await ws.send_text(message)
+                    logger.info(f"已向 {old_name} 发送重命名通知")
+                except Exception as e:
+                    logger.warning(f"发送重命名通知给 {old_name} 失败: {e}")
+    
     # 重命名
     characters['猫娘'][new_name] = characters['猫娘'].pop(old_name)
     # 如果当前猫娘是被重命名的猫娘，也需要更新
-    if characters.get('当前猫娘') == old_name:
+    if is_current_catgirl:
         characters['当前猫娘'] = new_name
     _config_manager.save_characters(characters)
     # 自动重新加载配置
     await initialize_character_data()
+    
     return {"success": True}
 
 @app.post('/api/characters/catgirl/{name}/unregister_voice')
@@ -3312,7 +3419,8 @@ async def get_model_files_by_id(model_id: str):
 
 # Steam 创意工坊管理相关API路由
 # 确保这个路由被正确注册
-logger.info('注册Steam创意工坊扫描API路由')
+if _IS_MAIN_PROCESS:
+    logger.info('注册Steam创意工坊扫描API路由')
 @app.post('/api/steam/workshop/local-items/scan')
 async def scan_local_workshop_items(request: Request):
     try:
@@ -3364,11 +3472,18 @@ async def scan_local_workshop_items(request: Request):
         published_items = []
         item_id = 1
         
+        # 获取Steam下载的workshop路径，这个路径需要被排除
+        steam_workshop_path = get_workshop_path()
+        
         # 遍历文件夹，扫描所有子文件夹
         for item_folder in os.listdir(folder_path):
             item_path = os.path.join(folder_path, item_folder)
             if os.path.isdir(item_path):
-                # 直接添加所有子文件夹
+                    
+                # 排除Steam下载的物品目录（WORKSHOP_PATH）
+                if os.path.normpath(item_path) == os.path.normpath(steam_workshop_path):
+                    logger.info(f"跳过Steam下载的workshop目录: {item_path}")
+                    continue
                 stat_info = os.stat(item_path)
                 
                 # 处理预览图路径（如果有）

@@ -161,6 +161,9 @@ function init_app(){
     // WebSocket心跳保活
     let heartbeatInterval = null;
     const HEARTBEAT_INTERVAL = 30000; // 30秒发送一次心跳
+    
+    // WebSocket自动重连定时器ID（用于在切换角色时取消之前的重连）
+    let autoReconnectTimeoutId = null;
 
     function isMobile() {
       return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
@@ -416,7 +419,8 @@ function init_app(){
             
             // 如果不是正在切换猫娘，才自动重连（避免与手动重连冲突）
             if (!isSwitchingCatgirl) {
-                setTimeout(connectWebSocket, 3000);
+                // 保存 setTimeout ID，以便在 handleCatgirlSwitch 中取消
+                autoReconnectTimeoutId = setTimeout(connectWebSocket, 3000);
             }
         };
 
@@ -2271,7 +2275,7 @@ function init_app(){
                     { href: `/chara_manager`, text: '👤 角色设置' },
                     { href: `/l2d?lanlan_name=${lanlan_config.lanlan_name}`, text: '🎨 Live2D管理' },
                     { href: `/api_key`, textKey: 'settings.menu.apiSettings', text: window.t ? window.t('settings.menu.apiSettings') : '🔑 API设置' },
-                    { href: `/steam_workshop_manager`, text: 'steam创意工坊' }
+                    { href: `/steam_workshop_manager`, textKey: 'steam.workshop', text: window.t ? window.t('steam.workshop') : 'steam创意工坊' }
                 ];
                 
                 // 已打开的设置窗口引用映射（URL -> Window对象）
@@ -3595,6 +3599,13 @@ function init_app(){
         // 标记正在切换，防止自动重连冲突
         isSwitchingCatgirl = true;
         
+        // 取消之前的自动重连定时器（避免使用旧角色名重连）
+        if (autoReconnectTimeoutId) {
+            clearTimeout(autoReconnectTimeoutId);
+            autoReconnectTimeoutId = null;
+            console.log('[猫娘切换] 已取消之前的自动重连定时器');
+        }
+        
         // 清理活跃的会话状态
         if (isRecording) {
             console.log('[猫娘切换] 停止录音');
@@ -3628,6 +3639,10 @@ function init_app(){
             clearInterval(heartbeatInterval);
             heartbeatInterval = null;
         }
+        
+        // 更新 lanlan_config.lanlan_name 为新的角色名
+        lanlan_config.lanlan_name = newCatgirl;
+        console.log('[猫娘切换] 已更新 lanlan_config.lanlan_name 为:', newCatgirl);
         
         // 等待一小段时间确保旧连接完全关闭
         await new Promise(resolve => setTimeout(resolve, 100));
