@@ -373,28 +373,40 @@ OUTPUT FORMAT (strict JSON):
         }, ensure_ascii=False)
         
         # Strongly enforce JSON-only output to reduce parsing errors
+        # NOTE: Require the model to return entry_id when has_task and can_execute are true.
         system_prompt = f"""You are a User Plugin selection agent. AVAILABLE PLUGINS:
 {plugins_desc}
 
 INSTRUCTIONS:
 1. Analyze the conversation and determine if any available plugin can handle the user's request.
-2. If yes, return the plugin id and arguments matching the plugin's schema.
-3. OUTPUT MUST BE ONLY a single JSON object and NOTHING ELSE. Do NOT include any explanatory text, markdown, or code fences.
+2. If yes, you MUST return the plugin id, the entry_id (the specific entry inside that plugin to invoke), and plugin_args matching the entry's schema.
+3. If you cannot determine a specific plugin entry, return has_task=false or can_execute=false and explain why in the 'reason' field.
+4. OUTPUT MUST BE ONLY a single JSON object and NOTHING ELSE. Do NOT include any explanatory text, markdown, or code fences.
 
 EXAMPLE (must follow this structure exactly):
-{example_json}
+{{
+    "has_task": true,
+    "can_execute": true,
+    "task_description": "example: call testPlugin open entry",
+    "plugin_id": "testPlugin",
+    "entry_id": "open",
+    "plugin_args": {{"message": "hello"}},
+    "reason": ""
+}}
 
-OUTPUT FORMAT:
+OUTPUT FORMAT (strict JSON):
 {{
     "has_task": boolean,
     "can_execute": boolean,
     "task_description": "brief description",
     "plugin_id": "plugin id or null",
+    "entry_id": "entry id inside the plugin or null",
     "plugin_args": {{...}} or null,
     "reason": "why"
 }}
 
-VERY IMPORTANT: Return the JSON object only, with no surrounding text.
+VERY IMPORTANT: If has_task and can_execute are true, entry_id is REQUIRED. If entry_id is missing or null when has_task/can_execute are true, the response will be treated as non-executable.
+Return only the JSON object, nothing else.
 """
         user_prompt = f"Conversation:\\n{conversation}\\n\\nUser intent (one-line): {conversation.splitlines()[-1] if conversation.splitlines() else ''}"
         
@@ -449,12 +461,13 @@ VERY IMPORTANT: Return the JSON object only, with no surrounding text.
                     logger.error(f"[UserPlugin Assessment] JSON parse error: {e}; raw_text (truncated): {repr(raw_text)[:2000]}")
                     return type("UP", (), {"has_task": False, "can_execute": False, "task_description": "", "plugin_id": None, "plugin_args": None, "reason": f"JSON parse error: {e}"})
                 
-                # return a simple object-like struct
+                # return a simple object-like struct, include entry_id if provided by the LLM
                 return type("UP", (), {
                     "has_task": decision.get("has_task", False),
                     "can_execute": decision.get("can_execute", False),
                     "task_description": decision.get("task_description", ""),
                     "plugin_id": decision.get("plugin_id"),
+                    "entry_id": decision.get("entry_id") or decision.get("plugin_entry_id") or decision.get("event_id"),
                     "plugin_args": decision.get("plugin_args"),
                     "reason": decision.get("reason", "")
                 })
@@ -726,7 +739,8 @@ VERY IMPORTANT: Return the JSON object only, with no surrounding text.
         plugin_args = getattr(up_decision, "plugin_args", {}) or {}
         task_description = getattr(up_decision, "task_description", "")
         # Optional: allow up_decision to specify a specific entry id
-        plugin_entry_id = getattr(up_decision, "plugin_entry_id", None) or plugin_args.pop("_entry", None)
+        # Prefer explicit 'entry_id' returned by the LLM (up_decision.entry_id), then fallback to older names
+        plugin_entry_id = getattr(up_decision, "entry_id", None) or getattr(up_decision, "plugin_entry_id", None) or plugin_args.pop("_entry", None)
         
         if not plugin_id:
             return TaskResult(
@@ -791,41 +805,47 @@ VERY IMPORTANT: Return the JSON object only, with no surrounding text.
         except Exception:
             entries = []
         
-        # Route via /plugin/trigger; include entry id in args when specified so plugin server can use it
+        # Route via /plugin/trigger; use separate top-level entry_id when provided
         trigger_endpoint = f"http://localhost:{USER_PLUGIN_SERVER_PORT}/plugin/trigger"
-        trigger_body = {"task_id": task_id, "plugin_id": plugin_id, "args": plugin_args}
-        if selected_entry and selected_entry.get("id"):
-            trigger_body["args"] = trigger_body.get("args", {})
-            trigger_body["args"]["_entry"] = selected_entry.get("id")
-        
+        trigger_body = {"task_id": task_id, "plugin_id": plugin_id, "args": plugin_args or {}}
+        if plugin_entry_id:
+            trigger_body["entry_id"] = plugin_entry_id
+            logger.info(f"[TaskExecutor] Using explicit plugin_entry_id for trigger: {plugin_entry_id}")
+        # send trigger
         logger.info(f"[TaskExecutor] POST to plugin trigger {trigger_endpoint} with body: {trigger_body}")
         try:
             import httpx
             async with httpx.AsyncClient(timeout=5.0) as client:
                 r = await client.post(trigger_endpoint, json=trigger_body)
-                # Treat 2xx as accepted. plugin_server may return plugin and entry info when calling trigger with _entry
+                # Treat 2xx as accepted. plugin_server may synchronously execute and return executed_entry
                 if 200 <= r.status_code < 300:
                     try:
                         data = r.json()
                     except Exception:
                         data = {"raw_text": r.text}
-                    logger.info(f"[TaskExecutor] ✅ Trigger accepted for plugin {plugin_id}: {data}")
-                    # If plugin server returned executed entry info, expose plugin name and entry id in result
+                    # Enhanced logging: include trigger_body and returned data for diagnosis
+                    try:
+                        logger.info(f"[TaskExecutor] ✅ Trigger accepted for plugin {plugin_id}. trigger_body={trigger_body} response={data}")
+                    except Exception:
+                        logger.info(f"[TaskExecutor] ✅ Trigger accepted for plugin {plugin_id}: {data}")
                     plugin_name = data.get("plugin_id") or plugin_id
+                    # Determine executed entry id: prefer explicit returned executed_entry/entry_id, then trigger_body.entry_id
                     entry_id = None
-                    # some trigger responses may include 'executed_entry' or 'entry_id'
                     if isinstance(data, dict):
-                        entry_id = data.get("executed_entry") or data.get("entry_id") or (trigger_body.get("args") or {}).get("_entry")
-                    # Return a TaskResult indicating the plugin task was accepted (async)
+                        entry_id = data.get("executed_entry") or data.get("entry_id") or trigger_body.get("entry_id")
+                    # Log decision about entry_id for traceability
+                    logger.debug(f"[TaskExecutor] Resolved entry_id for plugin {plugin_id}: {entry_id} (from response or trigger_body)")
+                    # Return TaskResult with independent entry_id field in result
+                    result_obj = {"accepted": True, "trigger_response": data, "entry_id": entry_id}
                     return TaskResult(
                         task_id=task_id,
                         has_task=True,
                         task_description=task_description,
                         execution_method='user_plugin',
-                        success=False,  # async accepted, execution pending
-                        result={"accepted": True, "trigger_response": data},
+                        success=False,
+                        result=result_obj,
                         tool_name=plugin_name,
-                        tool_args={"entry_id": entry_id, **(plugin_args or {})} if isinstance(plugin_args, dict) else plugin_args,
+                        tool_args=plugin_args,
                         reason=getattr(up_decision, "reason", "") or "trigger_accepted"
                     )
                 else:
