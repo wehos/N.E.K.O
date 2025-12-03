@@ -1629,12 +1629,18 @@ Live2DManager.prototype._createToggleItem = function(toggle, popup) {
     const handleToggle = (event) => {
         if (checkbox.disabled) return;
         
-        // 防止重复点击
+        // 防止重复点击：使用更长的防抖时间来适应异步操作
         if (checkbox._processing) {
-            console.log('[Live2D] Agent开关正在处理中，忽略重复点击:', toggle.id);
-            event?.preventDefault();
-            event?.stopPropagation();
-            return;
+            // 如果距离上次操作时间较短，忽略本次点击
+            const elapsed = Date.now() - (checkbox._processingTime || 0);
+            if (elapsed < 500) {  // 500ms 防抖，防止频繁点击
+                console.log('[Live2D] Agent开关正在处理中，忽略重复点击:', toggle.id, '已过', elapsed, 'ms');
+                event?.preventDefault();
+                event?.stopPropagation();
+                return;
+            }
+            // 超过500ms但仍在processing，可能是上次操作卡住了，允许新操作
+            console.log('[Live2D] Agent开关上次操作可能超时，允许新操作:', toggle.id);
         }
         
         // 立即设置处理中标志
@@ -1647,14 +1653,15 @@ Live2DManager.prototype._createToggleItem = function(toggle, popup) {
         checkbox.dispatchEvent(new Event('change', { bubbles: true }));
         updateStyle();
         
-        // 备用清除机制（如果外部没有处理）
+        // 备用清除机制（增加超时时间以适应网络延迟）
         setTimeout(() => {
-            if (checkbox._processing && Date.now() - checkbox._processingTime > 50) {
+            if (checkbox._processing && Date.now() - checkbox._processingTime > 5000) {
+                console.log('[Live2D] Agent开关备用清除机制触发:', toggle.id);
                 checkbox._processing = false;
                 checkbox._processingEvent = null;
                 checkbox._processingTime = null;
             }
-        }, 100);
+        }, 5500);
         
         // 防止默认行为和事件冒泡
         event?.preventDefault();
@@ -2032,6 +2039,11 @@ Live2DManager.prototype.closePopupById = function(buttonId) {
     const popup = document.getElementById(`live2d-popup-${buttonId}`);
     if (!popup || popup.style.display !== 'flex') {
         return false;
+    }
+
+    // 如果是 agent 弹窗关闭，派发关闭事件
+    if (buttonId === 'agent') {
+        window.dispatchEvent(new CustomEvent('live2d-agent-popup-closed'));
     }
 
     popup.style.opacity = '0';
@@ -2454,6 +2466,11 @@ Live2DManager.prototype.showPopup = function(buttonId, popup) {
         // 如果已经显示，则隐藏
         popup.style.opacity = '0';
         popup.style.transform = 'translateX(-10px)';
+        
+        // 如果是 agent 弹窗关闭，派发关闭事件
+        if (buttonId === 'agent') {
+            window.dispatchEvent(new CustomEvent('live2d-agent-popup-closed'));
+        }
         
         setTimeout(() => {
             popup.style.display = 'none';

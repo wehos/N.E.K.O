@@ -60,8 +60,7 @@ class Live2DManager {
         this.mouthValue = 0; // 0~1
         this.mouthParameterId = null; // 例如 'ParamMouthOpenY' 或 'ParamO'
         this._mouthOverrideInstalled = false;
-        this._origUpdateParameters = null;
-        this._origExpressionUpdateParameters = null;
+        this._origCoreModelUpdate = null; // 保存原始的 coreModel.update 方法
         this._mouthTicker = null;
         
         // 记录最后一次加载模型的原始路径（用于保存偏好时使用）

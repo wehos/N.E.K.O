@@ -23,6 +23,8 @@ class SteamUserStats(object):
         :param name: str
         :return: bool
         """
+        if isinstance(name, str):
+            name = name.encode('utf-8')
         return self.steam.GetAchievement(name)
 
 
@@ -94,6 +96,8 @@ class SteamUserStats(object):
         :param name: str
         :return: bool
         """
+        if isinstance(name, str):
+            name = name.encode('utf-8')
         return self.steam.SetAchievement(name)
 
 
@@ -157,5 +161,5 @@ class SteamUserStats(object):
         else:
             self.SetFindLeaderboardResultCallback(callback)
 
-        Steam.cdll.Leaderboard_FindLeaderboard(name.encode())
+        self.steam.Leaderboard_FindLeaderboard(name.encode())
         return True

@@ -799,13 +799,38 @@
             try {
                 showStatus(window.t ? window.t('emotion.savingConfig') : '正在保存配置...', 'info');
                 
+                // 在保存前，先从后端获取最新的配置，以保留常驻表情设置
+                let latestPersistent = null;
+                try {
+                    const latestRes = await fetch(`/api/live2d/emotion_mapping/${currentModel}`);
+                    const latestData = await latestRes.json();
+                    if (latestData && latestData.success && latestData.config && 
+                        latestData.config.expressions && latestData.config.expressions['常驻']) {
+                        latestPersistent = latestData.config.expressions['常驻'];
+                    }
+                } catch (e) {
+                    console.warn('获取最新常驻表情配置失败:', e);
+                }
+                
+                // 准备保存的配置
+                const configToSave = JSON.parse(JSON.stringify(emotionMappingConfig[currentModel] || { motions: {}, expressions: {} }));
+                
+                // 确保保留常驻表情（优先使用后端最新的，如果本地有也保留）
+                if (latestPersistent && latestPersistent.length > 0) {
+                    if (!configToSave.expressions) configToSave.expressions = {};
+                    configToSave.expressions['常驻'] = latestPersistent;
+                } else if (emotionMappingConfig[currentModel]?.expressions?.['常驻']) {
+                    if (!configToSave.expressions) configToSave.expressions = {};
+                    configToSave.expressions['常驻'] = emotionMappingConfig[currentModel].expressions['常驻'];
+                }
+                
                 // 保存情绪映射配置
                 const emotionResponse = await fetch(`/api/live2d/emotion_mapping/${currentModel}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(emotionMappingConfig[currentModel])
+                    body: JSON.stringify(configToSave)
                 });
 
                 const emotionData = await emotionResponse.json();
@@ -828,8 +853,19 @@
                 if (!emotionMappingConfig[currentModel]) {
                     emotionMappingConfig[currentModel] = { motions: {}, expressions: {} };
                 }
+                // 保留常驻表情设置，只重置情感组
+                const preservedPersistent = emotionMappingConfig[currentModel].expressions && 
+                    emotionMappingConfig[currentModel].expressions['常驻'] ? 
+                    [...emotionMappingConfig[currentModel].expressions['常驻']] : null;
+                
                 emotionMappingConfig[currentModel].motions = { "Idle": [] };
                 emotionMappingConfig[currentModel].expressions = {};
+                
+                // 恢复常驻表情
+                if (preservedPersistent && preservedPersistent.length > 0) {
+                    emotionMappingConfig[currentModel].expressions['常驻'] = preservedPersistent;
+                }
+                
                 renderEmotionGrid();
                 showStatus(window.t ? window.t('emotion.configReset') : '配置已重置', 'success');
             }

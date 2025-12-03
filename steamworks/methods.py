@@ -268,7 +268,8 @@ STEAMWORKS_METHODS = {
         'argtypes': [c_char_p]
     },
     'GetAchievement': {
-        'restype': bool
+        'restype': bool,
+        'argtypes': [c_char_p]
     },
     'GetNumAchievements': {
         'restype': int
@@ -292,7 +293,8 @@ STEAMWORKS_METHODS = {
         'restype': bool
     },
     'SetAchievement': {
-        'restype': bool
+        'restype': bool,
+        'argtypes': [c_char_p]
     },
     'SetStatInt': {
         'restype': bool
