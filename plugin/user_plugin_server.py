@@ -1,6 +1,8 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.responses import JSONResponse
+from typing import Optional
 import asyncio
+import threading
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -27,6 +29,8 @@ _plugins: Dict[str, Dict[str, Any]] = {}
 # In-memory plugin instances (id -> instance)
 _plugin_instances: Dict[str, Any] = {}
 _event_handlers: Dict[str, EventHandler] = {}
+_plugin_status: Dict[str, Dict[str, Any]] = {}
+_plugin_status_lock = threading.Lock()
 # Mapping from (plugin_id, entry_id) -> actual python method name on the instance.
 # Populated during plugin load to help server-side fallback when EventHandler lookup fails.
 _plugin_entry_method_map: Dict[tuple, str] = {}
@@ -52,18 +56,71 @@ async def available():
         "plugins_count": len(_plugins),
         "time": _now_iso()
     }
+
+def update_plugin_status(plugin_id: str, status: Dict[str, Any]) -> None:
+    """
+    由插件调用：上报自己的运行状态（全量覆盖该插件的当前状态快照）。
+    线程安全：支持在插件内部线程（比如 Tk 线程）里调用。
+    """
+    if not plugin_id:
+        return
+    with _plugin_status_lock:
+        _plugin_status[plugin_id] = {
+            **status,
+            "plugin_id": plugin_id,
+            "updated_at": _now_iso(),
+        }
+    logger.info(f"插件id:{plugin_id}  插件状态:{_plugin_status[plugin_id]}")
+def get_plugin_status(plugin_id: Optional[str] = None) -> Dict[str, Any]:
+    """
+    在进程内获取当前插件运行状态。
+    - plugin_id 为 None：返回 {plugin_id: status, ...}
+    - 否则只返回该插件状态（可能为空 dict）
+    """
+    with _plugin_status_lock:
+        if plugin_id is None:
+            # 返回一份拷贝，避免外部意外修改
+            return {pid: s.copy() for pid, s in _plugin_status.items()}
+        return _plugin_status.get(plugin_id, {}).copy()
+    
+@app.get("/plugin/status")
+async def plugin_status(plugin_id: Optional[str] = Query(default=None)):
+    """
+    查询插件运行状态：
+    - GET /plugin/status                -> 所有插件状态
+    - GET /plugin/status?plugin_id=xxx  -> 指定插件状态
+    """
+    try:
+        if plugin_id:
+            return {
+                "plugin_id": plugin_id,
+                "status": get_plugin_status(plugin_id),
+                "time": _now_iso(),
+            }
+        else:
+            return {
+                "plugins": get_plugin_status(),  # {pid: status}
+                "time": _now_iso(),
+            }
+    except Exception as e:
+        logger.exception("Failed to get plugin status")
+        raise HTTPException(status_code=500, detail=str(e))
 @app.get("/plugins")
 async def list_plugins():
     """
     Return the list of known plugins.
-    Each plugin item contains at least: id, name, description, input_schema, endpoint (if any).
-    If registry is empty, expose a minimal test plugin so task_executor can run a simple end-to-end test.
+    统一返回结构：
+    {
+        "plugins": [ ... ],
+        "message": "..."
+    }
     """
     try:
+        result = []
+
         if _plugins:
             logger.info("加载插件列表成功")
             # 已加载的插件（来自 TOML），直接返回
-            result = []
             for plugin_id, plugin_meta in _plugins.items():
                 plugin_info = plugin_meta.copy()  # Make a copy to modify
                 plugin_info["entries"] = []
@@ -72,33 +129,40 @@ async def list_plugins():
                 for key, eh in _event_handlers.items():
                     if not (key.startswith(f"{plugin_id}.") or key.startswith(f"{plugin_id}:plugin_entry:")):
                         continue
-                    if eh.meta.event_type != "plugin_entry":
+                    if getattr(eh.meta, "event_type", None) != "plugin_entry":
                         continue
                     # 去重判定键：优先使用 meta.id，再退回到 key
                     eid = getattr(eh.meta, "id", None) or key
-                    dedup_key = (eh.meta.event_type, eid)
+                    dedup_key = (getattr(eh.meta, "event_type", "plugin_entry"), eid)
                     if dedup_key in seen:
                         continue
                     seen.add(dedup_key)
-                    # 增加返回消息字段：若 EventMeta 有 return_message 属性则暴露，否则默认空字符串
-                    returned_message = getattr(eh.meta, "return_message", "") if hasattr(eh, "meta") else ""
+                    # 安全获取各字段，避免缺属性时报错
+                    returned_message = getattr(eh.meta, "return_message", "")
                     plugin_info["entries"].append({
-                        "id": eh.meta.id,
-                        "name": eh.meta.name,
-                        "description": eh.meta.description,
+                        "id": getattr(eh.meta, "id", eid),
+                        "name": getattr(eh.meta, "name", ""),
+                        "description": getattr(eh.meta, "description", ""),
                         "event_key": key,
-                        "input_schema": eh.meta.input_schema,
+                        "input_schema": getattr(eh.meta, "input_schema", {}),
                         "return_message": returned_message,
                     })
                 result.append(plugin_info)
+
             logger.info(result)
-            return result
+            return {"plugins": result, "message": ""}
+
         else:
             logger.info("No plugins registered.")
-            return {"plugins": [], "message": "No plugins available."}
+            return {
+                "plugins": [],
+                "message": "no plugins registered"
+            }
+
     except Exception as e:
         logger.exception("Failed to list plugins")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 # Utility to allow other parts of the application (same process) to query plugin list
 def get_plugins() -> List[Dict[str, Any]]:
@@ -154,11 +218,9 @@ def _load_plugins_from_toml() -> None:
 
             # 实例化插件；如果将来想传 ctx，可以改成 cls(ctx)
             instance = cls()
-
-            # 插件 HTTP endpoint 统一为 /plugin/<id>
-            endpoint = f"http://localhost:{USER_PLUGIN_SERVER_PORT}/plugin/{pid}"
-
-            meta = {
+            setattr(instance, "_plugin_id", pid)     # ← 就加在这里
+            _plugin_instances[pid] = instance
+            plugin_meta = {
                 "id": pid,
                 "name": name,
                 "description": desc,
@@ -172,8 +234,7 @@ def _load_plugins_from_toml() -> None:
                 },
             }
 
-            _plugin_instances[pid] = instance
-            _register_plugin(meta)
+            _register_plugin(plugin_meta)
  
             # 自动扫描实例的方法，查找 EventMeta 并将对应的 EventHandler 注册到 _event_handlers
             # 使用 event_base.py 中约定的 EVENT_META_ATTR（如果插件方法被装饰器标注了元信息）
@@ -183,30 +244,30 @@ def _load_plugins_from_toml() -> None:
                     # 忽略私有方法
                     if name.startswith("_"):
                         continue
-                    meta = getattr(member, EVENT_META_ATTR, None)
-                    if meta is None:
+                    event_meta = getattr(member, EVENT_META_ATTR, None)
+                    if event_meta is None:
                         # 有些装饰器可能将 meta 绑定到函数的 __wrapped__（例如 functools.wraps 情况），尝试获取
                         wrapped = getattr(member, "__wrapped__", None)
                         if wrapped is not None:
-                            meta = getattr(wrapped, EVENT_META_ATTR, None)
-                    if meta is None:
+                            event_meta = getattr(wrapped, EVENT_META_ATTR, None)
+                    if event_meta is None:
                         continue
                     # 仅关注 plugin_entry 类型
                     try:
-                        if getattr(meta, "event_type", None) != "plugin_entry":
+                        if getattr(event_meta, "event_type", None) != "plugin_entry":
                             continue
                     except Exception:
                         continue
                     # 兼容两种 key 约定： "pid.<id>" 和 "pid:plugin_entry:<id>"
                     try:
-                        eid = getattr(meta, "id", name)
+                        eid = getattr(event_meta, "id", name)
                     except Exception:
                         eid = name
                     key1 = f"{pid}.{eid}"
                     key2 = f"{pid}:plugin_entry:{eid}"
                     # 构造 EventHandler 并注册（最后注册的覆盖同名）
-                    _event_handlers[key1] = _EB_EventHandler(meta=meta, handler=member)
-                    _event_handlers[key2] = _EB_EventHandler(meta=meta, handler=member)
+                    _event_handlers[key1] = _EB_EventHandler(meta=event_meta, handler=member)
+                    _event_handlers[key2] = _EB_EventHandler(meta=event_meta, handler=member)
                     # 记录 (plugin_id, entry_id) -> python method 名，供触发时服务器端回退使用
                     try:
                         _plugin_entry_method_map[(pid, str(eid))] = name

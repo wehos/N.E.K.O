@@ -1,8 +1,9 @@
 import threading
 import tkinter as tk
 from plugin.decorators import neko_plugin, plugin_entry, on_event
+from plugin.plugin_base import NekoPluginBase
 @neko_plugin
-class TkWindowPlugin:
+class TkWindowPlugin(NekoPluginBase):
     def __init__(self):
         self._started = False
         self._thread = None
@@ -34,6 +35,7 @@ class TkWindowPlugin:
         },
     )
     def open_window(self, title: str | None = None, message: str | None = None, **_):
+        self.report_status({"started": True})
         if self._started:
             return {"started": False, "reason": "window already running"}
 

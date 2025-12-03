@@ -1,7 +1,8 @@
-# neko_plugin_core/plugin_base.py
+# neko_plugin_core/plugin_base.pyfrom plugin_server import upda
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
 from .event_base import EventHandler, EventMeta
+from user_plugin_server import update_plugin_status
 NEKO_PLUGIN_META_ATTR = "__neko_plugin_meta__"
 EVENT_META_ATTR = "__neko_event_meta__"
 NEKO_PLUGIN_TAG = "__neko_plugin__"
@@ -37,3 +38,14 @@ class NekoPluginBase:
             if meta:
                 entries[meta.id] = EventHandler(meta=meta, handler=value)
         return entries
+    
+    def report_status(self, status: Dict[str, Any]) -> None:
+            """
+            插件内部直接调用 self.report_status({...}),
+            不用自己管 plugin_id。
+            """
+            pid = getattr(self, "_plugin_id", None)
+            if not pid:
+                # 保险一点，避免忘记注入
+                raise RuntimeError("Plugin instance missing _plugin_id, cannot report status")
+            update_plugin_status(pid, status)
