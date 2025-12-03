@@ -337,7 +337,7 @@ OUTPUT FORMAT (strict JSON):
         except Exception:
             return type("UP", (), {"has_task": False, "can_execute": False, "task_description":"", "plugin_id": None, "plugin_args": None, "reason":"Invalid plugins"})
     
-        # 构建插件描述供 LLM 参考（只包含 id, description, input_schema）
+        # 构建插件描述供 LLM 参考（包含 id, description, input_schema 以及 entries 列表）
         lines = []
         try:
             # plugins can be dict or list
@@ -346,6 +346,7 @@ OUTPUT FORMAT (strict JSON):
                 pid = p.get("id") if isinstance(p, dict) else getattr(p, "id", None)
                 desc = p.get("description", "") if isinstance(p, dict) else getattr(p, "description", "")
                 schema = p.get("input_schema", {}) if isinstance(p, dict) else getattr(p, "input_schema", {})
+                entries = p.get("entries", []) if isinstance(p, dict) else getattr(p, "entries", []) or []
                 # Only include well-formed plugin entries
                 if not pid:
                     continue
@@ -353,7 +354,22 @@ OUTPUT FORMAT (strict JSON):
                     schema_str = json.dumps(schema)
                 except Exception:
                     schema_str = "{}"
-                lines.append(f"- {pid}: {desc} | schema: {schema_str}")
+                # Build entries description: show entry ids and short description to aid LLM in selecting entry_id
+                entry_lines = []
+                try:
+                    for e in entries:
+                        try:
+                            eid = e.get("id") if isinstance(e, dict) else getattr(e, "id", None)
+                            ename = e.get("name", "") if isinstance(e, dict) else getattr(e, "name", "")
+                            edesc = e.get("description", "") if isinstance(e, dict) else getattr(e, "description", "")
+                            if eid:
+                                entry_lines.append(f"{eid} ({ename}): {edesc}")
+                        except Exception:
+                            continue
+                except Exception:
+                    entry_lines = []
+                entry_desc = "; ".join(entry_lines) if entry_lines else "no entries"
+                lines.append(f"- {pid}: {desc} | schema: {schema_str} | entries: {entry_desc}")
         except Exception:
             pass
         
@@ -740,7 +756,7 @@ Return only the JSON object, nothing else.
         task_description = getattr(up_decision, "task_description", "")
         # Optional: allow up_decision to specify a specific entry id
         # Prefer explicit 'entry_id' returned by the LLM (up_decision.entry_id), then fallback to older names
-        plugin_entry_id = getattr(up_decision, "entry_id", None) or getattr(up_decision, "plugin_entry_id", None) or plugin_args.pop("_entry", None)
+        plugin_entry_id = getattr(up_decision, "entry_id", None) # or getattr(up_decision, "plugin_entry_id", None) or plugin_args.pop("_entry", None)
         
         if not plugin_id:
             return TaskResult(
@@ -788,23 +804,6 @@ Return only the JSON object, nothing else.
                 tool_args=plugin_args,
                 reason=getattr(up_decision, "reason", "") or "Plugin not found"
             )
-        
-        # If the plugin metadata includes entries, find the matching entry (by id) and prefer calling trigger with entry context
-        selected_entry = None
-        try:
-            entries = plugin_meta.get("entries", []) or []
-            if plugin_entry_id:
-                for e in entries:
-                    if e.get("id") == plugin_entry_id:
-                        selected_entry = e
-                        break
-            else:
-                # If there is exactly one entry and plugin_args contains keys matching its schema, pick it
-                if len(entries) == 1:
-                    selected_entry = entries[0]
-        except Exception:
-            entries = []
-        
         # Route via /plugin/trigger; use separate top-level entry_id when provided
         trigger_endpoint = f"http://localhost:{USER_PLUGIN_SERVER_PORT}/plugin/trigger"
         trigger_body = {"task_id": task_id, "plugin_id": plugin_id, "args": plugin_args or {}}

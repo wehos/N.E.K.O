@@ -769,25 +769,17 @@ async def analyze_and_plan(payload: Dict[str, Any]):
     messages = (payload or {}).get("messages", [])
     if not isinstance(messages, list):
         raise HTTPException(400, "messages must be a list of {role, text}")
-    # If user_plugin integration is enabled, forward optional message(s) to testPlugin endpoint (best-effort, non-blocking)
+    # Previously forwarded messages to a user plugin endpoint (/plugin/testPlugin).
+    # This forwarding has been removed to avoid relying on that endpoint.
+    # If in future a safe user-plugin integration is needed, implement a provider
+    # that enumerates plugins and forwards to configured endpoints with retry/backoff.
     try:
+        # Preserve check and a light log when user_plugin_enabled is true for traceability.
         if Modules.agent_flags.get("user_plugin_enabled", False):
-            async def _forward_to_user_plugin():
-                try:
-                    async with httpx.AsyncClient(timeout=0.5) as _client:
-                        # If payload contains a single optional "message" field in top-level payload, forward that.
-                        top_message = (payload or {}).get("message")
-                        if top_message is not None:
-                            body = {"message": top_message}
-                        else:
-                            # Otherwise forward the messages list for inspection by plugin
-                            body = {"messages": messages}
-                        await _client.post(f"http://localhost:{USER_PLUGIN_SERVER_PORT}/plugin/testPlugin", json=body)
-                except Exception:
-                    # best-effort: ignore failures
-                    pass
-            # Fire-and-forget forwarding
-            asyncio.create_task(_forward_to_user_plugin())
+            try:
+                logger.info("user_plugin_enabled is true but /plugin/testPlugin forwarding is disabled.")
+            except Exception:
+                pass
     except Exception:
         pass
 

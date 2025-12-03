@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Optional, Dict, Any
 from .event_base import EventHandler, EventMeta
 NEKO_PLUGIN_META_ATTR = "__neko_plugin_meta__"
+EVENT_META_ATTR = "__neko_event_meta__"
 NEKO_PLUGIN_TAG = "__neko_plugin__"
 
 
@@ -32,7 +33,7 @@ class NekoPluginBase:
         entries: Dict[str, EventHandler] = {}
         for attr_name in dir(self):
             value = getattr(self, attr_name)
-            meta: EventMeta | None = getattr(value, "__neko_entry_meta__", None)
+            meta: EventMeta | None = getattr(value, EVENT_META_ATTR, None)
             if meta:
                 entries[meta.id] = EventHandler(meta=meta, handler=value)
         return entries

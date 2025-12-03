@@ -244,42 +244,6 @@ def _load_plugins_from_toml() -> None:
 # so task_executor can either call GET /plugins remotely or import main_helper.user_plugin_server.get_plugins
 # if running in the same process.
 
-@app.post("/plugin/testPlugin")
-async def plugin_test_plugin(payload: Dict[str, Any], request: Request):
-    """
-    Minimal test plugin endpoint used for local testing (testUserPlugin).
-    When invoked it emits an ERROR-level log so it's obvious in console output,
-    and returns a clear JSON response for the caller.
-    """
-    try:
-        # Log invocation at INFO level and avoid sending an ERROR; we'll forward the received message instead
-        logger.info("testUserPlugin: testPlugin was invoked. client=%s", request.client.host if request.client else None)
-        # Enqueue an event for inspection
-        event = {
-            "type": "plugin_invoked",
-            "plugin_id": "testPlugin",
-            "payload": payload,
-            "client": request.client.host if request.client else None,
-            "received_at": _now_iso()
-        }
-        try:
-            _event_queue.put_nowait(event)
-        except asyncio.QueueFull:
-            try:
-                _ = _event_queue.get_nowait()
-            except Exception:
-                pass
-            try:
-                _event_queue.put_nowait(event)
-            except Exception:
-                logger.warning("testUserPlugin: failed to enqueue plugin event")
-        # Prepare message to forward: prefer explicit "message" field, otherwise forward full payload
-        forwarded = payload.get("message") if isinstance(payload, dict) and "message" in payload else payload
-        return JSONResponse({"success": True, "forwarded_message": forwarded, "received": payload})
-    except Exception as e:
-        logger.exception("testUserPlugin: plugin handler error")
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.on_event("startup")
 async def _startup_load_plugins():
     """
@@ -378,20 +342,54 @@ async def plugin_trigger(payload: Dict[str, Any], request: Request):
 
         # 小工具：根据函数签名决定用 args 还是 **args 调用，兼容 sync / async
         async def _invoke_call(fn, call_args: Dict[str, Any]):
-            sig = None
+            """
+            Invoke plugin handler or instance method safely.
+
+            Rules:
+            - Prefer calling with keyword args: fn(**call_args) if the function accepts parameters.
+            - If that raises a TypeError (mismatch), fall back to passing the whole dict as single positional arg: fn(call_args).
+            - If the function accepts no parameters, call it without arguments.
+            - Support both sync and async functions.
+            This approach avoids passing positional (self, args) incorrectly for bound methods.
+            """
             try:
                 sig = inspect.signature(fn)
             except Exception:
                 sig = None
 
+            params = list(sig.parameters.values()) if sig is not None else []
+
+            # Helper to actually call and handle fallbacks
+            async def _call_async():
+                # If function accepts no parameters, call without args
+                if len(params) == 0:
+                    return await fn()
+                # Try keyword invocation first
+                try:
+                    return await fn(**(call_args or {}))
+                except TypeError:
+                    # Fallback: try single positional dict
+                    try:
+                        return await fn(call_args or {})
+                    except TypeError:
+                        # As a last resort, try no-arg call
+                        return await fn()
+
+            def _call_sync():
+                if len(params) == 0:
+                    return fn()
+                try:
+                    return fn(**(call_args or {}))
+                except TypeError:
+                    try:
+                        return fn(call_args or {})
+                    except TypeError:
+                        return fn()
+
             if inspect.iscoroutinefunction(fn):
-                if sig and len(sig.parameters) == 1:
-                    return await fn(call_args or {})
-                return await fn(**(call_args or {}))
+                return await _call_async()
             else:
-                if sig and len(sig.parameters) == 1:
-                    return fn(call_args or {})
-                return fn(**(call_args or {}))
+                return _call_sync()
 
         plugin_response: Any = None
         plugin_error: Optional[Dict[str, Any]] = None
