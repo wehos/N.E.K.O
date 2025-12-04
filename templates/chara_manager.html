@@ -389,7 +389,11 @@ function renderMaster() {
             const label = document.createElement('label');
             label.textContent = field.labelText;
             if (field.required) {
-                label.innerHTML += '<span style="color:red" data-i18n="character.required">*</span>';
+                const requiredStar = document.createElement('span');
+                requiredStar.style.color = 'red';
+                requiredStar.setAttribute('data-i18n', 'character.required');
+                requiredStar.textContent = '*';
+                label.appendChild(requiredStar);
             }
             rowElement.appendChild(label);
             
@@ -644,20 +648,51 @@ function renderCatgirls() {
         const color = randomColor();
         const block = document.createElement('div');
         block.className = 'catgirl-block';
-        block.innerHTML = `
-            <div class="catgirl-header">
-                <span class="catgirl-expand" style="cursor:pointer;font-size:1.2em;margin-right:6px;user-select:none">▶</span>
-                <span class="catgirl-title" style="color:${color};">${key}</span>
-                <div class="catgirl-actions">
-                    <button class="btn sm" id="switch-btn-${key}" onclick="switchCatgirl('${key}')" style="background: #28a745;">${window.t ? window.t('character.switchCatgirl') : '切换猫娘'}</button>
-                    <button class="btn sm delete" onclick="deleteCatgirl('${key}')">${window.t ? window.t('character.deleteCatgirl') : '删除猫娘'}</button>
-                </div>
-            </div>
-            <div class="catgirl-details" style="display:none;"></div>
-        `;
-        // 展开按钮逻辑
-        const expandBtn = block.querySelector('.catgirl-expand');
-        const detailsDiv = block.querySelector('.catgirl-details');
+
+        // header
+        const header = document.createElement('div');
+        header.className = 'catgirl-header';
+
+        const expandBtn = document.createElement('span');
+        expandBtn.className = 'catgirl-expand';
+        expandBtn.style.cursor = 'pointer';
+        expandBtn.style.fontSize = '1.2em';
+        expandBtn.style.marginRight = '6px';
+        expandBtn.style.userSelect = 'none';
+        expandBtn.textContent = '▶';
+        header.appendChild(expandBtn);
+
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'catgirl-title';
+        titleSpan.style.color = color;
+        titleSpan.textContent = key;
+        header.appendChild(titleSpan);
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'catgirl-actions';
+
+        const switchBtn = document.createElement('button');
+        switchBtn.className = 'btn sm';
+        switchBtn.id = 'switch-btn-' + key;
+        switchBtn.style.background = '#28a745';
+        switchBtn.textContent = window.t ? window.t('character.switchCatgirl') : '切换猫娘';
+        switchBtn.addEventListener('click', function() { switchCatgirl(key); });
+        actionsDiv.appendChild(switchBtn);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn sm delete';
+        deleteBtn.textContent = window.t ? window.t('character.deleteCatgirl') : '删除猫娘';
+        deleteBtn.addEventListener('click', function() { deleteCatgirl(key); });
+        actionsDiv.appendChild(deleteBtn);
+
+        header.appendChild(actionsDiv);
+
+        const detailsDiv = document.createElement('div');
+        detailsDiv.className = 'catgirl-details';
+        detailsDiv.style.display = 'none';
+
+        block.appendChild(header);
+        block.appendChild(detailsDiv);
         
         // 从 localStorage 读取展开状态
         const storageKey = `catgirl_expand_${key}`;
@@ -786,63 +821,191 @@ function showCatgirlForm(key, container) {
     
     // 保存猫娘名称，用于后续恢复进阶设定的展开状态
     form._catgirlName = key;
-    // 先渲染基础项
-    form.innerHTML = `
-        <div class="field-row">
-            <label>${window.t ? window.t('character.profileName') : '档案名'}<span style="color:red">*</span></label>
-            <input type="text" name="档案名" value="${key || ''}" ${isNew ? '' : 'readonly'} required>
-            ${!isNew ? `<button type="button" class="btn sm" id="rename-catgirl-btn">${window.t ? window.t('character.rename') : '修改名称'}</button>` : ''}
-        </div>
-    `;
+    // 先渲染基础项（使用 DOM API，避免插入未转义内容）
+    const baseRow = document.createElement('div');
+    baseRow.className = 'field-row';
+
+    const baseLabel = document.createElement('label');
+    baseLabel.textContent = window.t ? window.t('character.profileName') : '档案名';
+    const star = document.createElement('span');
+    star.style.color = 'red';
+    star.textContent = '*';
+    baseLabel.appendChild(star);
+    baseRow.appendChild(baseLabel);
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.name = '档案名';
+    nameInput.required = true;
+    nameInput.value = key || '';
+    if (!isNew) nameInput.readOnly = true;
+    baseRow.appendChild(nameInput);
+
+    if (!isNew) {
+        const renameBtn = document.createElement('button');
+        renameBtn.type = 'button';
+        renameBtn.className = 'btn sm';
+        renameBtn.id = 'rename-catgirl-btn';
+        renameBtn.textContent = window.t ? window.t('character.rename') : '修改名称';
+        baseRow.appendChild(renameBtn);
+    }
+    form.appendChild(baseRow);
     // 渲染自定义项
     Object.keys(cat).forEach(k => {
         if (!["live2d", "voice_id", "system_prompt", "档案名"].includes(k)) {
             const row = document.createElement('div');
             row.className = 'field-row custom-row';
             const deleteFieldText = window.t ? window.t('character.deleteField') : '删除设定';
-            row.innerHTML = `<label>${k}</label><textarea name="${k}" rows="1" placeholder="可输入详细描述">${cat[k]}</textarea><button type="button" class="btn sm delete" style="margin-left:8px" onclick="deleteCatgirlField(this)">${deleteFieldText}</button>`;
+
+            const labelEl = document.createElement('label');
+            labelEl.textContent = k;
+            row.appendChild(labelEl);
+
+            const textareaEl = document.createElement('textarea');
+            textareaEl.name = k;
+            textareaEl.rows = 1;
+            textareaEl.placeholder = '可输入详细描述';
+            textareaEl.value = cat[k];
+            row.appendChild(textareaEl);
+
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'btn sm delete';
+            delBtn.style.marginLeft = '8px';
+            delBtn.textContent = deleteFieldText;
+            delBtn.addEventListener('click', function() { deleteCatgirlField(this); });
+            row.appendChild(delBtn);
+
             form.appendChild(row);
-            
+
             // 为渲染的textarea添加自动调整高度功能
-            const textarea = row.querySelector('textarea');
-            attachTextareaAutoResize(textarea);
+            attachTextareaAutoResize(textareaEl);
         }
     });
     // 渲染进阶设定
-    form.innerHTML += `
-        <div class="fold">
-            <div class="fold-toggle">${window.t ? window.t('character.advancedSettings') : '进阶设定'} <span class="arrow">▼</span></div>
-            <div class="fold-content">
-                <div class="field-row">
-                    <label>live2d</label>
-                    <span class="live2d-link" style="flex:1;cursor:pointer;color:#4f8cff;text-decoration:underline;display:inline-block;padding:6px 0" title="${window.t ? window.t('character.manageLive2D') : '点击管理Live2D模型'}">${cat['live2d'] ? cat['live2d'] : (window.t ? window.t('character.live2dNotSet') : '未设置')}</span>
-                </div>
-                <div class="field-row">
-                    <label>voice_id</label>
-                    <select name="voice_id" class="form-control" style="flex:1">
-                        <option value="">${window.t ? window.t('character.voiceNotSet') : '未指定音色'}</option>
-                    </select>
-                    <button type="button" class="btn sm" onclick="openVoiceClone('${key || ''}')">${window.t ? window.t('character.registerNewVoice') : '注册新声音'}</button>
-                </div>
-                <div class="fold">
-                    <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 8px 0;">
-                    <div class="fold-toggle" style="color: #888; font-style: italic">system_prompt <span class="arrow">▼</span></div>
-                    <div class="fold-content">
-                        <textarea name="system_prompt" rows="5" style="width:100%" placeholder="${window.t ? window.t('character.systemPrompt') : '系统指令（谨慎修改）'}">${cat['system_prompt'] || ''}</textarea>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div style="text-align:right;margin-top:10px;">
-            <button type="button" class="btn sm add" id="add-catgirl-field-btn">${window.t ? window.t('character.addField') : '新增设定'}</button>
-            <button type="submit" class="btn sm" id="save-button" style="display:none">${isNew ? (window.t ? window.t('character.confirmNewCatgirl') : '确认新猫娘') : (window.t ? window.t('character.saveChanges') : '保存修改')}</button>
-            <button type="button" class="btn sm" id="cancel-button" style="display:none" onclick="this.form.querySelector('#save-button').style.display = 'none'; this.form.querySelector('#cancel-button').style.display = 'none'; loadCharacterData()">${window.t ? window.t('character.cancel') : '取消'}</button>
-        </div>
-    `;
+    // 进阶设定（使用 DOM API）
+    const fold = document.createElement('div');
+    fold.className = 'fold';
+
+    const foldToggle = document.createElement('div');
+    foldToggle.className = 'fold-toggle';
+    foldToggle.textContent = window.t ? window.t('character.advancedSettings') : '进阶设定';
+    const arrowSpan = document.createElement('span');
+    arrowSpan.className = 'arrow';
+    arrowSpan.textContent = '▼';
+    foldToggle.appendChild(document.createTextNode(' '));
+    foldToggle.appendChild(arrowSpan);
+    fold.appendChild(foldToggle);
+
+    const foldContent = document.createElement('div');
+    foldContent.className = 'fold-content';
+
+    // live2d row
+    const live2dRow = document.createElement('div');
+    live2dRow.className = 'field-row';
+    const live2dLabel = document.createElement('label');
+    live2dLabel.textContent = 'live2d';
+    live2dRow.appendChild(live2dLabel);
+    const live2dLink = document.createElement('span');
+    live2dLink.className = 'live2d-link';
+    live2dLink.style.cssText = 'flex:1;cursor:pointer;color:#4f8cff;text-decoration:underline;display:inline-block;padding:6px 0';
+    live2dLink.title = window.t ? window.t('character.manageLive2D') : '点击管理Live2D模型';
+    live2dLink.textContent = cat['live2d'] ? cat['live2d'] : (window.t ? window.t('character.live2dNotSet') : '未设置');
+    live2dRow.appendChild(live2dLink);
+    foldContent.appendChild(live2dRow);
+
+    // voice_id row
+    const voiceRow = document.createElement('div');
+    voiceRow.className = 'field-row';
+    const voiceLabel = document.createElement('label');
+    voiceLabel.textContent = 'voice_id';
+    voiceRow.appendChild(voiceLabel);
+    const voiceSelect = document.createElement('select');
+    voiceSelect.name = 'voice_id';
+    voiceSelect.className = 'form-control';
+    voiceSelect.style.flex = '1';
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = window.t ? window.t('character.voiceNotSet') : '未指定音色';
+    voiceSelect.appendChild(defaultOption);
+    voiceRow.appendChild(voiceSelect);
+    const registerVoiceBtn = document.createElement('button');
+    registerVoiceBtn.type = 'button';
+    registerVoiceBtn.className = 'btn sm';
+    registerVoiceBtn.textContent = window.t ? window.t('character.registerNewVoice') : '注册新声音';
+    registerVoiceBtn.addEventListener('click', function() { openVoiceClone(key || ''); });
+    voiceRow.appendChild(registerVoiceBtn);
+    foldContent.appendChild(voiceRow);
+
+    // system_prompt fold
+    const innerFold = document.createElement('div');
+    innerFold.className = 'fold';
+    const hr = document.createElement('hr');
+    hr.style.cssText = 'border: none; border-top: 1px solid #e0e0e0; margin: 8px 0;';
+    innerFold.appendChild(hr);
+    const sysToggle = document.createElement('div');
+    sysToggle.className = 'fold-toggle';
+    sysToggle.style.color = '#888';
+    sysToggle.style.fontStyle = 'italic';
+    sysToggle.textContent = 'system_prompt ';
+    const sysArrow = document.createElement('span');
+    sysArrow.className = 'arrow';
+    sysArrow.textContent = '▼';
+    sysToggle.appendChild(sysArrow);
+    innerFold.appendChild(sysToggle);
+    const sysContent = document.createElement('div');
+    sysContent.className = 'fold-content';
+    const sysTextarea = document.createElement('textarea');
+    sysTextarea.name = 'system_prompt';
+    sysTextarea.rows = 5;
+    sysTextarea.style.width = '100%';
+    sysTextarea.placeholder = window.t ? window.t('character.systemPrompt') : '系统指令（谨慎修改）';
+    sysTextarea.value = cat['system_prompt'] || '';
+    sysContent.appendChild(sysTextarea);
+    innerFold.appendChild(sysContent);
+    foldContent.appendChild(innerFold);
+
+    fold.appendChild(foldContent);
+    form.appendChild(fold);
+
+    // 操作按钮区
+    const btnArea = document.createElement('div');
+    btnArea.style.textAlign = 'right';
+    btnArea.style.marginTop = '10px';
+
+    const addFieldBtn = document.createElement('button');
+    addFieldBtn.type = 'button';
+    addFieldBtn.className = 'btn sm add';
+    addFieldBtn.id = 'add-catgirl-field-btn';
+    addFieldBtn.textContent = window.t ? window.t('character.addField') : '新增设定';
+    btnArea.appendChild(addFieldBtn);
+
+    const saveButton = document.createElement('button');
+    saveButton.type = 'submit';
+    saveButton.className = 'btn sm';
+    saveButton.id = 'save-button';
+    saveButton.style.display = 'none';
+    saveButton.textContent = isNew ? (window.t ? window.t('character.confirmNewCatgirl') : '确认新猫娘') : (window.t ? window.t('character.saveChanges') : '保存修改');
+    btnArea.appendChild(saveButton);
+
+    const cancelButton = document.createElement('button');
+    cancelButton.type = 'button';
+    cancelButton.className = 'btn sm';
+    cancelButton.id = 'cancel-button';
+    cancelButton.style.display = 'none';
+    cancelButton.textContent = window.t ? window.t('character.cancel') : '取消';
+    cancelButton.addEventListener('click', function() {
+        if (form.querySelector('#save-button')) form.querySelector('#save-button').style.display = 'none';
+        if (form.querySelector('#cancel-button')) form.querySelector('#cancel-button').style.display = 'none';
+        loadCharacterData();
+    });
+    btnArea.appendChild(cancelButton);
+
+    form.appendChild(btnArea);
     // live2d弹窗逻辑
-    const live2dLink = form.querySelector('.live2d-link');
-    if (live2dLink) {
-        live2dLink.onclick = async function() {
+    const live2dLinkEl = form.querySelector('.live2d-link');
+    if (live2dLinkEl) {
+        live2dLinkEl.onclick = async function() {
             const catgirlName = form.querySelector('[name="档案名"]').value;
             if (!catgirlName) {
                 await showAlert(window.t ? window.t('character.fillProfileNameFirst') : '请先填写猫娘档案名，然后再设置Live2D模型');
@@ -944,7 +1107,25 @@ function showCatgirlForm(key, container) {
         const row = document.createElement('div');
         row.className = 'field-row custom-row';
         const deleteFieldText = window.t ? window.t('character.deleteField') : '删除设定';
-        row.innerHTML = `<label>${key}</label><textarea name="${key}" rows="1" placeholder="可输入详细描述"></textarea><button type="button" class="btn sm delete" style="margin-left:8px" onclick="deleteCatgirlField(this)">${deleteFieldText}</button>`;
+
+        const labelEl = document.createElement('label');
+        labelEl.textContent = key;
+        row.appendChild(labelEl);
+
+        const textareaEl = document.createElement('textarea');
+        textareaEl.name = key;
+        textareaEl.rows = 1;
+        textareaEl.placeholder = '可输入详细描述';
+        row.appendChild(textareaEl);
+
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'btn sm delete';
+        delBtn.style.marginLeft = '8px';
+        delBtn.textContent = deleteFieldText;
+        delBtn.addEventListener('click', function() { deleteCatgirlField(this); });
+        row.appendChild(delBtn);
+
         form.insertBefore(row, form.querySelector('.fold'));
         
         // 新增字段后显示操作按钮
@@ -977,16 +1158,20 @@ function showCatgirlForm(key, container) {
             const response = await fetch('/api/voices');
             const data = await response.json();
             const select = form.querySelector('select[name="voice_id"]');
-            if (select) {
-                // 清空现有选项
+                if (select) {
+                // 清空现有选项并使用 DOM API 创建
+                while (select.firstChild) select.removeChild(select.firstChild);
                 const voiceNotSetText = window.t ? window.t('character.voiceNotSet') : '未指定音色';
-                select.innerHTML = `<option value="">${voiceNotSetText}</option>`;
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = voiceNotSetText;
+                select.appendChild(defaultOption);
                 // 添加音色选项
                 Object.entries(data.voices).forEach(([voiceId, voiceData]) => {
                     const option = document.createElement('option');
                     option.value = voiceId;
                     option.textContent = voiceData.prefix || voiceId;
-                    option.selected = voiceId === (cat['voice_id'] || '');
+                    if (voiceId === (cat['voice_id'] || '')) option.selected = true;
                     select.appendChild(option);
                 });
             }
