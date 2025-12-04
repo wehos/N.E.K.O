@@ -20,7 +20,7 @@ except ImportError:  # pragma: no cover
 app = FastAPI(title="N.E.K.O User Plugin Server")
 
 logger = logging.getLogger("user_plugin_server")
-logging.basicConfig(level=logging.DEBUG)
+
 @dataclass
 class PluginContext:
     app: FastAPI
@@ -306,15 +306,19 @@ def _load_plugins_from_toml() -> None:
                                 logger.debug("Failed to register entry %s for plugin %s: %s",eid,pid,e,exc_info=True)
                                 continue
                 except Exception:
-                    # ignore if plugin.toml doesn't list entries in expected format
-                    pass
+                    # 如果 plugin.toml 没有按预期格式列出 entries，则跳过
+                    logger.debug(
+                        "No valid entries found in plugin.toml for plugin %s, skipping auto-registration from toml",
+                        pid,
+                        exc_info=True
+                    )
  
             except Exception:
                 logger.exception("Failed to auto-register EventMeta handlers for plugin %s", pid)
  
             logger.info("Loaded plugin %s from %s (%s)", pid, toml_path, entry)
         except Exception as e:
-            logger.exception("Failed to load plugin from %s: %s", toml_path, e)
+            logger.exception("Failed to load plugin from %s", toml_path, e)
 # NOTE: Registration endpoints are intentionally not exposed per request.
 # The server exposes plugin listing and event ingestion endpoints and a small in-process helper
 # so task_executor can either call GET /plugins remotely or import main_helper.user_plugin_server.get_plugins
@@ -430,10 +434,22 @@ async def plugin_trigger(payload: Dict[str, Any], request: Request):
             """
             try:
                 sig = inspect.signature(fn)
-            except Exception:
+                
+            except (ValueError, TypeError) as e:
+                logger.warning("Cannot inspect signature for %s: %s", fn, e)
                 sig = None
 
             params = list(sig.parameters.values()) if sig is not None else []
+
+            # 根据签名决定调用方式
+            accepts_kwargs = False
+            accepts_single_arg = False
+            if sig is not None:
+                # 检查是否接受 **kwargs
+                accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params)
+                # 检查是否接受单个位置参数
+                positional_params = [p for p in params if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)]
+                accepts_single_arg = len(positional_params) == 1
 
             # Helper to actually call and handle fallbacks
             async def _call_async():
@@ -441,29 +457,47 @@ async def plugin_trigger(payload: Dict[str, Any], request: Request):
                 if len(params) == 0:
                     return await fn()
                 # Try keyword invocation first
-                try:
-                    return await fn(**(call_args or {}))
-                except TypeError as e:
-                    logger.debug("Keyword invocation failed for %s: %s, trying fallback", fn, e)
+                if accepts_kwargs or len(params) > 0:
+                    try:
+                        return await fn(**(call_args or {}))
+                    except TypeError as e:
+                        # 真正的 TypeError，不是签名不匹配
+                        if "keyword" not in str(e) and "argument" not in str(e):
+                            raise
+                        logger.debug("Keyword invocation failed for %s: %s, trying fallback", fn, e)
+                # 尝试单个位置参数
+                if accepts_single_arg:
                     # Fallback: try single positional dict
                     try:
                         return await fn(call_args or {})
                     except TypeError as e2:
-                        logger.debug("Positional invocation failed for %s: %s, trying no-arg", fn, e2)
-                        # As a last resort, try no-arg call
-                        return await fn()
+                        if "argument" not in str(e2):
+                            raise
+                        logger.debug("Positional invocation failed for %s: %s", fn, e2)
+                # 都不行就抛出错误
+                raise TypeError(f"Cannot find valid way to call {fn} with args {call_args}")
+ 
 
             def _call_sync():
                 if len(params) == 0:
                     return fn()
-                try:
-                    return fn(**(call_args or {}))
-                except TypeError:
+                if accepts_kwargs or len(params) > 0:
+                    try:
+                        return fn(**(call_args or {}))
+
+                    except TypeError as e:
+                        if "keyword" not in str(e) and "argument" not in str(e):
+                            raise
+                        logger.debug("Keyword invocation failed for %s: %s, trying fallback", fn, e)
+                if accepts_single_arg:
                     try:
                         return fn(call_args or {})
-                    except TypeError:
-                        return fn()
-
+                    except TypeError as e2:
+                        if "argument" not in str(e2):
+                            raise
+                        logger.debug("Positional invocation failed for %s: %s", fn, e2)
+                raise TypeError(f"Cannot find valid way to call {fn} with args {call_args}")
+                    
             if inspect.iscoroutinefunction(fn):
                 return await _call_async()
             else:
@@ -569,8 +603,10 @@ async def plugin_trigger(payload: Dict[str, Any], request: Request):
         raise
     except Exception as e:
         logger.exception("plugin_trigger: unexpected error")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=USER_PLUGIN_SERVER_PORT)
+    logging.basicConfig(level=logging.DEBUG)
+    host = "127.0.0.1"  # 默认只暴露本机喵
+    uvicorn.run(app, host=host, port=USER_PLUGIN_SERVER_PORT)

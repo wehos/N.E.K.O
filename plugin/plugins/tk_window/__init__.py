@@ -1,5 +1,6 @@
 import threading
 import tkinter as tk
+from typing import Any
 from plugin.decorators import neko_plugin, plugin_entry, on_event
 from plugin.plugin_base import NekoPluginBase
 
@@ -10,13 +11,13 @@ May contains unpredictable bugs and bug fix is not provided.
 """
 @neko_plugin
 class TkWindowPlugin(NekoPluginBase):
-    def __init__(self,ctx):
+    def __init__(self, ctx: Any):
         super().__init__(ctx)
         self._lock = threading.Lock()
-        self._started = False
-        self._thread = None
-        self._root = None
-        self._should_close = False
+        self._started: bool = False
+        self._thread: threading.Thread | None = None
+        self._root: tk.Tk | None = None
+        self._should_close: bool = False
 
     def _run_tk(self, title: str, message: str):
         root = tk.Tk()
@@ -44,7 +45,7 @@ class TkWindowPlugin(NekoPluginBase):
             self._root = None
             self._should_close = False
 
-    # 1) 一个 plugin_entry：对外可调用，“打开窗口”
+    # 1) 一个 plugin_entry:对外可调用,“打开窗口”
     @plugin_entry(
         id="open",
         name="Open a Tk window",
@@ -73,7 +74,7 @@ class TkWindowPlugin(NekoPluginBase):
         self.report_status({"started": True})
         return {"started": True, "info": "Tk window thread started"}
 
-    # 2) 另一个 plugin_entry：关闭窗口
+    # 2) 另一个 plugin_entry:关闭窗口
     @plugin_entry(
         id="close",
         name="Close Tk Window",
@@ -87,7 +88,7 @@ class TkWindowPlugin(NekoPluginBase):
             else:
                 return {"closed": False, "reason": "no window"}
 
-    # 3) 一个 lifecycle 事件：插件加载后自动调用
+    # 3) 一个 lifecycle 事件:插件加载后自动调用
     @on_event(
         event_type="lifecycle",
         id="on_start",
@@ -97,6 +98,6 @@ class TkWindowPlugin(NekoPluginBase):
         auto_start=True,
     )
     def on_start(self, **_):
-        # 这里可以放一些初始化逻辑，比如预加载配置等
+        # 这里可以放一些初始化逻辑,比如预加载配置等
         print("[tkWindow] plugin started")
         return {"status": "initialized"}
