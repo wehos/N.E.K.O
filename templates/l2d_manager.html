@@ -219,7 +219,6 @@
             <option value="" data-i18n="live2d.selectPersistentExpression">选择常驻表情</option>
         </select>
         <div id="persistent-list" style="display: none;"></div>
-        <button id="save-persistent-btn" class="btn btn-success" disabled style="margin-top: 8px;" data-i18n="live2d.savePersistent">保存常驻表情</button>
     </div>
 
     <div class="control-group">
@@ -892,11 +891,9 @@
         // 更新常驻表情选择框
         async function updatePersistentExpressionSelect() {
             const persistentSelect = document.getElementById('persistent-expression-select');
-            const savePersistentBtn = document.getElementById('save-persistent-btn');
             
             if (!currentModelFiles || !currentModelFiles.expression_files) {
                 persistentSelect.disabled = true;
-                savePersistentBtn.disabled = true;
                 return;
             }
             
@@ -913,7 +910,6 @@
             });
             
             persistentSelect.disabled = false;
-            savePersistentBtn.disabled = false;
         }
 
         // 加载已配置的常驻表情
@@ -1049,30 +1045,7 @@
             }
         };
 
-        // 保存常驻表情按钮
-        const savePersistentBtn = document.getElementById('save-persistent-btn');
-        savePersistentBtn.addEventListener('click', async () => {
-            if (!currentModelInfo) {
-                showStatus(t('live2d.pleaseLoadModel', '请先加载模型'), 2000);
-                return;
-            }
-            
-            showStatus(t('live2d.savingPersistentExpression', '正在保存常驻表情...'), 0);
-            
-            try {
-                const res = await fetch(`/api/live2d/emotion_mapping/${encodeURIComponent(currentModelInfo.name)}`);
-                const data = await res.json();
-                
-                if (data && data.success) {
-                    showStatus(t('live2d.persistentExpressionSaved', '常驻表情保存成功'), 2000);
-                } else {
-                    showStatus(t('live2d.persistentExpressionSaveFailed', '保存常驻表情失败'), 2000);
-                }
-            } catch (e) {
-                console.error('保存常驻表情失败:', e);
-                showStatus(t('live2d.persistentExpressionSaveFailed', '保存常驻表情失败'), 2000);
-            }
-        });
+        // 保存按钮已移除，因为表情在添加/删除时已自动保存
 
         // Helper functions
         function setControlsDisabled(disabled) {
@@ -1083,9 +1056,7 @@
             emotionManagerBtn.disabled = disabled;
             savePositionBtn.disabled = disabled;
             const persistentSelect = document.getElementById('persistent-expression-select');
-            const savePersistentBtn = document.getElementById('save-persistent-btn');
             if (persistentSelect) persistentSelect.disabled = disabled;
-            if (savePersistentBtn) savePersistentBtn.disabled = disabled;
         }
 
         function updateSelectWithOptions(select, options, defaultText, type) {
