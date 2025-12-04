@@ -1,10 +1,9 @@
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.responses import JSONResponse
-from typing import Optional
 import asyncio
 import threading
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from config import USER_PLUGIN_SERVER_PORT
 from pathlib import Path
@@ -41,7 +40,7 @@ EVENT_QUEUE_MAX = 1000
 _event_queue: asyncio.Queue = asyncio.Queue(maxsize=EVENT_QUEUE_MAX)
 
 def _now_iso() -> str:
-    return datetime.utcnow().isoformat() + "Z"
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 @app.get("/health")
 async def health():
@@ -104,7 +103,7 @@ async def plugin_status(plugin_id: Optional[str] = Query(default=None)):
             }
     except Exception as e:
         logger.exception("Failed to get plugin status")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 @app.get("/plugins")
 async def list_plugins():
     """
@@ -218,7 +217,7 @@ def _load_plugins_from_toml() -> None:
 
             # 实例化插件；如果将来想传 ctx，可以改成 cls(ctx)
             instance = cls()
-            setattr(instance, "_plugin_id", pid)     # ← 就加在这里
+            instance._plugin_id = pid  # 注入 plugin_id 供实例内部使用
             _plugin_instances[pid] = instance
             plugin_meta = {
                 "id": pid,
@@ -272,8 +271,8 @@ def _load_plugins_from_toml() -> None:
                     try:
                         _plugin_entry_method_map[(pid, str(eid))] = name
                     except Exception:
-                        pass
- 
+                        logger.debug("Failed to map entry method for %s.%s", pid, eid, exc_info=True)
+
                 # 新增：基于 plugin.toml 中列出的 entries（如果有），尝试为实例中对应的方法自动注册 EventHandler
                 try:
                     entries = conf.get("entries") or pdata.get("entries") or []
