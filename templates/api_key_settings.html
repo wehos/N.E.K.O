@@ -1087,10 +1087,10 @@ async function loadCurrentApiKey() {
             // 加载自定义API启用状态
             if (typeof data.enableCustomApi === 'boolean' && document.getElementById('enableCustomApi')) {
                 document.getElementById('enableCustomApi').checked = data.enableCustomApi;
-                // 延迟应用状态，确保API Key已正确加载
+                // 延迟应用状态，确保所有数据都已正确加载
                 setTimeout(() => {
                     toggleCustomApi();
-                }, 100);
+                }, 150);
             }
         } else {
             showCurrentApiKey('📋 获取当前API Key失败');
@@ -1805,7 +1805,17 @@ async function initializePage() {
             const selectedCoreApi = coreApiSelect.value;
             
             // 重新确认API输入框状态是否与当前配置一致
-            if (selectedCoreApi === 'free') {
+            // 首先检查是否启用了自定义API模式
+            const enableCustomApi = document.getElementById('enableCustomApi');
+            const isCustomApiEnabled = enableCustomApi && enableCustomApi.checked;
+            
+            if (isCustomApiEnabled) {
+                // 如果启用了自定义API模式，保持所有核心API相关控件的禁用状态
+                if (apiKeyInput) apiKeyInput.disabled = true;
+                if (coreApiSelect) coreApiSelect.disabled = true;
+                if (assistApiSelect) assistApiSelect.disabled = true;
+                freeVersionHint.style.display = 'none';
+            } else if (selectedCoreApi === 'free') {
                 // 如果是免费版，确保输入框被禁用
                 apiKeyInput.disabled = true;
                 apiKeyInput.placeholder = window.t ? window.t('api.freeVersionNoApiKey') : '免费版无需API Key';
@@ -1876,11 +1886,6 @@ async function initializePage() {
         
         // 标记页面已初始化完成，防止重复执行
         window.apiKeySettingsInitialized = true;
-        
-        // 页面初始化完成后立即应用自定义API状态，确保显示正确的禁用状态
-        setTimeout(() => {
-            toggleCustomApi();
-        }, 0);
         
     } catch (error) {
         console.error('页面初始化失败:', error);
