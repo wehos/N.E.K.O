@@ -4,7 +4,7 @@
 from copy import deepcopy
 import logging
 
-from config.prompts_chara import lanlan_prompt
+from config.prompts_chara import lanlan_prompt, get_lanlan_prompt_by_language, LANLAN_PROMPTS
 
 logger = logging.getLogger(__name__)
 
@@ -321,5 +321,8 @@ __all__ = [
     'DEFAULT_COMPUTER_USE_GROUND_MODEL',
     'DEFAULT_COMPUTER_USE_GROUND_URL',
     'DEFAULT_COMPUTER_USE_GROUND_API_KEY',
+    # 多语言 prompt 支持
+    'get_lanlan_prompt_by_language',
+    'LANLAN_PROMPTS',
 ]
 

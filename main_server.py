@@ -63,6 +63,7 @@ import pathlib, wave
 from openai import AsyncOpenAI
 from config import MAIN_SERVER_PORT, MONITOR_SERVER_PORT, MEMORY_SERVER_PORT, MODELS_WITH_EXTRA_BODY, TOOL_SERVER_PORT
 from config.prompts_sys import emotion_analysis_prompt, proactive_chat_prompt
+from config.prompts_chara import get_lanlan_prompt_by_language
 import glob
 from utils.config_manager import get_config_manager
 # 导入创意工坊工具模块
@@ -501,6 +502,123 @@ async def get_steam_language():
             "error": str(e),
             "steam_language": None,
             "i18n_language": None
+        }
+
+
+@app.post("/api/initialize_language")
+async def initialize_language(request: Request):
+    """
+    首次启动时初始化语言设置
+    根据用户的语言偏好更新默认角色的 system_prompt
+    这个 API 应该只在首次启动时调用
+    """
+    try:
+        data = await request.json()
+        language = data.get('language', 'zh-CN')
+        force_update = data.get('force_update', False)  # 是否强制更新所有角色的 prompt
+        
+        logger.info(f"[i18n] 初始化语言设置: {language}, force_update={force_update}")
+        
+        # 获取配置管理器
+        config_manager = get_config_manager()
+        
+        # 加载当前角色配置
+        character_data = config_manager.load_characters()
+        
+        # 检查是否是首次启动（检查是否有 language_initialized 标记）
+        config_path = config_manager.get_config_path('language_config.json')
+        is_first_launch = not config_path.exists()
+        
+        if not is_first_launch and not force_update:
+            logger.info("[i18n] 语言已初始化，跳过 prompt 更新")
+            return {
+                "success": True,
+                "message": "Language already initialized",
+                "language": language,
+                "updated": False
+            }
+        
+        # 获取对应语言的默认 prompt
+        localized_prompt = get_lanlan_prompt_by_language(language)
+        
+        # 更新所有使用默认 prompt 的角色
+        catgirl_data = character_data.get('猫娘', {})
+        updated_count = 0
+        
+        for catgirl_name, catgirl_config in catgirl_data.items():
+            current_prompt = catgirl_config.get('system_prompt', '')
+            # 检查是否是默认 prompt（通过检查关键特征）
+            # 如果用户已经自定义了 prompt，则不更新
+            is_default_prompt = (
+                '{LANLAN_NAME}' in current_prompt and 
+                '{MASTER_NAME}' in current_prompt and
+                ('fictional character' in current_prompt.lower() or '虚构角色' in current_prompt)
+            )
+            
+            if is_default_prompt or force_update:
+                catgirl_config['system_prompt'] = localized_prompt
+                updated_count += 1
+                logger.info(f"[i18n] 更新角色 '{catgirl_name}' 的 prompt 为 {language} 版本")
+        
+        # 保存更新后的角色配置
+        if updated_count > 0:
+            character_data['猫娘'] = catgirl_data
+            config_manager.save_characters(character_data)
+        
+        # 保存语言初始化标记
+        language_config = {
+            "initialized": True,
+            "language": language,
+            "updated_at": __import__('datetime').datetime.now().isoformat()
+        }
+        config_manager.save_json_config('language_config.json', language_config)
+        
+        logger.info(f"[i18n] 语言初始化完成，更新了 {updated_count} 个角色的 prompt")
+        
+        return {
+            "success": True,
+            "message": f"Language initialized to {language}",
+            "language": language,
+            "updated": True,
+            "updated_count": updated_count
+        }
+        
+    except Exception as e:
+        logger.error(f"初始化语言设置失败: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@app.get("/api/language_config")
+async def get_language_config():
+    """
+    获取当前语言配置
+    """
+    try:
+        config_manager = get_config_manager()
+        config_path = config_manager.get_config_path('language_config.json')
+        
+        if not config_path.exists():
+            return {
+                "success": True,
+                "initialized": False,
+                "language": None
+            }
+        
+        language_config = config_manager.load_json_config('language_config.json', default_value={})
+        return {
+            "success": True,
+            "initialized": language_config.get('initialized', False),
+            "language": language_config.get('language')
+        }
+        
+    except Exception as e:
+        logger.error(f"获取语言配置失败: {e}")
+        return {
+            "success": False,
+            "error": str(e)
         }
 
 
