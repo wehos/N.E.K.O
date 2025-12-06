@@ -124,7 +124,7 @@ def _plugin_process_runner(plugin_id: str, entry_point: str, config_path: Path,
     import logging
     import importlib
     import asyncio
-    
+    import inspect
     # 重新配置 Logger
     logging.basicConfig(level=logging.INFO, format=f'[Proc-{plugin_id}] %(message)s')
     logger = logging.getLogger(f"plugin.{plugin_id}")
@@ -138,8 +138,30 @@ def _plugin_process_runner(plugin_id: str, entry_point: str, config_path: Path,
         # 2. 实例化 (传入精简版 Context)
         ctx = PluginContext(plugin_id=plugin_id, logger=logger,config_path=config_path)
         instance = cls(ctx)
-        
+        entry_map = {}
         logger.info(f"Plugin instance created. Waiting for commands.")
+                # 1. 扫描装饰器 (@EventHandler)
+        for name, member in inspect.getmembers(instance, predicate=callable):
+            # 忽略私有方法，除非它是明确被装饰的
+            if name.startswith("_") and not hasattr(member, EVENT_META_ATTR):
+                continue
+
+            # 获取元数据
+            event_meta = getattr(member, EVENT_META_ATTR, None)
+            if not event_meta and hasattr(member, "__wrapped__"):
+                 event_meta = getattr(member.__wrapped__, EVENT_META_ATTR, None)
+
+            if event_meta:
+                # 如果有装饰器，用装饰器里的 ID (例如 "open")
+                eid = getattr(event_meta, "id", name)
+                entry_map[eid] = member
+                logger.debug(f"Mapped entry '{eid}' -> method '{name}'")
+            else:
+                # 如果没有装饰器，也把方法名本身作为 ID 存进去，方便直接调用
+                entry_map[name] = member
+
+        logger.info(f"Plugin instance created. Mapped entries: {list(entry_map.keys())}")
+        # ==========================================
 
         # 3. 命令循环
         while True:
@@ -157,8 +179,10 @@ def _plugin_process_runner(plugin_id: str, entry_point: str, config_path: Path,
                 args = msg['args']
                 req_id = msg['req_id']
                 
+                method = entry_map.get(entry_id)
                 # 简单反射查找方法
-                method = getattr(instance, entry_id, None)
+                if not method:
+                    method = getattr(instance, entry_id, None)
                 if not method:
                     # 尝试 fallback 命名
                     method = getattr(instance, f"entry_{entry_id}", None)
@@ -167,8 +191,8 @@ def _plugin_process_runner(plugin_id: str, entry_point: str, config_path: Path,
                 
                 try:
                     if not method:
-                        raise AttributeError(f"Method {entry_id} not found")
-                    
+                        raise AttributeError(f"Method {entry_id} not found in plugin")
+                    logger.info(f"Executing entry '{entry_id}' using method '{method.__name__}'")
                     if asyncio.iscoroutinefunction(method):
                         res = asyncio.run(method(**args))
                     else:
