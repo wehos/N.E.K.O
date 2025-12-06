@@ -996,17 +996,39 @@
                         const currentValue = coreModel.getParameterValueByIndex(i);
                         const initialValue = initialParameters[paramId] || 0;
 
-                        // 检测参数是否为整数类型
-                        // 如果初始值和当前值都是整数，且参数名包含某些关键词，认为是整数参数
-                        const isIntegerParam = Number.isInteger(initialValue) && Number.isInteger(currentValue) &&
-                            (paramId.toLowerCase().includes('index') || 
-                             paramId.toLowerCase().includes('id') ||
-                             paramId.toLowerCase().includes('count') ||
-                             paramId.toLowerCase().includes('num') ||
-                             paramName.includes('索引') ||
-                             paramName.includes('编号') ||
-                             paramName.includes('数量') ||
-                             paramName.includes('计数'));
+                        // 从 coreModel 获取参数的实际范围
+                        let paramMin = -1;
+                        let paramMax = 1;
+                        let paramDefault = 0;
+                        
+                        try {
+                            // 尝试获取参数的最大值和最小值
+                            if (typeof coreModel.getParameterMaximumValue === 'function') {
+                                paramMax = coreModel.getParameterMaximumValue(i);
+                            }
+                            if (typeof coreModel.getParameterMinimumValue === 'function') {
+                                paramMin = coreModel.getParameterMinimumValue(i);
+                            }
+                            if (typeof coreModel.getParameterDefaultValue === 'function') {
+                                paramDefault = coreModel.getParameterDefaultValue(i);
+                            }
+                        } catch (e) {
+                            // 如果SDK不支持这些方法，使用默认值
+                            // 大多数Live2D参数的范围是-1到1
+                        }
+
+                        // 确保范围有效
+                        if (!Number.isFinite(paramMin)) paramMin = -1;
+                        if (!Number.isFinite(paramMax)) paramMax = 1;
+                        if (paramMin >= paramMax) {
+                            // 如果范围无效，使用默认值
+                            paramMin = -1;
+                            paramMax = 1;
+                        }
+
+                        // 计算合适的步长（基于范围大小）
+                        const range = paramMax - paramMin;
+                        const step = range > 10 ? 0.1 : (range > 1 ? 0.01 : 0.001);
 
                         const paramItem = document.createElement('div');
                         paramItem.className = 'parameter-item';
@@ -1020,7 +1042,7 @@
 
                         const valueSpan = document.createElement('span');
                         valueSpan.className = 'parameter-value';
-                        valueSpan.textContent = isIntegerParam ? Math.round(currentValue).toString() : currentValue.toFixed(3);
+                        valueSpan.textContent = currentValue.toFixed(3);
 
                         header.appendChild(nameSpan);
                         header.appendChild(valueSpan);
@@ -1028,107 +1050,64 @@
                         const controls = document.createElement('div');
                         controls.className = 'parameter-controls';
 
-                        let slider, input;
-                        
-                        if (isIntegerParam) {
-                            // 整数参数：使用整数输入
-                            input = document.createElement('input');
-                            input.type = 'number';
-                            input.className = 'parameter-input';
-                            input.min = '-100';
-                            input.max = '100';
-                            input.step = '1';
-                            input.value = Math.round(currentValue);
-                            
-                            const updateParameter = (value) => {
-                                const numValue = parseInt(value);
-                                if (isNaN(numValue)) return;
-                                
-                                try {
-                                    coreModel.setParameterValueByIndex(i, numValue);
-                                    valueSpan.textContent = numValue.toString();
-                                    input.value = numValue;
-                                    currentParameters[paramId] = numValue;
-                                } catch (e) {
-                                    console.warn(`更新参数 ${paramId} 失败:`, e);
-                                }
-                            };
+                        // 所有参数都使用浮点数（Live2D的原生类型）
+                        const slider = document.createElement('input');
+                        slider.type = 'range';
+                        slider.className = 'parameter-slider';
+                        slider.min = paramMin.toString();
+                        slider.max = paramMax.toString();
+                        slider.step = step.toString();
+                        slider.value = currentValue;
 
-                            input.addEventListener('input', (e) => {
-                                updateParameter(e.target.value);
-                            });
-                        } else {
-                            // 浮点数参数：使用滑块和数字输入
-                            slider = document.createElement('input');
-                            slider.type = 'range';
-                            slider.className = 'parameter-slider';
-                            slider.min = '-1';
-                            slider.max = '1';
-                            slider.step = '0.01';
-                            slider.value = currentValue;
+                        const input = document.createElement('input');
+                        input.type = 'number';
+                        input.className = 'parameter-input';
+                        input.min = paramMin.toString();
+                        input.max = paramMax.toString();
+                        input.step = step.toString();
+                        input.value = currentValue;
 
-                            input = document.createElement('input');
-                            input.type = 'number';
-                            input.className = 'parameter-input';
-                            input.min = '-1';
-                            input.max = '1';
-                            input.step = '0.01';
-                            input.value = currentValue;
+                        const updateParameter = (value) => {
+                            const numValue = parseFloat(value);
+                            if (isNaN(numValue)) return;
 
-                            const updateParameter = (value) => {
-                                const numValue = parseFloat(value);
-                                if (isNaN(numValue)) return;
+                            // 使用参数的实际范围进行限制
+                            const clampedValue = Math.max(paramMin, Math.min(paramMax, numValue));
+                            try {
+                                coreModel.setParameterValueByIndex(i, clampedValue);
+                                valueSpan.textContent = clampedValue.toFixed(3);
+                                slider.value = clampedValue;
+                                input.value = clampedValue;
+                                currentParameters[paramId] = clampedValue;
+                            } catch (e) {
+                                console.warn(`更新参数 ${paramId} 失败:`, e);
+                            }
+                        };
 
-                                const clampedValue = Math.max(-1, Math.min(1, numValue));
-                                try {
-                                    coreModel.setParameterValueByIndex(i, clampedValue);
-                                    valueSpan.textContent = clampedValue.toFixed(3);
-                                    slider.value = clampedValue;
-                                    input.value = clampedValue;
-                                    currentParameters[paramId] = clampedValue;
-                                } catch (e) {
-                                    console.warn(`更新参数 ${paramId} 失败:`, e);
-                                }
-                            };
+                        slider.addEventListener('input', (e) => {
+                            updateParameter(e.target.value);
+                        });
 
-                            slider.addEventListener('input', (e) => {
-                                updateParameter(e.target.value);
-                            });
-
-                            input.addEventListener('input', (e) => {
-                                updateParameter(e.target.value);
-                            });
-                        }
+                        input.addEventListener('input', (e) => {
+                            updateParameter(e.target.value);
+                        });
 
                         const resetBtn = document.createElement('button');
                         resetBtn.className = 'btn-reset';
                         resetBtn.textContent = t('live2d.parameterEditor.reset', '重置');
                         
                         resetBtn.addEventListener('click', () => {
-                            if (isIntegerParam) {
-                                const resetValue = Math.round(initialValue);
-                                const numValue = parseInt(resetValue);
-                                if (!isNaN(numValue)) {
-                                    try {
-                                        coreModel.setParameterValueByIndex(i, numValue);
-                                        valueSpan.textContent = numValue.toString();
-                                        input.value = numValue;
-                                        currentParameters[paramId] = numValue;
-                                    } catch (e) {
-                                        console.warn(`重置参数 ${paramId} 失败:`, e);
-                                    }
-                                }
-                            } else {
-                                const clampedValue = Math.max(-1, Math.min(1, initialValue));
-                                try {
-                                    coreModel.setParameterValueByIndex(i, clampedValue);
-                                    valueSpan.textContent = clampedValue.toFixed(3);
-                                    slider.value = clampedValue;
-                                    input.value = clampedValue;
-                                    currentParameters[paramId] = clampedValue;
-                                } catch (e) {
-                                    console.warn(`重置参数 ${paramId} 失败:`, e);
-                                }
+                            // 使用初始值或默认值
+                            const resetValue = initialParameters.hasOwnProperty(paramId) ? initialValue : paramDefault;
+                            const clampedValue = Math.max(paramMin, Math.min(paramMax, resetValue));
+                            try {
+                                coreModel.setParameterValueByIndex(i, clampedValue);
+                                valueSpan.textContent = clampedValue.toFixed(3);
+                                slider.value = clampedValue;
+                                input.value = clampedValue;
+                                currentParameters[paramId] = clampedValue;
+                            } catch (e) {
+                                console.warn(`重置参数 ${paramId} 失败:`, e);
                             }
                         });
 
