@@ -22,17 +22,59 @@ Live2DManager.prototype.setupHTMLLockIcon = function(model) {
 
     const lockIcon = document.createElement('div');
     lockIcon.id = 'live2d-lock-icon';
-    lockIcon.innerText = this.isLocked ? '🔒' : '🔓';
     Object.assign(lockIcon.style, {
         position: 'fixed',
-        zIndex: '30',
-        fontSize: '24px',
+        zIndex: '99999',  // 确保始终浮动在顶层，不被live2d遮挡
+        width: '32px',
+        height: '32px',
         cursor: 'pointer',
         userSelect: 'none',
-        textShadow: '0 0 4px black',
         pointerEvents: 'auto',
         display: 'none' // 默认隐藏
     });
+    
+    // 添加版本号防止缓存
+    const iconVersion = '?v=' + Date.now();
+    
+    // 创建图片容器
+    const imgContainer = document.createElement('div');
+    Object.assign(imgContainer.style, {
+        position: 'relative',
+        width: '32px',
+        height: '32px'
+    });
+    
+    // 创建锁定状态图片
+    const imgLocked = document.createElement('img');
+    imgLocked.src = '/static/icons/locked_icon.png' + iconVersion;
+    imgLocked.alt = 'Locked';
+    Object.assign(imgLocked.style, {
+        position: 'absolute',
+        width: '32px',
+        height: '32px',
+        objectFit: 'contain',
+        pointerEvents: 'none',
+        opacity: this.isLocked ? '1' : '0',
+        transition: 'opacity 0.3s ease'
+    });
+    
+    // 创建解锁状态图片
+    const imgUnlocked = document.createElement('img');
+    imgUnlocked.src = '/static/icons/unlocked_icon.png' + iconVersion;
+    imgUnlocked.alt = 'Unlocked';
+    Object.assign(imgUnlocked.style, {
+        position: 'absolute',
+        width: '32px',
+        height: '32px',
+        objectFit: 'contain',
+        pointerEvents: 'none',
+        opacity: this.isLocked ? '0' : '1',
+        transition: 'opacity 0.3s ease'
+    });
+    
+    imgContainer.appendChild(imgLocked);
+    imgContainer.appendChild(imgUnlocked);
+    lockIcon.appendChild(imgContainer);
 
     document.body.appendChild(lockIcon);
     this._lockIconElement = lockIcon;
@@ -40,12 +82,25 @@ Live2DManager.prototype.setupHTMLLockIcon = function(model) {
     lockIcon.addEventListener('click', (e) => {
         e.stopPropagation();
         this.isLocked = !this.isLocked;
-        lockIcon.innerText = this.isLocked ? '🔒' : '🔓';
+        
+        // 切换图标显示
+        imgLocked.style.opacity = this.isLocked ? '1' : '0';
+        imgUnlocked.style.opacity = this.isLocked ? '0' : '1';
 
         if (this.isLocked) {
             container.style.pointerEvents = 'none';
+            // 锁定时隐藏浮动菜单
+            const floatingButtons = document.getElementById('live2d-floating-buttons');
+            if (floatingButtons) {
+                floatingButtons.style.display = 'none';
+            }
         } else {
             container.style.pointerEvents = 'auto';
+            // 解锁时显示浮动菜单
+            const floatingButtons = document.getElementById('live2d-floating-buttons');
+            if (floatingButtons) {
+                floatingButtons.style.display = 'flex';
+            }
         }
     });
 
@@ -100,12 +155,27 @@ Live2DManager.prototype.setupFloatingButtons = function(model) {
     buttonsContainer.id = 'live2d-floating-buttons';
     Object.assign(buttonsContainer.style, {
         position: 'fixed',
-        zIndex: '30',
+        zIndex: '99999',  // 确保始终浮动在顶层，不被live2d遮挡
         pointerEvents: 'none',
         display: 'none', // 初始隐藏，鼠标靠近时才显示
         flexDirection: 'column',
         gap: '12px'
     });
+    
+    // 阻止浮动按钮容器上的指针事件传播到window，避免触发live2d拖拽
+    const stopContainerEvent = (e) => {
+        e.stopPropagation();
+    };
+    buttonsContainer.addEventListener('pointerdown', stopContainerEvent, true);
+    buttonsContainer.addEventListener('pointermove', stopContainerEvent, true);
+    buttonsContainer.addEventListener('pointerup', stopContainerEvent, true);
+    buttonsContainer.addEventListener('mousedown', stopContainerEvent, true);
+    buttonsContainer.addEventListener('mousemove', stopContainerEvent, true);
+    buttonsContainer.addEventListener('mouseup', stopContainerEvent, true);
+    buttonsContainer.addEventListener('touchstart', stopContainerEvent, true);
+    buttonsContainer.addEventListener('touchmove', stopContainerEvent, true);
+    buttonsContainer.addEventListener('touchend', stopContainerEvent, true);
+    
     document.body.appendChild(buttonsContainer);
     this._floatingButtonsContainer = buttonsContainer;
 
@@ -151,6 +221,20 @@ Live2DManager.prototype.setupFloatingButtons = function(model) {
         btnWrapper.style.display = 'flex';
         btnWrapper.style.alignItems = 'center';
         btnWrapper.style.gap = '8px';
+
+        // 阻止包装器上的指针事件传播到window，避免触发live2d拖拽
+        const stopWrapperEvent = (e) => {
+            e.stopPropagation();
+        };
+        btnWrapper.addEventListener('pointerdown', stopWrapperEvent, true);
+        btnWrapper.addEventListener('pointermove', stopWrapperEvent, true);
+        btnWrapper.addEventListener('pointerup', stopWrapperEvent, true);
+        btnWrapper.addEventListener('mousedown', stopWrapperEvent, true);
+        btnWrapper.addEventListener('mousemove', stopWrapperEvent, true);
+        btnWrapper.addEventListener('mouseup', stopWrapperEvent, true);
+        btnWrapper.addEventListener('touchstart', stopWrapperEvent, true);
+        btnWrapper.addEventListener('touchmove', stopWrapperEvent, true);
+        btnWrapper.addEventListener('touchend', stopWrapperEvent, true);
 
         const btn = document.createElement('div');
         btn.id = `live2d-btn-${config.id}`;
@@ -241,6 +325,20 @@ Live2DManager.prototype.setupFloatingButtons = function(model) {
             transition: 'all 0.1s ease',  // Fluent 快速响应
             pointerEvents: 'auto'
         });
+
+        // 阻止按钮上的指针事件传播到window，避免触发live2d拖拽
+        const stopBtnEvent = (e) => {
+            e.stopPropagation();
+        };
+        btn.addEventListener('pointerdown', stopBtnEvent, true);
+        btn.addEventListener('pointermove', stopBtnEvent, true);
+        btn.addEventListener('pointerup', stopBtnEvent, true);
+        btn.addEventListener('mousedown', stopBtnEvent, true);
+        btn.addEventListener('mousemove', stopBtnEvent, true);
+        btn.addEventListener('mouseup', stopBtnEvent, true);
+        btn.addEventListener('touchstart', stopBtnEvent, true);
+        btn.addEventListener('touchmove', stopBtnEvent, true);
+        btn.addEventListener('touchend', stopBtnEvent, true);
 
         // 鼠标悬停效果 - Fluent Design
         btn.addEventListener('mouseenter', () => {
@@ -420,6 +518,20 @@ Live2DManager.prototype.setupFloatingButtons = function(model) {
                     marginLeft: '-10px'
                 });
                 
+                // 阻止三角按钮上的指针事件传播到window，避免触发live2d拖拽
+                const stopTriggerEvent = (e) => {
+                    e.stopPropagation();
+                };
+                triggerBtn.addEventListener('pointerdown', stopTriggerEvent, true);
+                triggerBtn.addEventListener('pointermove', stopTriggerEvent, true);
+                triggerBtn.addEventListener('pointerup', stopTriggerEvent, true);
+                triggerBtn.addEventListener('mousedown', stopTriggerEvent, true);
+                triggerBtn.addEventListener('mousemove', stopTriggerEvent, true);
+                triggerBtn.addEventListener('mouseup', stopTriggerEvent, true);
+                triggerBtn.addEventListener('touchstart', stopTriggerEvent, true);
+                triggerBtn.addEventListener('touchmove', stopTriggerEvent, true);
+                triggerBtn.addEventListener('touchend', stopTriggerEvent, true);
+
                 triggerBtn.addEventListener('mouseenter', () => {
                     triggerBtn.style.transform = 'scale(1.05)';
                     triggerBtn.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.08), 0 8px 16px rgba(0, 0, 0, 0.08)';
@@ -445,6 +557,21 @@ Live2DManager.prototype.setupFloatingButtons = function(model) {
                 // 创建包装器用于三角按钮和弹出框（相对定位）
                 const triggerWrapper = document.createElement('div');
                 triggerWrapper.style.position = 'relative';
+                
+                // 阻止包装器上的指针事件传播到window，避免触发live2d拖拽
+                const stopTriggerWrapperEvent = (e) => {
+                    e.stopPropagation();
+                };
+                triggerWrapper.addEventListener('pointerdown', stopTriggerWrapperEvent, true);
+                triggerWrapper.addEventListener('pointermove', stopTriggerWrapperEvent, true);
+                triggerWrapper.addEventListener('pointerup', stopTriggerWrapperEvent, true);
+                triggerWrapper.addEventListener('mousedown', stopTriggerWrapperEvent, true);
+                triggerWrapper.addEventListener('mousemove', stopTriggerWrapperEvent, true);
+                triggerWrapper.addEventListener('mouseup', stopTriggerWrapperEvent, true);
+                triggerWrapper.addEventListener('touchstart', stopTriggerWrapperEvent, true);
+                triggerWrapper.addEventListener('touchmove', stopTriggerWrapperEvent, true);
+                triggerWrapper.addEventListener('touchend', stopTriggerWrapperEvent, true);
+                
                 triggerWrapper.appendChild(triggerBtn);
                 triggerWrapper.appendChild(popup);
                 
@@ -479,7 +606,7 @@ Live2DManager.prototype.setupFloatingButtons = function(model) {
         top: '0',
         left: '0',
         transform: 'none',
-        zIndex: '30',
+        zIndex: '99999',  // 确保始终浮动在顶层，不被live2d遮挡
         pointerEvents: 'auto', // 允许交互，包括拖动
         display: 'none' // 初始隐藏，只在点击"请她离开"后显示
     });
@@ -574,6 +701,12 @@ Live2DManager.prototype.setupFloatingButtons = function(model) {
     container.style.pointerEvents = this.isLocked ? 'none' : 'auto';
 
     // 持续更新按钮位置（在角色腰部右侧，垂直居中）
+    // 基准按钮尺寸和工具栏高度（用于计算缩放）
+    const baseButtonSize = 48;
+    const baseGap = 12;
+    const buttonCount = 5;
+    const baseToolbarHeight = baseButtonSize * buttonCount + baseGap * (buttonCount - 1); // 288px
+    
     const tick = () => {
         try {
             if (!model || !model.parent) {
@@ -587,19 +720,39 @@ Live2DManager.prototype.setupFloatingButtons = function(model) {
             const screenWidth = window.innerWidth;
             const screenHeight = window.innerHeight;
 
+            // 计算模型实际高度
+            const modelHeight = bounds.bottom - bounds.top;
+            
+            // 计算目标工具栏高度（模型高度的一半）
+            const targetToolbarHeight = modelHeight / 2;
+            
+            // 计算缩放比例（限制在合理范围内，防止按钮太小或太大）
+            const minScale = 0.5;  // 最小缩放50%
+            const maxScale = 1.;  // 最大缩放120%
+            const rawScale = targetToolbarHeight / baseToolbarHeight;
+            const scale = Math.max(minScale, Math.min(maxScale, rawScale));
+            
+            // 应用缩放到容器（使用 transform-origin: left top 确保从左上角缩放）
+            buttonsContainer.style.transformOrigin = 'left top';
+            buttonsContainer.style.transform = `scale(${scale})`;
+
             // X轴：定位在角色右侧（与锁按钮类似的横向位置）
             const targetX = bounds.right * 0.8 + bounds.left * 0.2;
             
-            // Y轴：工具栏下边缘对齐模型腰部（中间位置）
+            // Y轴：工具栏中心与模型中心对齐
             const modelCenterY = (bounds.top + bounds.bottom) / 2;
-            // 估算工具栏高度：5个按钮(48px) + 4个间隔(12px) = 288px
-            const estimatedToolbarHeight = 200;
-            // 让工具栏的下边缘位于模型中间，所以top = 中间 - 高度
-            const targetY = modelCenterY - estimatedToolbarHeight;
+            // 使用缩放后的实际工具栏高度
+            const actualToolbarHeight = baseToolbarHeight * scale;
+            // 让工具栏的中心位于模型中间，所以top = 中间 - 高度/2
+            const targetY = modelCenterY - actualToolbarHeight / 2;
+            
+            // 边界限制：确保不超出屏幕顶部和底部
+            const minY = 20; // 距离屏幕顶部的最小距离
+            const maxY = screenHeight - actualToolbarHeight - 20; // 距离屏幕底部的最小距离
+            const boundedY = Math.max(minY, Math.min(targetY, maxY));
 
-            buttonsContainer.style.left = `${Math.min(targetX, screenWidth - 80)}px`;
-            // 确保工具栏不会超出屏幕顶部
-            buttonsContainer.style.top = `${Math.max(targetY, 20)}px`;
+            buttonsContainer.style.left = `${Math.min(targetX, screenWidth - 80 * scale)}px`;
+            buttonsContainer.style.top = `${boundedY}px`;
             // 不要在这里设置 display，让鼠标检测逻辑来控制显示/隐藏
         } catch (_) {
             // 忽略单帧异常
@@ -611,8 +764,12 @@ Live2DManager.prototype.setupFloatingButtons = function(model) {
     // 为按钮容器添加拖动功能
     this.setupButtonsContainerDrag(buttonsContainer);
     
-    // 页面加载时先显示5秒
+    // 页面加载时先显示5秒（锁定状态下不显示）
     setTimeout(() => {
+        // 锁定状态下不显示浮动按钮容器
+        if (this.isLocked) {
+            return;
+        }
         // 显示浮动按钮容器
         buttonsContainer.style.display = 'flex';
         
@@ -643,6 +800,7 @@ Live2DManager.prototype.createPopup = function(buttonId) {
         left: '100%',
         top: '0',
         marginLeft: '8px',
+        zIndex: '100000',  // 确保弹出菜单置顶，不被任何元素遮挡
         background: 'rgba(255, 255, 255, 0.65)',  // Fluent Acrylic
         backdropFilter: 'saturate(180%) blur(20px)',  // Fluent 标准模糊
         border: '1px solid rgba(255, 255, 255, 0.18)',  // 微妙高光边框
@@ -660,6 +818,20 @@ Live2DManager.prototype.createPopup = function(buttonId) {
         transform: 'translateX(-10px)',
         transition: 'opacity 0.2s cubic-bezier(0.1, 0.9, 0.2, 1), transform 0.2s cubic-bezier(0.1, 0.9, 0.2, 1)'  // Fluent 动画曲线
     });
+
+    // 阻止弹出菜单上的指针事件传播到window，避免触发live2d拖拽
+    const stopEventPropagation = (e) => {
+        e.stopPropagation();
+    };
+    popup.addEventListener('pointerdown', stopEventPropagation, true);
+    popup.addEventListener('pointermove', stopEventPropagation, true);
+    popup.addEventListener('pointerup', stopEventPropagation, true);
+    popup.addEventListener('mousedown', stopEventPropagation, true);
+    popup.addEventListener('mousemove', stopEventPropagation, true);
+    popup.addEventListener('mouseup', stopEventPropagation, true);
+    popup.addEventListener('touchstart', stopEventPropagation, true);
+    popup.addEventListener('touchmove', stopEventPropagation, true);
+    popup.addEventListener('touchend', stopEventPropagation, true);
 
     // 根据不同按钮创建不同的弹出内容
     if (buttonId === 'mic') {
@@ -1350,6 +1522,24 @@ Live2DManager.prototype._setupDragging = function(hud) {
             100% { transform: translateX(-100%); }
         }
         
+        /* 请她回来按钮呼吸特效 */
+        @keyframes returnButtonBreathing {
+            0%, 100% {
+                box-shadow: 0 0 8px rgba(68, 183, 254, 0.6), 0 2px 4px rgba(0, 0, 0, 0.04), 0 8px 16px rgba(0, 0, 0, 0.08);
+            }
+            50% {
+                box-shadow: 0 0 18px rgba(68, 183, 254, 1), 0 2px 4px rgba(0, 0, 0, 0.04), 0 8px 16px rgba(0, 0, 0, 0.08);
+            }
+        }
+        
+        #live2d-btn-return {
+            animation: returnButtonBreathing 2s ease-in-out infinite;
+        }
+        
+        #live2d-btn-return:hover {
+            animation: none;
+        }
+        
         #agent-task-hud::-webkit-scrollbar {
             width: 4px;
         }
@@ -1895,7 +2085,7 @@ Live2DManager.prototype._createSettingsMenuItems = function(popup) {
         { id: 'character', label: window.t ? window.t('settings.menu.characterManage') : '角色管理', labelKey: 'settings.menu.characterManage', icon: '/static/icons/character_icon.png', action: 'navigate', url: '/chara_manager' },
         { id: 'voice-clone', label: window.t ? window.t('settings.menu.voiceClone') : '声音克隆', labelKey: 'settings.menu.voiceClone', icon: '/static/icons/voice_clone_icon.png', action: 'navigate', url: '/voice_clone' },
         { id: 'memory', label: window.t ? window.t('settings.menu.memoryBrowser') : '记忆浏览', labelKey: 'settings.menu.memoryBrowser', icon: '/static/icons/memory_icon.png', action: 'navigate', url: '/memory_browser' },
-        { id: 'steam-workshop', label: '创意工坊', icon: '/static/icons/Steam_icon_logo.png', action: 'navigate', url: '/steam_workshop_manager' },
+        { id: 'steam-workshop', label: window.t ? window.t('settings.menu.steamWorkshop') : '创意工坊', labelKey: 'settings.menu.steamWorkshop', icon: '/static/icons/Steam_icon_logo.png', action: 'navigate', url: '/steam_workshop_manager' },
     ];
     
     settingsItems.forEach(item => {

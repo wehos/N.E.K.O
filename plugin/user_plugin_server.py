@@ -10,6 +10,13 @@ from config import USER_PLUGIN_SERVER_PORT
 from pathlib import Path
 import importlib
 import inspect
+import multiprocessing
+import traceback
+from multiprocessing import Queue
+from queue import Empty
+import uuid
+import time
+
 from plugin.event_base import EventHandler,EVENT_META_ATTR
 # Python 3.11 有 tomllib；低版本可用 tomli 兼容
 try:
@@ -23,10 +30,10 @@ logger = logging.getLogger("user_plugin_server")
 
 @dataclass
 class PluginContext:
-    app: FastAPI
     plugin_id: str
-    logger: logging.Logger
     config_path: Path
+    logger:logging.Logger
+    app: Optional[FastAPI] = None
 
 # In-memory plugin registry (initially empty). Plugins are dicts with keys:
 # { "id": str, "name": str, "description": str, "endpoint": str, "input_schema": dict }
@@ -43,12 +50,7 @@ _plugin_entry_method_map: Dict[tuple, str] = {}
 # Where to look for plugin.toml files: ./plugins/<any>/plugin.toml
 PLUGIN_CONFIG_ROOT = Path(__file__).parent / "plugins"
 # Simple bounded in-memory event queue for inspection
-_event_queue = None
-
-@app.on_event("startup")
-async def _init_event_queue():
-    global _event_queue
-    _event_queue = asyncio.Queue(maxsize=EVENT_QUEUE_MAX)
+EVENT_QUEUE_MAX = 1000
 _event_queue: asyncio.Queue = asyncio.Queue(maxsize=EVENT_QUEUE_MAX)
 
 def _now_iso() -> str:
@@ -116,6 +118,150 @@ async def plugin_status(plugin_id: Optional[str] = Query(default=None)):
     except Exception as e:
         logger.exception("Failed to get plugin status")
         raise HTTPException(status_code=500, detail=str(e)) from e
+# --- 子进程运行函数 (独立运行在另一个进程空间) ---
+def _plugin_process_runner(plugin_id: str, entry_point: str, config_path: Path, 
+                           cmd_queue: Queue, res_queue: Queue, status_queue: Queue):
+    import logging
+    import importlib
+    import asyncio
+    import inspect
+    # 重新配置 Logger
+    logging.basicConfig(level=logging.INFO, format=f'[Proc-{plugin_id}] %(message)s')
+    logger = logging.getLogger(f"plugin.{plugin_id}")
+
+    try:
+        # 1. 动态加载
+        module_path, class_name = entry_point.split(":", 1)
+        mod = importlib.import_module(module_path)
+        cls = getattr(mod, class_name)
+
+        # 2. 实例化 (传入精简版 Context)
+        ctx = PluginContext(plugin_id=plugin_id, logger=logger,config_path=config_path)
+        instance = cls(ctx)
+        entry_map = {}
+        logger.info(f"Plugin instance created. Waiting for commands.")
+                # 1. 扫描装饰器 (@EventHandler)
+        for name, member in inspect.getmembers(instance, predicate=callable):
+            # 忽略私有方法，除非它是明确被装饰的
+            if name.startswith("_") and not hasattr(member, EVENT_META_ATTR):
+                continue
+
+            # 获取元数据
+            event_meta = getattr(member, EVENT_META_ATTR, None)
+            if not event_meta and hasattr(member, "__wrapped__"):
+                 event_meta = getattr(member.__wrapped__, EVENT_META_ATTR, None)
+
+            if event_meta:
+                # 如果有装饰器，用装饰器里的 ID (例如 "open")
+                eid = getattr(event_meta, "id", name)
+                entry_map[eid] = member
+                logger.debug(f"Mapped entry '{eid}' -> method '{name}'")
+            else:
+                # 如果没有装饰器，也把方法名本身作为 ID 存进去，方便直接调用
+                entry_map[name] = member
+
+        logger.info(f"Plugin instance created. Mapped entries: {list(entry_map.keys())}")
+        # ==========================================
+
+        # 3. 命令循环
+        while True:
+            try:
+                msg = cmd_queue.get(timeout=1.0)
+            except Empty:
+                continue
+
+            if msg['type'] == 'STOP':
+                break
+            
+            if msg['type'] == 'TRIGGER':
+                # 执行具体方法...
+                entry_id = msg['entry_id']
+                args = msg['args']
+                req_id = msg['req_id']
+                
+                method = entry_map.get(entry_id)
+                # 简单反射查找方法
+                if not method:
+                    method = getattr(instance, entry_id, None)
+                if not method:
+                    # 尝试 fallback 命名
+                    method = getattr(instance, f"entry_{entry_id}", None)
+
+                ret_payload = {"req_id": req_id, "success": False, "data": None, "error": None}
+                
+                try:
+                    if not method:
+                        raise AttributeError(f"Method {entry_id} not found in plugin")
+                    logger.info(f"Executing entry '{entry_id}' using method '{method.__name__}'")
+                    if asyncio.iscoroutinefunction(method):
+                        res = asyncio.run(method(**args))
+                    else:
+                        # 简单的参数调用尝试
+                        try:
+                            res = method(**args)
+                        except TypeError:
+                            res = method(args)
+                    
+                    ret_payload["success"] = True
+                    ret_payload["data"] = res
+                except Exception as e:
+                    logger.error(f"Error executing {entry_id}: {e}")
+                    ret_payload["error"] = str(e)
+                
+                res_queue.put(ret_payload)
+
+    except Exception as e:
+        logger.exception("Process crashed")
+
+# --- 主进程控制类 ---
+class PluginProcessHost:
+    def __init__(self, plugin_id: str, entry_point: str, config_path: Path):
+        self.plugin_id = plugin_id
+        self.cmd_queue = multiprocessing.Queue()
+        self.res_queue = multiprocessing.Queue()
+        self.status_queue = multiprocessing.Queue()
+        
+        self.process = multiprocessing.Process(
+            target=_plugin_process_runner,
+            args=(plugin_id, entry_point, config_path, 
+                  self.cmd_queue, self.res_queue, self.status_queue),
+            daemon=True
+        )
+        self.process.start()
+
+    async def trigger(self, entry_id: str, args: dict, timeout=10.0):
+        import uuid, time, asyncio
+        req_id = str(uuid.uuid4())
+        
+        self.cmd_queue.put({
+            "type": "TRIGGER", "req_id": req_id, 
+            "entry_id": entry_id, "args": args
+        })
+        
+        # 轮询获取结果 (为了不阻塞 EventLoop，使用 run_in_executor)
+        loop = asyncio.get_running_loop()
+        start = time.time()
+        
+        while time.time() - start < timeout:
+            try:
+                # 尝试非阻塞读
+                res = await loop.run_in_executor(None, self._get_result_safe)
+                if res and res['req_id'] == req_id:
+                    if res['success']: return res['data']
+                    else: raise Exception(res['error'])
+            except Empty:
+                await asyncio.sleep(0.05)
+        
+        raise TimeoutError("Plugin execution timed out")
+
+    def _get_result_safe(self):
+        try:
+            return self.res_queue.get_nowait()
+        except Empty:
+            return None
+
+
+_plugin_hosts: Dict[str, PluginProcessHost] = {} 
 @app.get("/plugins")
 async def list_plugins():
     """
@@ -191,164 +337,121 @@ def _register_plugin(plugin: Dict[str, Any]) -> None:
 
 def _load_plugins_from_toml() -> None:
     """
-    扫描 ./plugins/*/plugin.toml，按配置加载插件类并实例化。
-    每个 plugin.toml 形如：
-
-        [plugin]
-        id = "testPlugin"
-        name = "Test Plugin"
-        description = "Minimal plugin used for local testing"
-        version = "0.1.0"
-        entry = "plugins.hello:HelloPlugin"
+    扫描插件配置，启动子进程，并静态扫描元数据用于注册列表。
     """
     if not PLUGIN_CONFIG_ROOT.exists():
-        logger.info("No plugin config directory %s, skipping TOML loading", PLUGIN_CONFIG_ROOT)
+        logger.info("No plugin config directory %s, skipping", PLUGIN_CONFIG_ROOT)
         return
 
     logger.info("Loading plugins from %s", PLUGIN_CONFIG_ROOT)
     for toml_path in PLUGIN_CONFIG_ROOT.glob("*/plugin.toml"):
         try:
+            # 1. 解析 TOML
             with toml_path.open("rb") as f:
                 conf = tomllib.load(f)
             pdata = conf.get("plugin") or {}
             pid = pdata.get("id")
-            if not pid:
-                logger.warning("plugin.toml %s missing [plugin].id, skipping", toml_path)
-                continue
+            if not pid: continue
+            
+            entry = pdata.get("entry") # e.g. "plugins.demo:DemoPlugin"
+            if not entry or ":" not in entry: continue
 
-            name = pdata.get("name", pid)
-            desc = pdata.get("description", "")
-            version = pdata.get("version", "0.1.0")
-            entry = pdata.get("entry")
-            if not entry or ":" not in entry:
-                logger.warning("plugin.toml %s has invalid entry=%r, skipping", toml_path, entry)
-                continue
-
+            # 2. 静态导入类 (用于提取元数据，不实例化)
             module_path, class_name = entry.split(":", 1)
-            mod = importlib.import_module(module_path)
-            cls = getattr(mod, class_name)
-            # 构造一个简单的上下文 ctx 传给插件
-            plugin_logger = logger.getChild(pid)
-            ctx = PluginContext(
-                app=app,          # FastAPI 实例，插件需要时可以用
-                plugin_id= pid,    # 当前插件 id
-                logger=plugin_logger,
-                config_path=toml_path,  # 这个也可以传进去，随意
-            )
-            # 实例化插件；如果将来想传 ctx，可以改成 cls(ctx)
-            instance = cls(ctx)
-            instance._plugin_id = pid  # 注入 plugin_id 供实例内部使用
-            _plugin_instances[pid] = instance
+            try:
+                mod = importlib.import_module(module_path)
+                cls = getattr(mod, class_name)
+            except Exception as e:
+                logger.error(f"Failed to import plugin class {entry}: {e}")
+                continue
+
+            # 3. [关键步骤] 启动子进程宿主
+            # 我们把 entry 字符串和配置路径传进去，让子进程自己去 import 和实例化
+            try:
+                host = PluginProcessHost(
+                    plugin_id=pid,
+                    entry_point=entry,
+                    config_path=toml_path
+                )
+                _plugin_hosts[pid] = host
+            except Exception as e:
+                logger.exception(f"Failed to start process for plugin {pid}")
+                continue
+
+            # 4. [关键步骤] 静态扫描类中的元数据
+            # 目的：填充 _event_handlers，这样 /plugins 接口依然能显示插件有哪些功能
+            # 注意：这里的 handler 只是未绑定的函数，主进程绝对不能调用它！
+            _scan_static_metadata(pid, cls, conf, pdata)
+
+            # 5. 注册基础插件信息
             plugin_meta = {
                 "id": pid,
-                "name": name,
-                "description": desc,
-                "version": version,
-                # 不再填充 endpoint 字段，避免暴露本地地址/端口
-                # "endpoint": endpoint,
-                # 短期：如果插件类上有 input_schema 属性，就用；否则给个空 schema
-                "input_schema": getattr(instance, "input_schema", {}) or {
-                    "type": "object",
-                    "properties": {}
-                },
+                "name": pdata.get("name", pid),
+                "description": pdata.get("description", ""),
+                "version": pdata.get("version", "0.1.0"),
+                # 如果类上有静态属性 input_schema，尝试获取，否则为空
+                "input_schema": getattr(cls, "input_schema", {}) or {"type": "object", "properties": {}},
             }
-
             _register_plugin(plugin_meta)
- 
-            # 自动扫描实例的方法，查找 EventMeta 并将对应的 EventHandler 注册到 _event_handlers
-            # 使用 event_base.py 中约定的 EVENT_META_ATTR（如果插件方法被装饰器标注了元信息）
-            try:
-                for name, member in inspect.getmembers(instance, predicate=callable):
-                    # 忽略私有方法
-                    if name.startswith("_"):
-                        continue
-                    event_meta = getattr(member, EVENT_META_ATTR, None)
-                    if event_meta is None:
-                        # 有些装饰器可能将 meta 绑定到函数的 __wrapped__（例如 functools.wraps 情况），尝试获取
-                        wrapped = getattr(member, "__wrapped__", None)
-                        if wrapped is not None:
-                            event_meta = getattr(wrapped, EVENT_META_ATTR, None)
-                    if event_meta is None:
-                        continue
-                    # 仅关注 plugin_entry 类型
-                    try:
-                        if getattr(event_meta, "event_type", None) != "plugin_entry":
-                            continue
-                    except Exception as e:
-                        logger.debug("Failed to check event_type for %s.%s: %s", pid, name, e)
-                        continue
-                    # 兼容两种 key 约定： "pid.<id>" 和 "pid:plugin_entry:<id>"
-                    try:
-                        eid = getattr(event_meta, "id", name)
-                    except Exception as e:
-                        logger.debug("Failed to check event_type for %s.%s: %s", pid, name, e)
-                        eid = name
-                    key1 = f"{pid}.{eid}"
-                    key2 = f"{pid}:plugin_entry:{eid}"
-                    # 构造 EventHandler 并注册（最后注册的覆盖同名）
-                    _event_handlers[key1] = EventHandler(meta=event_meta, handler=member)
-                    _event_handlers[key2] = EventHandler(meta=event_meta, handler=member)
-                    # 记录 (plugin_id, entry_id) -> python method 名，供触发时服务器端回退使用
-                    try:
-                        _plugin_entry_method_map[(pid, str(eid))] = name
-                    except Exception:
-                        logger.debug("Failed to map entry method for %s.%s", pid, eid, exc_info=True)
 
-                # 新增：基于 plugin.toml 中列出的 entries（如果有），尝试为实例中对应的方法自动注册 EventHandler
-                try:
-                    entries = conf.get("entries") or pdata.get("entries") or []
-                    # Some plugin.toml formats may not include entries; we also try to use discovered plugin_info later.
-                    for ent in entries:
-                        try:
-                            eid = ent.get("id") if isinstance(ent, dict) else str(ent)
-                            if not eid:
-                                continue
-                            handler_fn = None
-                            # prefer instance method matching eid
-                            if hasattr(instance, eid):
-                                handler_fn = getattr(instance, eid)
-                            if handler_fn is None:
-                                logger.debug(
-                                    "No handler found for entry %s on plugin %s, skipping auto-registration from toml",
-                                    eid,
-                                    pid,
-                                )
-                                continue
+            logger.info(f"Loaded plugin {pid} (Process PID: {host.process.pid})")
 
-                            @dataclass
-                            class SimpleEntryMeta:
-                                event_type: str
-                                id: str
-                                name: str
-                                description: str
-                                input_schema: dict
-
-                            entry_meta = SimpleEntryMeta(
-                                event_type="plugin_entry",
-                                id=eid,
-                                name=ent.get("name", "") if isinstance(ent, dict) else "",
-                                description=ent.get("description", "") if isinstance(ent, dict) else "",
-                                input_schema=ent.get("input_schema", {}) if isinstance(ent, dict) else {},
-                            )
-                            _event_handlers[f"{pid}.{eid}"] = EventHandler(meta=entry_meta, handler=handler_fn)
-                            _event_handlers[f"{pid}:plugin_entry:{eid}"] = EventHandler(meta=entry_meta, handler=handler_fn)
-                        except Exception as e:
-                                logger.debug("Failed to register entry %s for plugin %s: %s",eid,pid,e,exc_info=True)
-                                continue
-                except Exception:
-                    # 如果 plugin.toml 没有按预期格式列出 entries，则跳过
-                    logger.debug(
-                        "No valid entries found in plugin.toml for plugin %s, skipping auto-registration from toml",
-                        pid,
-                        exc_info=True
-                    )
- 
-            except Exception:
-                logger.exception("Failed to auto-register EventMeta handlers for plugin %s", pid)
- 
-            logger.info("Loaded plugin %s from %s (%s)", pid, toml_path, entry)
         except Exception:
             logger.exception("Failed to load plugin from %s", toml_path)
+
+def _scan_static_metadata(pid: str, cls: type, conf: dict, pdata: dict):
+    """
+    辅助函数：在不实例化的情况下，扫描类属性获取 EventHandler 信息
+    """
+    # A. 扫描装饰器标记的方法 (@EventHandler)
+    # inspect.getmembers 对类使用时，得到的是 Unbound Function
+    for name, member in inspect.getmembers(cls):
+        # 尝试获取装饰器留下的元数据
+        event_meta = getattr(member, EVENT_META_ATTR, None)
+        
+        # 处理 functools.wraps 的情况
+        if event_meta is None and hasattr(member, "__wrapped__"):
+             event_meta = getattr(member.__wrapped__, EVENT_META_ATTR, None)
+
+        if event_meta and getattr(event_meta, "event_type", None) == "plugin_entry":
+            eid = getattr(event_meta, "id", name)
+            
+            # 注册到全局表 (用于 list_plugins 显示)
+            # 注意：handler=member 此时是未绑定的函数，不能直接调用
+            handler_obj = EventHandler(meta=event_meta, handler=member)
+            _event_handlers[f"{pid}.{eid}"] = handler_obj
+            _event_handlers[f"{pid}:plugin_entry:{eid}"] = handler_obj
+            
+            # 记录映射，方便 debug
+            _plugin_entry_method_map[(pid, str(eid))] = name
+
+    # B. 扫描 TOML 中的显式 entries 配置 (保持原逻辑兼容)
+    entries = conf.get("entries") or pdata.get("entries") or []
+    for ent in entries:
+        try:
+            eid = ent.get("id") if isinstance(ent, dict) else str(ent)
+            if not eid: continue
+            
+            # 尝试看类里有没有对应名字的方法
+            handler_fn = getattr(cls, eid, None)
+            
+            # 构造虚拟 Meta
+            @dataclass
+            class SimpleEntryMeta:
+                event_type: str = "plugin_entry"
+                id: str = eid
+                name: str = ent.get("name", "") if isinstance(ent, dict) else ""
+                description: str = ent.get("description", "") if isinstance(ent, dict) else ""
+                input_schema: dict = ent.get("input_schema", {}) if isinstance(ent, dict) else {}
+
+            entry_meta = SimpleEntryMeta()
+            # 即使 handler_fn 为 None (纯配置定义)，我们也注册，保证 /plugins 能看到
+            eh = EventHandler(meta=entry_meta, handler=handler_fn) 
+            _event_handlers[f"{pid}.{eid}"] = eh
+            _event_handlers[f"{pid}:plugin_entry:{eid}"] = eh
+        except Exception:
+            logger.warning(f"Error parsing entry {ent} for {pid}")
+
 # NOTE: Registration endpoints are intentionally not exposed per request.
 # The server exposes plugin listing and event ingestion endpoints and a small in-process helper
 # so task_executor can either call GET /plugins remotely or import main_helper.user_plugin_server.get_plugins
@@ -400,6 +503,7 @@ async def plugin_trigger(payload: Dict[str, Any], request: Request):
     }
     """
     try:
+        # --- 1. 基础校验 (保持不变) ---
         client_host = request.client.host if request.client else None
 
         if not isinstance(payload, dict):
@@ -409,7 +513,6 @@ async def plugin_trigger(payload: Dict[str, Any], request: Request):
         if not plugin_id or not isinstance(plugin_id, str):
             raise HTTPException(status_code=400, detail="plugin_id (string) required")
 
-        # 👇 核心：前端传的是 entry_id，这里直接作为事件/entry 的 id 使用
         entry_id = payload.get("entry_id")
         if not entry_id or not isinstance(entry_id, str):
             raise HTTPException(status_code=400, detail="entry_id (string) required")
@@ -425,7 +528,7 @@ async def plugin_trigger(payload: Dict[str, Any], request: Request):
             plugin_id, entry_id, task_id, args
         )
 
-        # 记录一个事件到队列里，方便调试/观测
+        # --- 2. 审计日志/事件队列 (保持不变) ---
         event = {
             "type": "plugin_triggered",
             "plugin_id": plugin_id,
@@ -436,190 +539,45 @@ async def plugin_trigger(payload: Dict[str, Any], request: Request):
             "received_at": _now_iso(),
         }
         try:
-            _event_queue.put_nowait(event)
+            if _event_queue: # 简单判空防止未初始化报错
+                _event_queue.put_nowait(event)
         except asyncio.QueueFull:
-            # 丢掉最旧的一条，再塞新的
             try:
                 _event_queue.get_nowait()
-            except asyncio.QueueEmpty:
-                logger.warning(
-                    "plugin_trigger: event queue reported full but was empty when trimming; dropping new event for plugin_id=%s",
-                    plugin_id,
-                )
-                return
-            try:
                 _event_queue.put_nowait(event)
-            except asyncio.QueueFull:
-                logger.warning(
-                    "plugin_trigger: failed to enqueue event for plugin_id=%s after dropping oldest",
-                    plugin_id,
-                )
+            except Exception:
+                pass
+        except Exception:
+            # 队列报错不应影响主流程
+            pass
 
-        # 小工具：根据函数签名决定用 args 还是 **args 调用，兼容 sync / async
-        async def _invoke_call(fn, call_args: Dict[str, Any]):
-            """
-            Invoke plugin handler or instance method safely.
-
-            Rules:
-            - Prefer calling with keyword args: fn(**call_args) if the function accepts parameters.
-            - If that raises a TypeError (mismatch), fall back to passing the whole dict as single positional arg: fn(call_args).
-            - If the function accepts no parameters, call it without arguments.
-            - Support both sync and async functions.
-            This approach avoids passing positional (self, args) incorrectly for bound methods.
-            """
-            try:
-                sig = inspect.signature(fn)
-                
-            except (ValueError, TypeError) as e:
-                logger.warning("Cannot inspect signature for %s: %s", fn, e)
-                sig = None
-
-            params = list(sig.parameters.values()) if sig is not None else []
-
-            # 根据签名决定调用方式
-            accepts_kwargs = False
-            accepts_single_arg = False
-            if sig is not None:
-                # 检查是否接受 **kwargs
-                accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params)
-                # 检查是否接受单个位置参数
-                positional_params = [p for p in params if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)]
-                accepts_single_arg = len(positional_params) == 1
-
-            # Helper to actually call and handle fallbacks
-            async def _call_async():
-                # If function accepts no parameters, call without args
-                if len(params) == 0:
-                    return await fn()
-                # Try keyword invocation first
-                if accepts_kwargs or len(params) > 0:
-                    try:
-                        return await fn(**(call_args or {}))
-                    except TypeError as e:
-                        # 真正的 TypeError，不是签名不匹配
-                        if "keyword" not in str(e) and "argument" not in str(e):
-                            raise
-                        logger.debug("Keyword invocation failed for %s: %s, trying fallback", fn, e)
-                # 尝试单个位置参数
-                if accepts_single_arg:
-                    # Fallback: try single positional dict
-                    try:
-                        return await fn(call_args or {})
-                    except TypeError as e2:
-                        if "argument" not in str(e2):
-                            raise
-                        logger.debug("Positional invocation failed for %s: %s", fn, e2)
-                # 都不行就抛出错误
-                raise TypeError(f"Cannot find valid way to call {fn} with args {call_args}")
- 
-
-            def _call_sync():
-                if len(params) == 0:
-                    return fn()
-                if accepts_kwargs or len(params) > 0:
-                    try:
-                        return fn(**(call_args or {}))
-
-                    except TypeError as e:
-                        if "keyword" not in str(e) and "argument" not in str(e):
-                            raise
-                        logger.debug("Keyword invocation failed for %s: %s, trying fallback", fn, e)
-                if accepts_single_arg:
-                    try:
-                        return fn(call_args or {})
-                    except TypeError as e2:
-                        if "argument" not in str(e2):
-                            raise
-                        logger.debug("Positional invocation failed for %s: %s", fn, e2)
-                raise TypeError(f"Cannot find valid way to call {fn} with args {call_args}")
-                    
-            if inspect.iscoroutinefunction(fn):
-                return await _call_async()
-            else:
-                return _call_sync()
+        # --- 3. [核心修改] 使用 ProcessHost 进行跨进程调用 ---
+        
+        # 不再查找 _plugin_instances，而是查找进程宿主 _plugin_hosts
+        host = _plugin_hosts.get(plugin_id)
+        if not host:
+            raise HTTPException(status_code=404, detail=f"Plugin '{plugin_id}' is not running/loaded")
 
         plugin_response: Any = None
         plugin_error: Optional[Dict[str, Any]] = None
 
-        # 1️⃣ 优先：通过 EventHandler 查找 entry（标准路径）
-        key_candidates = [
-            f"{plugin_id}:plugin_entry:{entry_id}",
-            f"{plugin_id}.{entry_id}",
-        ]
-        handler = None
-        for k in key_candidates:
-            eh = _event_handlers.get(k)
-            if eh:
-                handler = eh.handler
-                logger.debug(
-                    "plugin_trigger: matched EventHandler key %s for plugin %s entry %s",
-                    k, plugin_id, entry_id
-                )
-                break
-
-        if handler is not None:
-            try:
-                plugin_response = await _invoke_call(handler, args)
-            except Exception as e:
-                logger.exception(
-                    "plugin_trigger: error invoking EventHandler %s for plugin %s",
-                    entry_id, plugin_id
-                )
-                plugin_error = {"error": str(e)}
-
-            resp: Dict[str, Any] = {
-                "success": plugin_error is None,
-                "plugin_id": plugin_id,
-                "executed_entry": entry_id,
-                "args": args,
-                "plugin_response": plugin_response,
-                "received_at": event["received_at"],
-            }
-            if plugin_error:
-                resp["plugin_forward_error"] = plugin_error
-            return JSONResponse(resp)
-
-        # 2️⃣ 没有 EventHandler，则尝试实例方法（fallback）
-        instance = _plugin_instances.get(plugin_id)
-        if instance is None:
-            raise HTTPException(status_code=404, detail=f"Plugin '{plugin_id}' not found")
-
-        method = None
-
-        # 先看 (plugin_id, entry_id) 映射
-        mapped_name = _plugin_entry_method_map.get((plugin_id, entry_id))
-        if mapped_name and hasattr(instance, mapped_name):
-            method = getattr(instance, mapped_name)
-
-        # 再尝试常见命名约定
-        if method is None:
-            for name in [entry_id, f"entry_{entry_id}", f"handle_{entry_id}"]:
-                if hasattr(instance, name):
-                    method = getattr(instance, name)
-                    break
-
-        if method is None:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Entry '{entry_id}' not found for plugin '{plugin_id}'"
-            )
-
         try:
-            logger.info(
-                "plugin_trigger: invoking instance method %s for plugin %s with args=%s",
-                getattr(method, "__name__", entry_id),
-                plugin_id,
-                args,
-            )
-            plugin_response = await _invoke_call(method, args)
+            # 调用宿主对象的 trigger 方法，它会负责将消息发送给子进程并等待结果
+            # 注意：参数校验、反射调用、sync/async 兼容处理都在子进程里完成了
+            plugin_response = await host.trigger(entry_id, args, timeout=30.0) 
+
+        except TimeoutError:
+             plugin_error = {"error": "Plugin execution timed out"}
+             logger.error(f"Plugin {plugin_id} entry {entry_id} timed out")
         except Exception as e:
+            # 这里的异常可能是 host.trigger 抛出的（子进程报错传回来的，或者通信错误）
             logger.exception(
-                "plugin_trigger: error invoking method %s for plugin %s",
-                getattr(method, "__name__", "<unknown>"),
-                plugin_id,
+                "plugin_trigger: error invoking plugin %s via IPC",
+                plugin_id
             )
             plugin_error = {"error": str(e)}
 
+        # --- 4. 构造响应 (保持原有格式兼容) ---
         resp: Dict[str, Any] = {
             "success": plugin_error is None,
             "plugin_id": plugin_id,
@@ -634,12 +592,10 @@ async def plugin_trigger(payload: Dict[str, Any], request: Request):
         return JSONResponse(resp)
 
     except HTTPException:
-        # FastAPI 会处理
         raise
     except Exception as e:
         logger.exception("plugin_trigger: unexpected error")
         raise HTTPException(status_code=500, detail=str(e)) from e
-
 if __name__ == "__main__":
     import uvicorn
     logging.basicConfig(level=logging.DEBUG)
