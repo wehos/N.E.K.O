@@ -1097,7 +1097,11 @@
                         resetBtn.textContent = t('live2d.parameterEditor.reset', '重置');
                         
                         resetBtn.addEventListener('click', () => {
-                            // 使用初始值或默认值
+                            // 重置逻辑的优先级：
+                            // 1. 如果参数在 initialParameters 中存在，使用记录的初始值（模型加载时的值）
+                            // 2. 否则使用 paramDefault（从 SDK 获取的参数默认值）
+                            // 注意：如果 SDK API 调用失败，paramDefault 可能为 0，这可能不是参数的真实默认值
+                            // 但在这种情况下，0 通常是一个合理的中间值（大多数 Live2D 参数范围是 -1 到 1）
                             const resetValue = initialParameters.hasOwnProperty(paramId) ? initialValue : paramDefault;
                             const clampedValue = Math.max(paramMin, Math.min(paramMax, resetValue));
                             try {
