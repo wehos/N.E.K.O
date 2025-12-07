@@ -1,5 +1,5 @@
 # neko_plugin_core/decorators.py
-from typing import Type, Callable
+from typing import Type, Callable, Literal
 from .plugin_base import PluginMeta, NEKO_PLUGIN_TAG
 from .event_base import EventMeta, EVENT_META_ATTR
 def neko_plugin(cls):
@@ -66,4 +66,85 @@ def plugin_entry(
         kind=kind,
         auto_start=auto_start,
         extra=extra,
+    )
+def lifecycle(
+    *,
+    id: Literal["startup", "shutdown", "reload"],
+    name: str | None = None,
+    description: str = "",
+    extra: dict | None = None,
+) -> Callable:
+
+    return on_event(
+        event_type="lifecycle",
+        id=id,
+        name=name or id,
+        description=description,
+        input_schema={},   # 一般不需要参数
+        kind="lifecycle",
+        auto_start=False,
+        extra=extra or {},
+    )
+
+
+def message(
+    *,
+    id: str,
+    name: str | None = None,
+    description: str = "",
+    input_schema: dict | None = None,
+    source: str | None = None,
+    extra: dict | None = None,
+) -> Callable:
+    """
+    消息事件：比如处理聊天消息、总线事件等。
+    """
+    ex = extra or {}
+    if source:
+        ex.setdefault("source", source)
+
+    return on_event(
+        event_type="message",
+        id=id,
+        name=name or id,
+        description=description,
+        input_schema=input_schema or {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string"},
+                "sender": {"type": "string"},
+                "ts": {"type": "string"},
+            },
+        },
+        kind="consumer",
+        auto_start=True,   # runtime 可以根据这个自动订阅
+        extra=ex,
+    )
+
+
+def timer_interval(
+    *,
+    id: str,
+    seconds: int,
+    name: str | None = None,
+    description: str = "",
+    auto_start: bool = True,
+    extra: dict | None = None,
+) -> Callable:
+    """
+    固定间隔定时任务：每 N 秒执行一次。
+    """
+    ex = {"mode": "interval", "seconds": seconds}
+    if extra:
+        ex.update(extra)
+
+    return on_event(
+        event_type="timer",
+        id=id,
+        name=name or id,
+        description=description or f"Run every {seconds}s",
+        input_schema={},
+        kind="timer",
+        auto_start=auto_start,
+        extra=ex,
     )

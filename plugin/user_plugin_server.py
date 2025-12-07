@@ -121,10 +121,7 @@ async def plugin_status(plugin_id: Optional[str] = Query(default=None)):
 # --- 子进程运行函数 (独立运行在另一个进程空间) ---
 def _plugin_process_runner(plugin_id: str, entry_point: str, config_path: Path, 
                            cmd_queue: Queue, res_queue: Queue, status_queue: Queue): # noqa: ARG001 - status_queue reserved for future use
-    import logging
-    import importlib
-    import asyncio
-    import inspect
+
     # 重新配置 Logger
     logging.basicConfig(level=logging.INFO, format=f'[Proc-{plugin_id}] %(message)s')
     logger = logging.getLogger(f"plugin.{plugin_id}")
@@ -139,6 +136,7 @@ def _plugin_process_runner(plugin_id: str, entry_point: str, config_path: Path,
         ctx = PluginContext(plugin_id=plugin_id, logger=logger,config_path=config_path)
         instance = cls(ctx)
         entry_map = {}
+        events_by_type: dict[str, dict[str, Any]] = {}
         logger.info(f"Plugin instance created. Waiting for commands.")
                 # 1. 扫描装饰器 (@EventHandler)
         for name, member in inspect.getmembers(instance, predicate=callable):
@@ -152,9 +150,15 @@ def _plugin_process_runner(plugin_id: str, entry_point: str, config_path: Path,
                  event_meta = getattr(member.__wrapped__, EVENT_META_ATTR, None)
 
             if event_meta:
+                
                 # 如果有装饰器，用装饰器里的 ID (例如 "open")
                 eid = getattr(event_meta, "id", name)
                 entry_map[eid] = member
+                # 新增：按 event_type 分组
+                etype = getattr(event_meta, "event_type", "plugin_entry")
+                events_by_type.setdefault(etype, {})
+                events_by_type[etype][eid] = member
+                
                 logger.debug(f"Mapped entry '{eid}' -> method '{name}'")
             else:
                 # 如果没有装饰器，也把方法名本身作为 ID 存进去，方便直接调用
@@ -162,7 +166,50 @@ def _plugin_process_runner(plugin_id: str, entry_point: str, config_path: Path,
 
         logger.info(f"Plugin instance created. Mapped entries: {list(entry_map.keys())}")
         # ==========================================
+        # ========== 2. 生命周期事件：startup ==========
+        lifecycle_events = events_by_type.get("lifecycle", {})
+        startup_fn = lifecycle_events.get("startup")
+        if startup_fn:
+            logger.info("Calling lifecycle.startup()")
+            try:
+                if asyncio.iscoroutinefunction(startup_fn):
+                    asyncio.run(startup_fn())
+                else:
+                    startup_fn()
+            except Exception as e:
+                logger.error(f"Error in lifecycle.startup: {e}")
 
+        # ========== 3. 定时任务：timer ==========
+        def _run_timer_interval(fn, interval_seconds: int, fn_name: str):
+            while True:
+                try:
+                    if asyncio.iscoroutinefunction(fn):
+                        asyncio.run(fn())
+                    else:
+                        fn()
+                except Exception as e:
+                    logger.error(f"Timer '{fn_name}' failed: {e}")
+                time.sleep(interval_seconds)
+
+        timer_events = events_by_type.get("timer", {})
+        for eid, fn in timer_events.items():
+            meta = getattr(fn, EVENT_META_ATTR, None)
+            if not meta:
+                continue
+            if not getattr(meta, "auto_start", False):
+                continue
+            mode = getattr(meta, "extra", {}).get("mode")
+            if mode == "interval":
+                seconds = getattr(meta, "extra", {}).get("seconds", 0)
+                if seconds > 0:
+                    t = threading.Thread(
+                        target=_run_timer_interval,
+                        args=(fn, seconds, eid),
+                        daemon=True,
+                    )
+                    t.start()
+                    logger.info(f"Started timer '{eid}' every {seconds}s")
+            # 如果以后要支持 cron，可以在这里加 mode == "cron" 的分支
         # 3. 命令循环
         while True:
             try:
@@ -225,9 +272,25 @@ class PluginProcessHost:
             target=_plugin_process_runner,
             args=(plugin_id, entry_point, config_path, 
                   self.cmd_queue, self.res_queue, self.status_queue),
-            daemon=True
+            daemon=False
         )
         self.process.start()
+    def shutdown(self, timeout: float = 5.0):
+        """优雅关闭插件进程"""
+        try:
+            # 发送 STOP 命令通知插件进程停止
+            self.cmd_queue.put({"type": "STOP"}, timeout=1.0)
+            
+            # 等待插件进程退出，给它一个合理的超时时间
+            self.process.join(timeout=timeout)
+            
+            # 如果子进程还在运行，则强制终止
+            if self.process.is_alive():
+                logger.warning(f"Plugin {self.plugin_id} didn't stop gracefully, terminating")
+                self.process.terminate()
+                self.process.join(timeout=1.0)
+        except Exception:
+            logger.exception(f"Error shutting down plugin {self.plugin_id}")
 
     async def trigger(self, entry_id: str, args: dict, timeout=10.0):
         req_id = str(uuid.uuid4())
@@ -451,7 +514,7 @@ def _scan_static_metadata(pid: str, cls: type, conf: dict, pdata: dict):
             _event_handlers[f"{pid}.{eid}"] = eh
             _event_handlers[f"{pid}:plugin_entry:{eid}"] = eh
         except Exception:
-            logger.warning(f"Error parsing entry {ent} for {pid}")
+            logger.exception(f"Error parsing entry {ent} for {pid}")
 
 # NOTE: Registration endpoints are intentionally not exposed per request.
 # The server exposes plugin listing and event ingestion endpoints and a small in-process helper
@@ -492,6 +555,14 @@ async def _startup_load_plugins():
 # - Validate plugin_id presence
 # - Enqueue a standardized event into _event_queue for inspection/processing
 # - Return JSON response summarizing the accepted event
+
+@app.on_event("shutdown")
+async def shutdown_plugins():
+    """在应用关闭时，优雅地关闭所有插件"""
+    for plugin_host in _plugin_hosts.values():
+        plugin_host.shutdown(timeout=5.0)
+    logger.info("All plugins have been gracefully shutdown.")
+
 @app.post("/plugin/trigger")
 async def plugin_trigger(payload: Dict[str, Any], request: Request):
     """

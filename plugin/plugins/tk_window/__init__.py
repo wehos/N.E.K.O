@@ -18,7 +18,8 @@ class TkWindowPlugin(NekoPluginBase):
         self._thread: threading.Thread | None = None
         self._root: tk.Tk | None = None
         self._should_close: bool = False
-
+        self.ctx = ctx
+        
     def _run_tk(self, title: str, message: str):
         root = tk.Tk()
         self._root = root
@@ -101,3 +102,19 @@ class TkWindowPlugin(NekoPluginBase):
         # 这里可以放一些初始化逻辑,比如预加载配置等
         print("[tkWindow] plugin started")
         return {"status": "initialized"}
+    # 4) 一个 lifecycle 事件:插件停止时自动调用
+    @on_event(
+        event_type="lifecycle",
+        id="on_shutdown",
+        name="On Plugin Shutdown",
+        description="Run when plugin is stopped",
+        kind="hook",
+        auto_start=False,  # 不自动启动，插件停止时手动触发
+    )
+    def on_shutdown(self, **_):
+        # 在这里执行一些资源清理、状态保存等操作
+        self.ctx.logger.info("[tkWindow] plugin shutting down")
+        with self._lock:
+            if self._root is not None:
+                self._root.destroy()  # 如果窗口正在运行，销毁它
+        return {"status": "shutdown"}

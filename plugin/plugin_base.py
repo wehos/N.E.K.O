@@ -17,6 +17,7 @@ class NekoPluginBase:
     """插件都继承这个基类."""
     def __init__(self, ctx: Any):
         self.ctx = ctx
+        
 
     def get_input_schema(self) -> Dict[str, Any]:
         """默认从类属性 input_schema 取."""
