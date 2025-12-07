@@ -120,7 +120,7 @@ async def plugin_status(plugin_id: Optional[str] = Query(default=None)):
         raise HTTPException(status_code=500, detail=str(e)) from e
 # --- 子进程运行函数 (独立运行在另一个进程空间) ---
 def _plugin_process_runner(plugin_id: str, entry_point: str, config_path: Path, 
-                           cmd_queue: Queue, res_queue: Queue, status_queue: Queue):
+                           cmd_queue: Queue, res_queue: Queue, status_queue: Queue): # noqa: ARG001 - status_queue reserved for future use
     import logging
     import importlib
     import asyncio
@@ -205,7 +205,7 @@ def _plugin_process_runner(plugin_id: str, entry_point: str, config_path: Path,
                     ret_payload["success"] = True
                     ret_payload["data"] = res
                 except Exception as e:
-                    logger.error(f"Error executing {entry_id}: {e}")
+                    logger.exception(f"Error executing {entry_id}: {e}")
                     ret_payload["error"] = str(e)
                 
                 res_queue.put(ret_payload)
@@ -230,7 +230,6 @@ class PluginProcessHost:
         self.process.start()
 
     async def trigger(self, entry_id: str, args: dict, timeout=10.0):
-        import uuid, time, asyncio
         req_id = str(uuid.uuid4())
         
         self.cmd_queue.put({
@@ -247,8 +246,10 @@ class PluginProcessHost:
                 # 尝试非阻塞读
                 res = await loop.run_in_executor(None, self._get_result_safe)
                 if res and res['req_id'] == req_id:
-                    if res['success']: return res['data']
-                    else: raise Exception(res['error'])
+                    if res['success']: 
+                        return res['data']
+                    else: 
+                        raise Exception(res['error'])
             except Empty:
                 await asyncio.sleep(0.05)
         
@@ -546,11 +547,10 @@ async def plugin_trigger(payload: Dict[str, Any], request: Request):
                 _event_queue.get_nowait()
                 _event_queue.put_nowait(event)
             except Exception:
-                pass
+                logger.debug("Event queue operation failed, event dropped")
         except Exception:
             # 队列报错不应影响主流程
-            pass
-
+            logger.debug("Event queue error, continuing without queueing")
         # --- 3. [核心修改] 使用 ProcessHost 进行跨进程调用 ---
         
         # 不再查找 _plugin_instances，而是查找进程宿主 _plugin_hosts
