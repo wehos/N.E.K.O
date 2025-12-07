@@ -1117,10 +1117,6 @@ function toggleCustomApi() {
     const coreApiSelect = document.getElementById('coreApiSelect');
     const assistApiSelect = document.getElementById('assistApiSelect');
     const apiKeyInput = document.getElementById('apiKeyInput');
-    const assistApiKeyInputs = [
-        'assistApiKeyInputQwen', 'assistApiKeyInputOpenai', 'assistApiKeyInputGlm', 
-        'assistApiKeyInputStep', 'assistApiKeyInputSilicon'
-    ];
     
     const isEnabled = enableCustomApi.checked;
     const isFreeVersion = coreApiSelect && coreApiSelect.value === 'free';
@@ -1134,11 +1130,8 @@ function toggleCustomApi() {
         if (assistApiSelect) assistApiSelect.disabled = true;
         if (apiKeyInput) apiKeyInput.disabled = true;
         
-        // 禁用所有辅助API Key输入框
-        assistApiKeyInputs.forEach(id => {
-            const input = document.getElementById(id);
-            if (input) input.disabled = true;
-        });
+        // 禁用所有辅助API Key输入框（统一处理）
+        setAssistApiInputsDisabled(true);
     } else if (isFreeVersion) {
         // 免费版本：只禁用API Key输入框和辅助API选择框
         if (assistApiSelect) assistApiSelect.disabled = true;
@@ -1147,22 +1140,16 @@ function toggleCustomApi() {
         // 核心API选择框保持可用，以便用户可以切换回付费版本
         if (coreApiSelect) coreApiSelect.disabled = false;
         
-        // 禁用所有辅助API Key输入框
-        assistApiKeyInputs.forEach(id => {
-            const input = document.getElementById(id);
-            if (input) input.disabled = true;
-        });
+        // 禁用所有辅助API Key输入框（统一处理）
+        setAssistApiInputsDisabled(true);
     } else {
         // 付费版本：启用所有控件
         if (coreApiSelect) coreApiSelect.disabled = false;
         if (assistApiSelect) assistApiSelect.disabled = false;
         if (apiKeyInput) apiKeyInput.disabled = false;
         
-        // 启用所有辅助API Key输入框
-        assistApiKeyInputs.forEach(id => {
-            const input = document.getElementById(id);
-            if (input) input.disabled = false;
-        });
+        // 启用所有辅助API Key输入框（统一处理）
+        setAssistApiInputsDisabled(false);
     }
     
     // 控制自定义API容器的折叠状态
@@ -1497,6 +1484,36 @@ function toggleAdvancedOptions() {
     }
 }
 
+// Helper: 判断一个值是否表示免费版（支持存储值 'free-access' 和当前语言的翻译文本）
+function isFreeVersionText(value) {
+    if (typeof value !== 'string') return false;
+    const v = value.trim();
+    if (!v) return false;
+    // 存储层标记
+    if (v === 'free-access') return true;
+    // UI 展示的翻译文本
+    const translated = (window.t ? window.t('api.freeVersionNoApiKey') : '免费版无需API Key');
+    if (v === translated) return true;
+    return false;
+}
+
+// 统一禁用/启用所有辅助API Key输入框
+function setAssistApiInputsDisabled(disabled) {
+    const assistApiKeyInputs = [
+        'assistApiKeyInputQwen', 'assistApiKeyInputOpenai', 'assistApiKeyInputGlm',
+        'assistApiKeyInputStep', 'assistApiKeyInputSilicon'
+    ];
+    assistApiKeyInputs.forEach(id => {
+        const input = document.getElementById(id);
+        if (!input) return;
+        input.disabled = !!disabled;
+        // 启用时清理表示免费版的占位值
+        if (!disabled && isFreeVersionText(input.value)) {
+            input.value = '';
+        }
+    });
+}
+
 // 根据核心API选择更新辅助API的提示和建议
 function updateAssistApiRecommendation() {
     const coreApiSelect = document.getElementById('coreApiSelect');
@@ -1528,17 +1545,8 @@ function updateAssistApiRecommendation() {
         assistApiSelect.disabled = true;
         assistApiSelect.value = 'free';
         
-        // 禁用所有辅助API输入框
-        const assistApiKeyInputs = [
-            'assistApiKeyInputQwen', 'assistApiKeyInputOpenai', 'assistApiKeyInputGlm', 
-            'assistApiKeyInputStep', 'assistApiKeyInputSilicon'
-        ];
-        assistApiKeyInputs.forEach(id => {
-            const input = document.getElementById(id);
-            if (input) {
-                input.disabled = true;
-            }
-        });
+        // 禁用所有辅助API输入框（统一处理）
+        setAssistApiInputsDisabled(true);
         
         recommendation = window.t ? window.t('api.freeVersionConfig') : '免费版配置：支持语音对话、文本对话和记忆管理，不支持自定义语音、Agent模式和视频对话';
     } else {
@@ -1547,7 +1555,7 @@ function updateAssistApiRecommendation() {
             apiKeyInput.disabled = false;
             apiKeyInput.placeholder = window.t ? window.t('api.pleaseEnterApiKey') : '请输入您的API Key';
             apiKeyInput.required = true;
-            if (apiKeyInput.value === 'free-access' || apiKeyInput.value === (window.t ? window.t('api.freeVersionNoApiKey') : '免费版无需API Key')) {
+            if (isFreeVersionText(apiKeyInput.value)) {
                 apiKeyInput.value = '';
             }
         }
@@ -1563,20 +1571,8 @@ function updateAssistApiRecommendation() {
             freeOption.textContent = window.t ? window.t('api.freeVersionOnlyWhenCoreFree') : '免费版（仅核心API为免费版时可用）';
         }
         
-        // 启用所有辅助API输入框
-        const assistApiKeyInputs = [
-            'assistApiKeyInputQwen', 'assistApiKeyInputOpenai', 'assistApiKeyInputGlm', 
-            'assistApiKeyInputStep', 'assistApiKeyInputSilicon'
-        ];
-        assistApiKeyInputs.forEach(id => {
-            const input = document.getElementById(id);
-            if (input) {
-                input.disabled = false;
-                if (input.value === 'free-access' || input.value === (window.t ? window.t('api.freeVersionNoApiKey') : '免费版无需API Key')) {
-                    input.value = '';
-                }
-            }
-        });
+        // 启用所有辅助API输入框（统一处理，启用时清理显示为免费版的占位值）
+        setAssistApiInputsDisabled(false);
         
         // 如果当前选择的是免费版，自动切换到推荐的API
         if (selectedAssistApi === 'free') {
@@ -1918,7 +1914,7 @@ async function initializePage() {
                 apiKeyInput.disabled = false;
                 apiKeyInput.placeholder = window.t ? window.t('api.pleaseEnterApiKey') : '请输入您的API Key';
                 apiKeyInput.required = true;
-                if (apiKeyInput.value === 'free-access') {
+                if (isFreeVersionText(apiKeyInput.value)) {
                     apiKeyInput.value = '';
                 }
                 freeVersionHint.style.display = 'none';
