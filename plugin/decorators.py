@@ -99,7 +99,7 @@ def message(
     """
     消息事件：比如处理聊天消息、总线事件等。
     """
-    ex = extra or {}
+    ex = dict(extra) if extra else {}
     if source:
         ex.setdefault("source", source)
 

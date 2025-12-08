@@ -116,5 +116,5 @@ class TkWindowPlugin(NekoPluginBase):
         self.ctx.logger.info("[tkWindow] plugin shutting down")
         with self._lock:
             if self._root is not None:
-                self._root.destroy()  # 如果窗口正在运行，销毁它
+                self._should_close = True  # 通知 Tk 线程自己关闭
         return {"status": "shutdown"}
