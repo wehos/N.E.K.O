@@ -1439,6 +1439,9 @@ function init_app(){
             return;
         }
         
+        // 用户主动发送文本时，停止主动搭话定时器
+        stopProactiveChatSchedule();
+        
         // 如果还没有启动session，先启动
         if (!isTextSessionActive) {
             // 临时禁用文本输入
