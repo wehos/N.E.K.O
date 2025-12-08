@@ -314,7 +314,7 @@ $bitmap.Dispose()
                 elif assist_api == 'openai':
                     vision_api_key = core_config.get('ASSIST_API_KEY_OPENAI') or core_config.get('CORE_API_KEY')
                     vision_base_url = "https://api.openai.com/v1"
-                    vision_model = "gpt-4-vision-preview"
+                    vision_model = "gpt-4o"
                 elif assist_api == 'glm':
                     vision_api_key = core_config.get('ASSIST_API_KEY_GLM') or core_config.get('CORE_API_KEY')
                     vision_base_url = "https://open.bigmodel.cn/api/paas/v4"
@@ -357,7 +357,7 @@ $bitmap.Dispose()
             try:
                 logger.info("发送AI分析请求...")
                 response = await client.chat.completions.create(
-                    model=vision_model if vision_model else "gpt-4-vision-preview",
+                    model=vision_model if vision_model else "gpt-4o",
                     messages=[
                         {
                             "role": "user",
