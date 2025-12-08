@@ -101,6 +101,8 @@ class ScreenshotUtils:
                 return screenshot_path
             except ImportError:
                 logger.warning("PIL库不可用，尝试使用系统命令")
+            except Exception as e:
+                logger.warning(f"PIL截图失败: {e}，尝试使用系统命令")
             
             # 使用Windows系统命令（需要安装nircmd或使用其他工具）
             # 这里使用简单的PowerShell命令
