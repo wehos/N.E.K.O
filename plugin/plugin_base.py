@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
 from .event_base import EventHandler, EventMeta, EVENT_META_ATTR
-from .user_plugin_server import update_plugin_status
 NEKO_PLUGIN_META_ATTR = "__neko_plugin_meta__"
 NEKO_PLUGIN_TAG = "__neko_plugin__"
 
@@ -17,7 +16,7 @@ class NekoPluginBase:
     """插件都继承这个基类."""
     def __init__(self, ctx: Any):
         self.ctx = ctx
-        
+        self._plugin_id = getattr(ctx, "plugin_id", "unknown")
 
     def get_input_schema(self) -> Dict[str, Any]:
         """默认从类属性 input_schema 取."""
@@ -41,13 +40,17 @@ class NekoPluginBase:
         return entries
     
     def report_status(self, status: Dict[str, Any]) -> None:
-            """
-            插件内部直接调用 self.report_status({...}),
-            不用自己管 plugin_id。
-            """
-            pid = getattr(self, "_plugin_id", None)
-            if not pid:
-                # 保险一点，避免忘记注入
-                raise RuntimeError("Plugin instance missing _plugin_id, cannot report status")
-            update_plugin_status(pid, status)
+        """
+        插件内部调用此方法上报状态。
+        通过 ctx.update_status 把状态发回主进程。
+        """
+        if hasattr(self.ctx, "update_status"):
+            # ✅ 这里只传原始 status，由 Context 负责打包成队列消息
+            self.ctx.update_status(status)
+        else:
+            logger = getattr(self.ctx, "logger", None)
+            if logger:
+                logger.warning(
+                    f"Plugin {self._plugin_id} tried to report status but ctx.update_status is missing."
+                )
             

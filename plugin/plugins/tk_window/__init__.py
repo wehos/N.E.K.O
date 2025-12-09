@@ -31,7 +31,7 @@ class TkWindowPlugin(NekoPluginBase):
         btn = tk.Button(root, text="Close", command=root.destroy)
         btn.pack()
         
-         # 在 Tk 线程内部轮询关闭标志
+        # 在 Tk 线程内部轮询关闭标志
         def poll_close_flag():
             if self._should_close:
                 root.destroy()
@@ -92,15 +92,16 @@ class TkWindowPlugin(NekoPluginBase):
     # 3) 一个 lifecycle 事件:插件加载后自动调用
     @on_event(
         event_type="lifecycle",
-        id="on_start",
+        id="startup",
         name="On Plugin Start",
         description="Run when plugin is loaded",
         kind="hook",
         auto_start=True,
     )
-    def on_start(self, **_):
+    def startup(self, **_):
         # 这里可以放一些初始化逻辑,比如预加载配置等
-        print("[tkWindow] plugin started")
+        self.ctx.logger.info("[tkWindow] plugin started")
+        self.report_status({"status": "initialized"})
         return {"status": "initialized"}
     # 4) 一个 lifecycle 事件:插件停止时自动调用
     @on_event(
@@ -114,6 +115,7 @@ class TkWindowPlugin(NekoPluginBase):
     def on_shutdown(self, **_):
         # 在这里执行一些资源清理、状态保存等操作
         self.ctx.logger.info("[tkWindow] plugin shutting down")
+        self.report_status({"status": "shutdown"})
         with self._lock:
             if self._root is not None:
                 self._should_close = True  # 通知 Tk 线程自己关闭

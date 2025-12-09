@@ -32,9 +32,26 @@ logger = logging.getLogger("user_plugin_server")
 class PluginContext:
     plugin_id: str
     config_path: Path
-    logger:logging.Logger
+    logger: logging.Logger
+    status_queue: Any
     app: Optional[FastAPI] = None
 
+    def update_status(self, status: Dict[str, Any]) -> None:
+        """
+        子进程 / 插件内部调用：把原始 status 丢到主进程的队列里，由主进程统一整理。
+        """
+        try:
+            payload = {
+                "type": "STATUS_UPDATE",
+                "plugin_id": self.plugin_id,
+                "data": status,
+                "time": _now_iso(),
+            }
+            self.status_queue.put_nowait(payload)
+            # 这条日志爱要不要
+            self.logger.info(f"Plugin {self.plugin_id} status updated: {payload}")
+        except Exception as e:
+            self.logger.exception(f"Error updating status for plugin {self.plugin_id}: {e}")
 # In-memory plugin registry (initially empty). Plugins are dicts with keys:
 # { "id": str, "name": str, "description": str, "endpoint": str, "input_schema": dict }
 # Registration endpoints are intentionally not implemented now.
@@ -53,7 +70,21 @@ PLUGIN_CONFIG_ROOT = Path(__file__).parent / "plugins"
 # Simple bounded in-memory event queue for inspection
 EVENT_QUEUE_MAX = 1000
 _event_queue: asyncio.Queue = asyncio.Queue(maxsize=EVENT_QUEUE_MAX)
-
+def _apply_status_update(plugin_id: str, status: Dict[str, Any], source: str) -> None:
+    """
+    统一落地插件状态的内部工具函数。
+    所有路径（主进程直接调用 / 子进程上报）最后都走这里。
+    """
+    if not plugin_id:
+        return
+    with _plugin_status_lock:
+        _plugin_status[plugin_id] = {
+            "plugin_id": plugin_id,
+            "status": status,
+            "updated_at": _now_iso(),
+            "source": source,
+        }
+    logger.info(f"插件id:{plugin_id}  插件状态:{_plugin_status[plugin_id]}")
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -73,18 +104,9 @@ async def available():
 
 def update_plugin_status(plugin_id: str, status: Dict[str, Any]) -> None:
     """
-    由插件调用：上报自己的运行状态（全量覆盖该插件的当前状态快照）。
-    线程安全：支持在插件内部线程（比如 Tk 线程）里调用。
+    由同进程代码调用：直接在主进程内更新状态。
     """
-    if not plugin_id:
-        return
-    with _plugin_status_lock:
-        _plugin_status[plugin_id] = {
-            **status,
-            "plugin_id": plugin_id,
-            "updated_at": _now_iso(),
-        }
-    logger.info(f"插件id:{plugin_id}  插件状态:{_plugin_status[plugin_id]}")
+    _apply_status_update(plugin_id, status, source="main_process_direct")
 def get_plugin_status(plugin_id: Optional[str] = None) -> Dict[str, Any]:
     """
     在进程内获取当前插件运行状态。
@@ -134,7 +156,7 @@ def _plugin_process_runner(plugin_id: str, entry_point: str, config_path: Path,
         cls = getattr(mod, class_name)
 
         # 2. 实例化 (传入精简版 Context)
-        ctx = PluginContext(plugin_id=plugin_id, logger=logger,config_path=config_path)
+        ctx = PluginContext(plugin_id=plugin_id, logger=logger,config_path=config_path,status_queue=status_queue)
         instance = cls(ctx)
         entry_map = {}
         events_by_type: dict[str, dict[str, Any]] = {}
@@ -264,7 +286,22 @@ def _plugin_process_runner(plugin_id: str, entry_point: str, config_path: Path,
 
     except Exception as e:
         logger.exception("Process crashed")
-
+async def _status_consumer():
+    while True:
+        for pid, host in _plugin_hosts.items():
+            try:
+                # 尝试从每个 host 的 status_queue 读取
+                while not host.status_queue.empty():
+                    msg = host.status_queue.get_nowait()
+                    if msg.get("type") == "STATUS_UPDATE":
+                        _apply_status_update(
+                            plugin_id=msg["plugin_id"],
+                            status=msg["data"],
+                            source="child_process",
+                        )
+            except Exception:
+                logger.exception("Error consuming status for plugin %s", pid)
+        await asyncio.sleep(1) # 定期轮询
 # --- 主进程控制类 ---
 class PluginProcessHost:
     def __init__(self, plugin_id: str, entry_point: str, config_path: Path):
@@ -565,7 +602,11 @@ async def _startup_load_plugins():
             logger.info("startup-diagnostics: no plugin instances loaded")
     except Exception:
         logger.exception("startup-diagnostics: failed to enumerate plugin instances")
-
+        
+@app.on_event("startup")
+async def start_status_monitor():
+    asyncio.create_task(_status_consumer())
+    
 # New endpoint: /plugin/trigger
 # This endpoint is intended to be called by TaskExecutor (or other components) when a plugin should be triggered.
 # Expected JSON body:
