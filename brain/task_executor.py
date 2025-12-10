@@ -7,7 +7,7 @@ DirectTaskExecutor: 合并 Analyzer + Planner 的功能
 import json
 import asyncio
 import logging
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Callable, Awaitable
 from dataclasses import dataclass
 from openai import AsyncOpenAI, APIConnectionError, InternalServerError, RateLimitError
 import httpx
@@ -69,7 +69,7 @@ class DirectTaskExecutor:
     
     流程:
     1. 并行调用多个评估器:_assess_mcp、_assess_user_plugin、_assess_computer_use
-    2. 优先使用 MCP(如果可行),再次 ComputerUse,再次 UserPlugin (优先级可调整)
+    2. 优先使用 MCP(如果可行),其次 ComputerUse,再次 UserPlugin (优先级可调整)
     3. 执行选中的方法
     """
     
@@ -80,9 +80,30 @@ class DirectTaskExecutor:
         self._config_manager = get_config_manager()
         self.plugin_list = []
         self.user_plugin_enabled_default = False
+        self._external_plugin_provider: Optional[Callable[[bool], Awaitable[List[Dict[str, Any]]]]] = None
     
     
+    def set_plugin_list_provider(self, provider: Callable[[bool], Awaitable[List[Dict[str, Any]]]]):
+        """Allow agent_server to inject a custom async provider for plugin discovery."""
+        self._external_plugin_provider = provider
+
     async def plugin_list_provider(self, force_refresh: bool = True) -> List[Dict[str, Any]]:
+        # return cached list when allowed
+        if self.plugin_list and not force_refresh:
+            return self.plugin_list
+
+        # try external provider first (e.g., injected by agent_server)
+        if self._external_plugin_provider is not None:
+            try:
+                plugins = await self._external_plugin_provider(force_refresh)
+                if isinstance(plugins, list):
+                    self.plugin_list = plugins
+                    logger.info(f"[Agent] Loaded {len(self.plugin_list)} plugins via external provider")
+                    return self.plugin_list
+            except Exception as e:
+                logger.warning(f"[Agent] external plugin_list_provider failed: {e}")
+
+        # fallback to built-in HTTP fetcher
         if (self.plugin_list == []) or force_refresh:
             try:
                 url = f"http://localhost:{USER_PLUGIN_SERVER_PORT}/plugins"

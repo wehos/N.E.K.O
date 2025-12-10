@@ -480,6 +480,7 @@ async def startup():
 
     try:
         import httpx
+
         async def _http_plugin_provider(force_refresh: bool = False):
             url = f"http://localhost:{USER_PLUGIN_SERVER_PORT}/plugins"
             try:
@@ -491,7 +492,13 @@ async def startup():
             except Exception as e:
                 logger.debug(f"[Agent] plugin_list_provider http fetch failed: {e}")
             return []
-        # Wrap to a sync-callable for backward compatibility with run_in_executor usage in task_executor
+
+        # inject http-based provider so DirectTaskExecutor can pick up user_plugin_server plugins
+        try:
+            Modules.task_executor.set_plugin_list_provider(_http_plugin_provider)
+            logger.info("[Agent] Registered http plugin_list_provider for task_executor")
+        except Exception as e:
+            logger.warning(f"[Agent] Failed to inject plugin_list_provider into task_executor: {e}")
     except Exception as e:
         logger.warning(f"[Agent] Failed to set http plugin_list_provider: {e}")
 
