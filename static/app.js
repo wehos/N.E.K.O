@@ -149,6 +149,7 @@ function init_app(){
     
     // 主动搭话功能相关
     let proactiveChatEnabled = false;
+    let proactiveVisionEnabled = false;
     let proactiveChatTimer = null;
     let proactiveChatBackoffLevel = 0; // 退避级别：0=30s, 1=1min, 2=2min, 3=4min, etc.
     const PROACTIVE_CHAT_BASE_DELAY = 30000; // 30秒基础延迟
@@ -158,6 +159,7 @@ function init_app(){
     
     // 暴露到全局作用域，供 live2d.js 等其他模块访问和修改
     window.proactiveChatEnabled = proactiveChatEnabled;
+    window.proactiveVisionEnabled = proactiveVisionEnabled;
     window.focusModeEnabled = focusModeEnabled;
     
     // WebSocket心跳保活
@@ -2395,6 +2397,21 @@ function init_app(){
                 focusModeDiv.appendChild(focusModeCheckbox);
                 container.appendChild(focusModeDiv);
                 
+                // 主动视觉开关
+                const proactiveVisionDiv = document.createElement('div');
+                proactiveVisionDiv.style.cssText = 'padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(0,0,0,0.1);';
+                const proactiveVisionSpan = document.createElement('span');
+                proactiveVisionSpan.style.fontSize = '14px';
+                proactiveVisionSpan.textContent = window.t ? window.t('settings.toggles.proactiveVision') : '👁️ 主动视觉';
+                proactiveVisionSpan.setAttribute('data-i18n', 'settings.toggles.proactiveVision');
+                proactiveVisionDiv.appendChild(proactiveVisionSpan);
+                const proactiveVisionCheckbox = document.createElement('input');
+                proactiveVisionCheckbox.type = 'checkbox';
+                proactiveVisionCheckbox.id = 'proactive-vision-toggle-l2d';
+                proactiveVisionCheckbox.style.cssText = 'cursor: pointer; width: 18px; height: 18px;';
+                proactiveVisionDiv.appendChild(proactiveVisionCheckbox);
+                container.appendChild(proactiveVisionDiv);
+                
                 // 页面链接
                 const links = [
                     { href: `/memory_browser`, text: '📝 记忆管理' },
@@ -2457,11 +2474,15 @@ function init_app(){
                 
                 // 设置初始状态
                 const proactiveChatToggle = document.getElementById('proactive-chat-toggle-l2d');
+                const proactiveVisionToggle = document.getElementById('proactive-vision-toggle-l2d');
                 const focusModeToggle = document.getElementById('focus-mode-toggle-l2d');
                 
                 // 从 window 同步最新值到局部变量（防止从 l2d 页面返回时值丢失）
                 if (typeof window.proactiveChatEnabled !== 'undefined') {
                     proactiveChatEnabled = window.proactiveChatEnabled;
+                }
+                if (typeof window.proactiveVisionEnabled !== 'undefined') {
+                    proactiveVisionEnabled = window.proactiveVisionEnabled;
                 }
                 if (typeof window.focusModeEnabled !== 'undefined') {
                     focusModeEnabled = window.focusModeEnabled;
@@ -2494,6 +2515,24 @@ function init_app(){
                         saveSettings();
                         
                         console.log(`Focus模式已${focusModeEnabled ? '开启' : '关闭'}`);
+                    });
+                }
+                
+                if (proactiveVisionToggle) {
+                    proactiveVisionToggle.checked = proactiveVisionEnabled;
+                    proactiveVisionToggle.addEventListener('change', (event) => {
+                        event.stopPropagation();
+                        proactiveVisionEnabled = event.target.checked;
+                        window.proactiveVisionEnabled = proactiveVisionEnabled; // 同步到全局
+                        saveSettings();
+                        
+                        console.log(`主动视觉已${proactiveVisionEnabled ? '开启' : '关闭'}`);
+                        
+                        if (proactiveVisionEnabled) {
+                            resetProactiveChatBackoff();
+                        } else {
+                            stopProactiveChatSchedule();
+                        }
                     });
                 }
                 
@@ -4406,8 +4445,8 @@ function init_app(){
             proactiveChatTimer = null;
         }
         
-        // 如果主动搭话未开启，不执行
-        if (!proactiveChatEnabled) {
+        // 如果主动搭话和主动视觉都未开启，不执行
+        if (!proactiveChatEnabled && !proactiveVisionEnabled) {
             return;
         }
         
@@ -4438,12 +4477,41 @@ function init_app(){
     
     async function triggerProactiveChat() {
         try {
-            // 首先在前端截图
-            const screenshotDataUrl = await captureProactiveChatScreenshot();
+            // 根据三种模式决定使用哪种搭话方式
+            let useScreenshot = false;
             
-            if (!screenshotDataUrl) {
-                console.log('主动搭话截图失败，跳过本次搭话');
+            if (proactiveChatEnabled && proactiveVisionEnabled) {
+                // 两个都开启时：各50%
+                useScreenshot = Math.random() < 0.5;
+                console.log(`主动搭话模式：双开模式，使用${useScreenshot ? '截图搭话' : '热门内容'}`);
+            } else if (proactiveVisionEnabled) {
+                // 只开启主动视觉时：100%屏幕截图搭话
+                useScreenshot = true;
+                console.log('主动搭话模式：仅视觉模式，使用截图搭话');
+            } else if (proactiveChatEnabled) {
+                // 只开启主动搭话时：100%热门内容
+                useScreenshot = false;
+                console.log('主动搭话模式：仅搭话模式，使用热门内容');
+            } else {
+                // 两个都关闭，不执行搭话
+                console.log('主动搭话模式：两个功能都关闭，跳过本次搭话');
                 return;
+            }
+            
+            let requestBody = {
+                lanlan_name: lanlan_config.lanlan_name
+            };
+            
+            if (useScreenshot) {
+                // 使用截图搭话
+                const screenshotDataUrl = await captureProactiveChatScreenshot();
+                
+                if (!screenshotDataUrl) {
+                    console.log('主动搭话截图失败，跳过本次搭话');
+                    return;
+                }
+                
+                requestBody.screenshot_data = screenshotDataUrl;
             }
             
             const response = await fetch('/api/proactive_chat', {
@@ -4451,10 +4519,7 @@ function init_app(){
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    lanlan_name: lanlan_config.lanlan_name,
-                    screenshot_data: screenshotDataUrl
-                })
+                body: JSON.stringify(requestBody)
             });
             
             const result = await response.json();
@@ -4544,18 +4609,23 @@ function init_app(){
         const currentProactive = typeof window.proactiveChatEnabled !== 'undefined' 
             ? window.proactiveChatEnabled 
             : proactiveChatEnabled;
+        const currentVision = typeof window.proactiveVisionEnabled !== 'undefined' 
+            ? window.proactiveVisionEnabled 
+            : proactiveVisionEnabled;
         const currentFocus = typeof window.focusModeEnabled !== 'undefined' 
             ? window.focusModeEnabled 
             : focusModeEnabled;
         
         const settings = {
             proactiveChatEnabled: currentProactive,
+            proactiveVisionEnabled: currentVision,
             focusModeEnabled: currentFocus
         };
         localStorage.setItem('project_neko_settings', JSON.stringify(settings));
         
         // 同步回局部变量，保持一致性
         proactiveChatEnabled = currentProactive;
+        proactiveVisionEnabled = currentVision;
         focusModeEnabled = currentFocus;
     }
     
@@ -4571,12 +4641,16 @@ function init_app(){
                 // 使用 ?? 运算符提供更好的默认值处理（避免将 false 误判为需要使用默认值）
                 proactiveChatEnabled = settings.proactiveChatEnabled ?? false;
                 window.proactiveChatEnabled = proactiveChatEnabled; // 同步到全局
+                // 主动视觉：从localStorage加载设置
+                proactiveVisionEnabled = settings.proactiveVisionEnabled ?? false;
+                window.proactiveVisionEnabled = proactiveVisionEnabled; // 同步到全局
                 // Focus模式：从localStorage加载设置
                 focusModeEnabled = settings.focusModeEnabled ?? false;
                 window.focusModeEnabled = focusModeEnabled; // 同步到全局
                 
                 console.log('已加载设置:', {
                     proactiveChatEnabled: proactiveChatEnabled,
+                    proactiveVisionEnabled: proactiveVisionEnabled,
                     focusModeEnabled: focusModeEnabled,
                     focusModeDesc: focusModeEnabled ? 'AI说话时自动静音麦克风（不允许打断）' : '允许打断AI说话'
                 });

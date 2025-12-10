@@ -1207,37 +1207,36 @@ async def proactive_chat(request: Request):
         screenshot_data = data.get('screenshot_data')
         has_screenshot = bool(screenshot_data)
         
-        # 设置概率：截图50%，热门内容50%
-        use_screenshot = False
+        # 前端已经根据三种模式决定是否使用截图
+        use_screenshot = has_screenshot
         
-        if has_screenshot:
-            # 50%概率使用截图，50%概率使用热门内容
-            if random.random() < 0.5:
-                logger.info(f"[{lanlan_name}] 随机选择使用截图进行主动搭话")
-                use_screenshot = True
-                
-                # 处理前端发送的截图数据
-                try:
-                    # 将DataURL转换为base64数据并分析
-                    screenshot_content = await analyze_screenshot_from_data_url(screenshot_data)
-                    if not screenshot_content:
-                        logger.warning(f"[{lanlan_name}] 截图分析失败，回退到热门内容")
-                        use_screenshot = False
-                    else:
-                        logger.info(f"[{lanlan_name}] 成功分析截图内容")
-                except Exception as e:
-                    logger.error(f"[{lanlan_name}] 处理截图数据失败: {e}")
-                    use_screenshot = False
-            else:
-                logger.info(f"[{lanlan_name}] 随机选择使用热门内容进行主动搭话")
-                use_screenshot = False
+        if use_screenshot:
+            logger.info(f"[{lanlan_name}] 前端选择使用截图进行主动搭话")
+            
+            # 处理前端发送的截图数据
+            try:
+                # 将DataURL转换为base64数据并分析
+                screenshot_content = await analyze_screenshot_from_data_url(screenshot_data)
+                if not screenshot_content:
+                    logger.warning(f"[{lanlan_name}] 截图分析失败，跳过本次搭话")
+                    return JSONResponse({
+                        "success": False,
+                        "error": "截图分析失败",
+                        "action": "pass"
+                    }, status_code=500)
+                else:
+                    logger.info(f"[{lanlan_name}] 成功分析截图内容")
+            except Exception as e:
+                logger.error(f"[{lanlan_name}] 处理截图数据失败: {e}")
+                return JSONResponse({
+                    "success": False,
+                    "error": "截图处理失败",
+                    "action": "pass"
+                }, status_code=500)
         else:
-            # 没有截图数据，只能使用热门内容
-            logger.info(f"[{lanlan_name}] 没有截图数据，使用热门内容进行主动搭话")
-            use_screenshot = False
+            logger.info(f"[{lanlan_name}] 前端选择使用热门内容进行主动搭话")
         
         if not use_screenshot:
-            logger.info(f"[{lanlan_name}] 选择使用热门内容进行主动搭话")
             # 热门内容主动对话
             try:
                 trending_content = await fetch_trending_content(bilibili_limit=10, weibo_limit=10)
