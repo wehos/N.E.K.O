@@ -419,8 +419,18 @@ async def analyze_screenshot_from_data_url(data_url: str) -> Optional[str]:
             logger.error(f"无效的DataURL格式: {data_url[:100]}...")
             return None
         
+        # 验证DataURL格式，确保包含base64分隔符
+        if ',' not in data_url:
+            logger.error(f"无效的DataURL格式: 缺少base64分隔符 - {data_url[:100]}...")
+            return None
+        
         # 提取base64数据
-        base64_data = data_url.split(',')[1]
+        parts = data_url.split(',')
+        if len(parts) < 2:
+            logger.error(f"无效的DataURL格式: 缺少base64数据部分 - {data_url[:100]}...")
+            return None
+        
+        base64_data = parts[1]
         
         # 解码base64数据
         image_data = base64.b64decode(base64_data)

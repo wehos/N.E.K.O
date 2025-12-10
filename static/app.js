@@ -2531,7 +2531,13 @@ function init_app(){
                         if (proactiveVisionEnabled) {
                             resetProactiveChatBackoff();
                         } else {
-                            stopProactiveChatSchedule();
+                            // 只有当主动搭话也关闭时才停止调度
+                            const currentProactiveChat = typeof window.proactiveChatEnabled !== 'undefined' 
+                                ? window.proactiveChatEnabled 
+                                : proactiveChatEnabled;
+                            if (!currentProactiveChat) {
+                                stopProactiveChatSchedule();
+                            }
                         }
                     });
                 }

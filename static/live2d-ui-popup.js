@@ -468,7 +468,10 @@ Live2DManager.prototype._createSettingsToggleItem = function (toggle, popup) {
             if (isChecked && typeof window.resetProactiveChatBackoff === 'function') {
                 window.resetProactiveChatBackoff();
             } else if (!isChecked && typeof window.stopProactiveChatSchedule === 'function') {
-                window.stopProactiveChatSchedule();
+                // 只有当主动搭话也关闭时才停止调度
+                if (!window.proactiveChatEnabled) {
+                    window.stopProactiveChatSchedule();
+                }
             }
             console.log(`主动视觉已${isChecked ? '开启' : '关闭'}`);
         }
