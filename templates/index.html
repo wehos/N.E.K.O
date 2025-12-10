@@ -9,9 +9,230 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta charset="UTF-8">
     <title data-i18n="app.title">Project N.E.K.O.</title>
+    
+    <!-- HTML/JS 通用初始化工具（封装 waitForRequestInit 等） -->
+    <script src="/static/bundles/react_init.js"></script>
+
+    <!-- 加载统一的 request 模块（ES Module） -->
+    <script type="module" src="/static/bundles/request.global.js"></script>
+    
+    <!-- 加载首页 API 封装模块（ES Module，可选） -->
+    <!-- 构建命令：npm run build:global -->
+    <script type="module" src="/static/bundles/request.api.global.js"></script>
+
+    <script type="module">
+    // 初始化消息队列（在组件挂载前缓存消息）
+    if (!window.__statusToastQueue) {
+        window.__statusToastQueue = [];
+    }
+    
+    // 提供临时的 showStatusToast 函数，在组件挂载前缓存消息
+    if (typeof window.showStatusToast !== 'function') {
+        window.showStatusToast = function(message, duration = 3000) {
+        console.log('[Status Toast] 组件未挂载，消息已加入队列:', message);
+        window.__statusToastQueue.push({ message, duration });
+        };
+    }
+
+    // 重要：先导入 React 和 ReactDOM，确保它们先初始化
+    import React from "/static/bundles/react.js";
+    import { createRoot } from "/static/bundles/react-dom-client.js";
+    // 然后导入组件（组件依赖 React 和 ReactDOM）
+    import { StatusToast } from "/static/bundles/StatusToast.js";
+    import { Button } from "/static/bundles/Button.js";
+    
+    // 导入 Modal 组件（支持命名导出和默认导出）
+    let Modal;
+    import("/static/bundles/Modal.js").then(module => {
+        Modal = module.Modal || module.default;
+        console.log("[Modal] Modal 组件导入成功:", typeof Modal);
+        // 导入成功后尝试挂载
+        mountModal();
+    }).catch(error => {
+        console.error("[Modal] Modal 组件导入失败:", error);
+    });
+
+    // 优先挂载 StatusToast（确保在 app.js 执行前就绪）
+    function mountStatusToast() {
+        const container = document.getElementById("status-toast");
+        if (container) {
+            try {
+                const root = createRoot(container);
+                // 确保 ReactDOM 已经初始化 hooks dispatcher
+                // 通过立即渲染一个空组件来触发初始化
+                root.render(React.createElement(StatusToast));
+                console.log("StatusToast 组件已挂载");
+            } catch (error) {
+                console.error("StatusToast 挂载失败:", error);
+                // 如果失败，延迟重试
+                setTimeout(mountStatusToast, 100);
+            }
+        } else {
+            console.error("StatusToast 容器不存在，延迟重试...");
+            // 如果容器不存在，延迟重试
+            setTimeout(mountStatusToast, 50);
+        }
+    }
+
+    // ExampleButton 相关逻辑已移除，示例按钮不再在生产页面中使用
+
+    // 挂载 Modal 组件
+    function mountModal() {
+        console.log("[Modal] 开始挂载 Modal 组件...");
+        console.log("[Modal] Modal 变量类型:", typeof Modal);
+        
+        if (!Modal) {
+            console.warn("[Modal] Modal 组件尚未导入，延迟重试...");
+            setTimeout(mountModal, 100);
+            return;
+        }
+        
+        const container = document.getElementById("modal-container");
+        console.log("[Modal] 容器查找结果:", container);
+        if (container) {
+            try {
+                console.log("[Modal] 创建 React Root...");
+                const root = createRoot(container);
+                console.log("[Modal] 渲染 Modal 组件...");
+                root.render(React.createElement(Modal));
+                console.log("✅ Modal 组件已挂载");
+            } catch (error) {
+                console.error("❌ Modal 挂载失败:", error);
+                console.error("错误堆栈:", error.stack);
+                // 如果失败，延迟重试
+                setTimeout(mountModal, 100);
+            }
+        } else {
+            console.error("❌ Modal 容器不存在，延迟重试...");
+            // 如果容器不存在，延迟重试
+            setTimeout(mountModal, 50);
+        }
+    }
+
+    // 通用 Button 挂载辅助函数，避免重复代码
+    function mountReactButton(containerId, buttonProps, children) {
+        const container = document.getElementById(containerId);
+        if (!container) {
+            return;
+        }
+        try {
+            const root = createRoot(container);
+            root.render(
+                React.createElement(
+                    Button,
+                    buttonProps,
+                    ...children,
+                ),
+            );
+        } catch (error) {
+            console.error(`[Button] 挂载 ${buttonProps && buttonProps.id ? buttonProps.id : containerId} 失败:`, error);
+        }
+    }
+
+    // 挂载通用 Button 组件到现有按钮位置
+    function mountButtons() {
+        // 清空全部截图按钮
+        mountReactButton(
+            "clear-all-screenshots-container",
+            {
+                id: "clear-all-screenshots",
+                variant: "danger",
+                size: "sm",
+            },
+            [
+                React.createElement("span", { "data-i18n": "chat.clearAll" }, "清空全部"),
+            ],
+        );
+
+        // 文本发送按钮
+        mountReactButton(
+            "textSendButton-container",
+            {
+                id: "textSendButton",
+                variant: "primary",
+                size: "md",
+            },
+            [
+                React.createElement("img", {
+                    src: "/static/icons/send_icon.png",
+                    alt: "",
+                }),
+                React.createElement("span", { "data-i18n": "chat.send" }, "发送"),
+            ],
+        );
+
+        // 截图 / 拍照按钮
+        mountReactButton(
+            "screenshotButton-container",
+            {
+                id: "screenshotButton",
+                variant: "secondary",
+                size: "md",
+            },
+            [
+                React.createElement("img", {
+                    src: "/static/icons/screenshot_icon.png",
+                    alt: "",
+                }),
+                React.createElement(
+                    "span",
+                    { className: "desktop-text", "data-i18n": "chat.screenshot" },
+                    "截图",
+                ),
+                React.createElement(
+                    "span",
+                    { className: "mobile-text", "data-i18n": "chat.takePhoto" },
+                    "拍照",
+                ),
+            ],
+        );
+    }
+
+    function mountComponents() {
+        // 优先挂载 StatusToast
+        mountStatusToast();
+        // 挂载 Modal（尽早挂载，确保全局 API 可用）
+        mountModal();
+        // 然后挂载其他组件
+        mountButtons();
+    }
+
+    // 立即尝试挂载（不等待 DOMContentLoaded），确保尽早挂载
+    if (document.readyState === "loading") {
+        // 如果还在加载，立即挂载 StatusToast，Modal 会在导入完成后自动挂载
+        mountStatusToast();
+        // 其余组件在 DOMContentLoaded 后挂载
+        document.addEventListener("DOMContentLoaded", () => {
+            mountButtons();
+        });
+    } else {
+        // 如果已经加载完成，立即挂载所有组件
+        mountComponents();
+        // mountModal() 会在 Modal 导入成功后自动调用（如果还没挂载）
+    }
+    </script>
+    
     <!-- i18next 加载器（统一处理 CDN 加载和初始化） -->
     <script src="/static/i18n-i18next.js"></script>
-    <script src="/static/common_dialogs.js"></script>
+    <!-- 
+        统一的 request 模块初始化
+        - 加载 request.global.js（打包了 axios 和 axios-auth-refresh）
+        - 自动初始化 window.request、window.buildApiUrl 等工具函数
+        - 旧版 JS 代码应使用 window.request 或 window.buildApiUrl 等工具函数
+        - 如需自定义后端地址，可在此处显式设置：
+          window.API_BASE_URL = 'http://your-backend-host:port';
+          window.STATIC_SERVER_URL = window.API_BASE_URL;
+        
+        首页 API 封装模块（request.api.global.js）
+        - 提供 window.RequestAPI 对象，封装常用的 API 调用
+        - 使用方式：await window.RequestAPI.getPageConfig()
+        - 详见：react_web/app/api/request.api.ts
+    -->
+    <!-- 
+        注意：Modal 对话框功能已迁移到 React 组件
+        - 全局 API: window.showAlert, window.showConfirm, window.showPrompt
+        - 由 Modal 组件自动提供，无需加载 common_dialogs.js
+    -->
     <style>
         *:focus {
             outline: none !important;
@@ -41,136 +262,7 @@
             }
         }
         
-        /* Status 气泡框样式 - 更显眼的样式 */
-        #status-toast {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 99999;
-            max-width: 500px;
-            min-width: 280px;
-            padding: 18px 24px;
-            padding-left: 50px;  /* 为左上角的猫爪留出空间 */
-            /* 自定义背景图片 */
-            background-image: url('/static/icons/toast_background.png');  /* 图片路径 */
-            background-size: 100% 100%;  /* 强制拉伸到100%覆盖，避免边缘露出 */
-            background-position: center;  /* 居中显示 */
-            background-repeat: no-repeat;  /* 不重复 */
-            background-origin: border-box;  /* 背景从边框区域开始 */
-            background-clip: border-box;  /* 背景裁剪到边框区域 */
-            /* 如果图片加载失败，使用备用背景色 */
-            background-color: transparent;  /* 移除备用背景色，避免白色边框 */
-            color: #fff;  /* 纯白色文字 */
-            text-shadow: none;  /* 移除文字阴影 */
-            border-radius: 12px;
-            font-size: 18px;  /* 字体大小 */
-            font-weight: 500;
-            line-height: 1.6;
-            box-shadow: none;  /* 移除阴影 */
-            border: none;  /* 移除边框，避免白色边框问题 */
-            overflow: hidden;  /* 确保背景图片不会超出圆角 */
-            opacity: 0;
-            transform: translateY(-20px) scale(0.95);
-            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-            pointer-events: none;  /* 默认不响应事件 */
-            word-wrap: break-word;
-            white-space: pre-wrap;
-            display: flex;  /* 使用flex布局 */
-            align-items: center;  /* 垂直居中对齐 */
-            visibility: visible;  /* 确保元素可见 */
-            text-align: center;
-        }
-        
-        /* 添加遮罩层以确保文字可读性（可选） */
-        #status-toast::after {
-            content: '';
-            position: absolute;
-            top: -1px;  /* 稍微超出，确保完全覆盖 */
-            left: -1px;
-            right: -1px;
-            bottom: -1px;
-            background: rgba(0, 0, 0, 0.1);  /* 半透明黑色遮罩，增强文字对比度 */
-            border-radius: 12px;
-            z-index: 0;  /* 在背景图片之上，文字和猫爪之下 */
-            pointer-events: none;
-        }
-        
-        /* 左上角的小猫爪爪 */
-        #status-toast::before {
-            content: '🐾';
-            position: absolute;
-            top: 50%;  /* 垂直居中 */
-            left: 12px;
-            transform: translateY(-50%);  /* 配合top: 50%实现垂直居中 */
-            font-size: 50px;  /* 增大猫爪图标 */
-            line-height: 1;
-            opacity: 1;
-            filter: brightness(0) invert(1);  /* 将emoji变成纯白色，移除阴影 */
-            animation: pawBounce 1.5s ease-in-out infinite;
-            z-index: 1;  /* 确保猫爪在遮罩层之上 */
-        }
-        
-        @keyframes pawBounce {
-            0%, 100% {
-                transform: translateY(-50%) rotate(0deg);  /* 保持垂直居中 */
-            }
-            25% {
-                transform: translateY(calc(-50% - 3px)) rotate(-5deg);  /* 保持垂直居中并添加动画 */
-            }
-            75% {
-                transform: translateY(calc(-50% - 3px)) rotate(5deg);  /* 保持垂直居中并添加动画 */
-            }
-        }
-        
-        #status-toast.show {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-            pointer-events: auto;
-            animation: slideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-        }
-        
-        @keyframes slideIn {
-            0% {
-                opacity: 0;
-                transform: translateY(-20px) scale(0.8);
-            }
-            100% {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
-        }
-        
-        #status-toast.hide {
-            opacity: 0;
-            transform: translateY(-20px) scale(0.95);
-            animation: none;
-        }
-        
-        @media (max-width: 600px) {
-            #status-toast {
-                top: 10px;
-                right: 10px;
-                left: 10px;
-                max-width: none;
-                font-size: 17px;  /* 移动端字体大小 */
-                padding: 16px 20px;
-                padding-left: 45px;  /* 为左上角的猫爪留出空间 */
-            }
-            
-            #status-toast::before {
-                top: 6px;
-                left: 10px;
-                font-size: 40px;  /* 增大移动端猫爪图标 */
-            }
-            
-            #status-toast.show {
-                transform: translateY(0) scale(1);
-            }
-            
-            #status-toast.hide {
-                transform: translateY(-20px) scale(0.95);
-            }
-        }
+        /* Status 气泡框样式已迁移到 StatusToast 组件 CSS 文件 */
         
         /* 全局按钮样式 - 防止文字被选中 */
         button {
@@ -528,20 +620,7 @@
             font-weight: 600;
         }
         
-        #clear-all-screenshots {
-            padding: 2px 8px;
-            font-size: 0.75rem;
-            background: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        
-        #clear-all-screenshots:hover {
-            background: #c82333;
-        }
+        /* #clear-all-screenshots 按钮的视觉样式由 React Button 组件的 Button.css 提供 */
         
         /* 截图列表 - 横向滚动 */
         #screenshots-list {
@@ -715,74 +794,7 @@
             gap: 6px;
         }
         
-        #textSendButton, #screenshotButton {
-            pointer-events: auto;
-            padding: 8px 16px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background 0.2s, border-color 0.2s;
-            font-size: 0.85rem;
-            font-weight: 500;
-            white-space: nowrap;
-            min-width: 80px;
-            display: flex;
-            align-items: center; /* 图标和文字垂直居中对齐 */
-            justify-content: flex-start; /* 内容左对齐，图标在左边 */
-            gap: 6px;
-            box-sizing: border-box;
-        }
-        
-        /* 确保两个按钮的图标和文字对齐 */
-        #textSendButton img, #screenshotButton img {
-            flex-shrink: 0; /* 图标不收缩 */
-            width: 22px; /* 统一图标宽度，确保对齐 */
-            height: 22px;
-            object-fit: contain;
-            pointer-events: none;
-        }
-        
-        #textSendButton span, #screenshotButton span {
-            flex-shrink: 0; /* 文字不收缩 */
-            text-align: left; /* 文字左对齐 */
-        }
-        
-        /* 发送按钮：蓝色背景 */
-        #textSendButton {
-            border: 2px solid transparent;
-            background: #44b7fe;
-            color: #fff;
-        }
-        
-        #textSendButton:hover:not(:disabled) {
-            background: #2ea0e0;
-        }
-        
-        #textSendButton:disabled {
-            background: #b0c4de;
-            cursor: not-allowed;
-            opacity: 0.6;
-        }
-        
-        /* 截图按钮：白色背景 + 蓝色边框 */
-        #screenshotButton {
-            border: 2px solid #44b7fe;
-            background: #fff;
-            color: #44b7fe;
-        }
-        
-        #screenshotButton:hover:not(:disabled) {
-            background: #f0f9ff;
-            border-color: #2ea0e0;
-            border-width: 2px;
-        }
-        
-        #screenshotButton:disabled {
-            border-color: #b0c4de;
-            border-width: 2px;
-            color: #b0c4de;
-            cursor: not-allowed;
-            opacity: 0.6;
-        }
+        /* #textSendButton 与 #screenshotButton 的视觉样式由 React Button 组件的 Button.css 提供 */
         
         /* 桌面端和移动端文本显示控制 */
         .desktop-text {
@@ -1056,8 +1068,12 @@
     </div>
 </div>
 
-<!-- Status 气泡框 -->
+<!-- Status 气泡框 - 将由 React 组件挂载 -->
 <div id="status-toast"></div>
+<!-- Modal 容器 - 将由 React 组件挂载 -->
+<div id="modal-container" style="display: none;"></div>
+<!-- ExampleButton 容器 -->
+<div id="example-button-container" style="position: fixed; top: 20px; left: 20px; z-index: 99998; pointer-events: auto;"></div>
 <div id="chat-container">
     <div id="chat-header">
         <span id="chat-title" data-i18n="chat.title">💬 对话</span>
@@ -1071,7 +1087,7 @@
         <div id="screenshot-thumbnail-container">
             <div id="screenshots-header">
                 <span id="screenshots-title" data-i18n="chat.screenshotsTitle">📸 待发送截图</span> (<span id="screenshot-count">0</span>)
-                <button id="clear-all-screenshots" data-i18n="chat.clearAll">清空全部</button>
+                <div id="clear-all-screenshots-container"></div>
             </div>
             <div id="screenshots-list">
                 <!-- 截图项将动态添加到这里 -->
@@ -1080,8 +1096,8 @@
         <div id="text-input-row">
             <textarea id="textInputBox" data-i18n-placeholder="chat.textInputPlaceholder" placeholder="文字聊天模式...回车发送，Shift+回车换行" tabindex="0"></textarea>
             <div id="button-group">
-                <button id="textSendButton"><img src="/static/icons/send_icon.png" alt=""><span data-i18n="chat.send">发送</span></button>
-                <button id="screenshotButton"><img src="/static/icons/screenshot_icon.png" alt=""><span class="desktop-text" data-i18n="chat.screenshot">截图</span><span class="mobile-text" data-i18n="chat.takePhoto">拍照</span></button>
+                <div id="textSendButton-container"></div>
+                <div id="screenshotButton-container"></div>
             </div>
         </div>
     </div>
@@ -1113,15 +1129,13 @@
                 }
             }
             
-            // 从 API 获取配置
-            const apiUrl = lanlanNameFromUrl 
-                ? `/api/config/page_config?lanlan_name=${encodeURIComponent(lanlanNameFromUrl)}`
-                : '/api/config/page_config';
+            // 从 API 获取配置（使用 RequestAPI）
+            // 等待 request 和 RequestAPI 都初始化完成
+            await window.ReactInit.waitForRequestInit();
+            await window.ReactInit.waitForRequestAPIInit();
+            const data = await window.RequestAPI.getPageConfig(lanlanNameFromUrl || undefined);
             
-            const response = await fetch(apiUrl);
-            const data = await response.json();
-            
-            if (data.success) {
+            if (data && data.success) {
                 // 使用 URL 中的 lanlan_name（如果有），否则使用 API 返回的
                 lanlan_config.lanlan_name = lanlanNameFromUrl || data.lanlan_name || "";
                 window.lanlan_config = lanlan_config;
@@ -1155,41 +1169,95 @@
 <script>
     // Beacon功能 - 页面关闭时发送信号给服务器
     let beaconSent = false;
+    
+    // 缓存 RequestAPI 的 sendShutdownBeacon 方法引用（在页面加载时初始化）
+    let cachedSendShutdownBeacon = null;
 
     function sendBeacon() {
         if (beaconSent) return; // 防止重复发送
         beaconSent = true;
         
         try {
-            // 使用navigator.sendBeacon确保信号不被拦截
-            const success = navigator.sendBeacon('/api/beacon/shutdown', JSON.stringify({
-                timestamp: Date.now(),
-                action: 'shutdown'
-            }));
+            // 优先使用缓存的 RequestAPI.sendShutdownBeacon（如果已初始化）
+            if (cachedSendShutdownBeacon) {
+                // 调用缓存的函数（异步执行，不等待结果）
+                cachedSendShutdownBeacon(true).catch(err => {
+                    console.warn('RequestAPI.sendShutdownBeacon 调用失败:', err);
+                });
+                return;
+            }
             
-            if (success) {
-                console.log('Beacon信号已发送');
+            // 如果 RequestAPI 在此时可用但未缓存，直接尝试使用
+            if (window.RequestAPI && typeof window.RequestAPI.sendShutdownBeacon === 'function') {
+                window.RequestAPI.sendShutdownBeacon(true).catch(err => {
+                    console.warn('RequestAPI.sendShutdownBeacon 调用失败:', err);
+                });
+                return;
+            }
+            
+            // 备用方案：直接使用 navigator.sendBeacon
+            if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+                const payload = JSON.stringify({
+                    timestamp: Date.now(),
+                    action: 'shutdown'
+                });
+                const success = navigator.sendBeacon('/api/beacon/shutdown', payload);
+                if (success) {
+                    console.log('Beacon信号已发送（使用 navigator.sendBeacon）');
+                } else {
+                    console.warn('navigator.sendBeacon 发送失败');
+                }
             } else {
-                console.warn('Beacon发送失败，尝试使用fetch');
-                // 备用方案：使用fetch
-                fetch('/api/beacon/shutdown', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        timestamp: Date.now(),
-                        action: 'shutdown'
-                    }),
-                    keepalive: true // 确保请求在页面关闭时仍能发送
-                }).catch(err => console.log('备用beacon发送失败:', err));
+                console.warn('RequestAPI 未初始化且 navigator.sendBeacon 不可用，无法发送关闭信号');
             }
         } catch (e) {
-            console.log('Beacon发送异常:', e);
+            console.error('Beacon发送异常:', e);
         }
     }
 
     // 监听页面关闭事件
     window.addEventListener('beforeunload', sendBeacon);
     window.addEventListener('unload', sendBeacon);
+</script>
+<script>
+    // 在页面加载时缓存 RequestAPI 的 sendShutdownBeacon 方法
+    // 使用 DOMContentLoaded 和 load 事件确保在模块加载后检查
+    function cacheRequestAPIShutdownBeacon() {
+        // 检查 RequestAPI 是否已初始化
+        if (window.RequestAPI && typeof window.RequestAPI.sendShutdownBeacon === 'function') {
+            cachedSendShutdownBeacon = window.RequestAPI.sendShutdownBeacon.bind(window.RequestAPI);
+            console.log('[Beacon] RequestAPI.sendShutdownBeacon 已缓存');
+            return true;
+        }
+        return false;
+    }
+    
+    // 立即检查一次（可能模块已经加载完成）
+    if (cacheRequestAPIShutdownBeacon()) {
+        // 已经缓存，无需继续
+    } else {
+        // 模块可能还在加载，使用事件监听和轮询
+        let checkCount = 0;
+        const maxChecks = 50; // 最多检查 50 次（约 5 秒）
+        
+        const checkInterval = setInterval(() => {
+            checkCount++;
+            if (cacheRequestAPIShutdownBeacon() || checkCount >= maxChecks) {
+                clearInterval(checkInterval);
+            }
+        }, 100);
+        
+        // DOMContentLoaded 时也检查一次
+        document.addEventListener('DOMContentLoaded', () => {
+            cacheRequestAPIShutdownBeacon();
+        });
+        
+        // load 事件时最终检查
+        window.addEventListener('load', () => {
+            cacheRequestAPIShutdownBeacon();
+            clearInterval(checkInterval);
+        });
+    }
 </script>
 <script src="/static/libs/live2dcubismcore.min.js"></script>  <!-- Cubism 4核心库（支持Cubism 3/4模型） -->
 <script>
@@ -1280,17 +1348,17 @@
         try {
             console.log('检查模型配置是否有更新...');
             
+            // 等待 RequestAPI 初始化
+            if (window.ReactInit && window.ReactInit.waitForRequestAPIInit) {
+                await window.ReactInit.waitForRequestAPIInit();
+            }
+            
             // 1. 获取当前角色名称
             let currentLanlanName = lanlan_config.lanlan_name;
             console.log('BEFORE currentLanlanName: ', currentLanlanName);
             
-            // 2. 获取最新的角色配置（包含所有猫娘的完整配置）
-            const charResponse = await fetch('/api/characters');
-            if (!charResponse.ok) {
-                console.warn('获取角色配置失败，跳过模型检查');
-                return;
-            }
-            const charactersData = await charResponse.json();
+            // 2. 获取最新的角色配置（使用 RequestAPI）
+            const charactersData = await window.RequestAPI.getCharacters();
 
             // 确保 lanlan_config.lanlan_name 更新到 chara_manager.html 当前选中的猫娘
             currentLanlanName = lanlan_config.lanlan_name = charactersData['当前猫娘'];
@@ -1305,13 +1373,8 @@
             const newModelName = catgirlConfig.live2d || 'mao_pro';
             console.log('AFTER newModelName: ', newModelName);
             
-            // 3. 获取所有可用模型列表
-            const modelsResponse = await fetch('/api/live2d/models');
-            if (!modelsResponse.ok) {
-                console.warn('获取模型列表失败，跳过模型检查');
-                return;
-            }
-            const models = await modelsResponse.json();
+            // 3. 获取所有可用模型列表（使用 RequestAPI）
+            const models = await window.RequestAPI.getLive2DModels();
             
             // 4. 根据模型名称查找对应的模型路径
             const modelInfo = models.find(m => m.name === newModelName);
@@ -1676,6 +1739,33 @@
             // 加载所有 live2d 模块
             await loadScriptsSequentially(live2dModules);
             
+            // 等待 StatusToast 组件就绪（最多等待 2 秒）
+            const waitForStatusToast = () => {
+                return new Promise((resolve) => {
+                    if (typeof window.showStatusToast === 'function' && 
+                        window.showStatusToast.toString().includes('showToast')) {
+                        // 检查是否是 React 组件提供的函数（不是临时队列函数）
+                        console.log('[App] StatusToast 组件已就绪');
+                        resolve(true);
+                        return;
+                    }
+                    
+                    // 监听就绪事件
+                    const timeout = setTimeout(() => {
+                        console.warn('[App] StatusToast 组件等待超时，继续加载 app.js');
+                        resolve(false);
+                    }, 2000);
+                    
+                    window.addEventListener('statusToastReady', () => {
+                        clearTimeout(timeout);
+                        console.log('[App] StatusToast 组件就绪事件触发');
+                        resolve(true);
+                    }, { once: true });
+                });
+            };
+            
+            await waitForStatusToast();
+            
             // 等待 live2d 模块加载完成后再加载 app.js
             const appScript = document.createElement('script');
             appScript.src = '/static/app.js';
@@ -1685,6 +1775,7 @@
         }
     })();
 </script>
+
 <script>
   // 对话区提示框逻辑 - 仅在第一次访问时显示
   (function() {
