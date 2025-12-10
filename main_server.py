@@ -46,8 +46,6 @@ from steamworks.exceptions import SteamNotLoadedException
 from steamworks.enums import EWorkshopFileType, EItemUpdateStatus
 import base64
 import tempfile
-import platform
-import subprocess
 from utils.screenshot_utils import ScreenshotUtils
 
 
@@ -453,7 +451,7 @@ async def analyze_screenshot_from_data_url(data_url: str) -> Optional[str]:
                 logger.warning(f"清理临时截图文件失败: {e}")
                 
     except Exception as e:
-        logger.error(f"分析截图DataURL失败: {e}")
+        logger.exception(f"分析截图DataURL失败: {e}")
         return None
 
 # 使用 FastAPI 的 app.state 来管理启动配置
@@ -1190,7 +1188,6 @@ async def proactive_chat(request: Request):
     """主动搭话：根据概率选择使用图片或热门内容，让AI决定是否主动发起对话"""
     try:
         from utils.web_scraper import fetch_trending_content, format_trending_content
-        import random
         
         # 获取当前角色数据
         master_name_current, her_name_current, _, _, _, _, _, _, _, _ = _config_manager.get_character_data()
@@ -1237,7 +1234,7 @@ async def proactive_chat(request: Request):
                 else:
                     logger.info(f"[{lanlan_name}] 成功分析截图内容")
             except Exception as e:
-                logger.error(f"[{lanlan_name}] 处理截图数据失败: {e}")
+                logger.exception(f"[{lanlan_name}] 处理截图数据失败: {e}")
                 return JSONResponse({
                     "success": False,
                     "error": "截图处理失败",
@@ -1262,7 +1259,7 @@ async def proactive_chat(request: Request):
                 logger.info(f"[{lanlan_name}] 成功获取热门内容")
                 
             except Exception as e:
-                logger.error(f"[{lanlan_name}] 获取热门内容失败: {e}")
+                logger.exception(f"[{lanlan_name}] 获取热门内容失败: {e}")
                 return JSONResponse({
                     "success": False,
                     "error": "爬取热门内容时出错",

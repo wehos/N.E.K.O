@@ -373,7 +373,7 @@ function init_app(){
                     }
                     
                     // AI回复完成后，重置主动搭话计时器（如果已开启且在文本模式）
-                    if (proactiveChatEnabled && !isRecording) {
+                    if ((proactiveChatEnabled || proactiveVisionEnabled) && !isRecording) {
                         resetProactiveChatBackoff();
                     }
                 } else if (response.type === 'session_preparing') {
@@ -711,7 +711,7 @@ function init_app(){
         textInputArea.classList.remove('hidden');
         
         // 停止录音后，重置主动搭话退避级别并开始定时
-        if (proactiveChatEnabled) {
+        if (proactiveChatEnabled || proactiveVisionEnabled) {
             resetProactiveChatBackoff();
         }
         
@@ -1296,7 +1296,7 @@ function init_app(){
             console.log('[App] 执行普通结束会话逻辑');
             
             // 结束会话后，重置主动搭话计时器（如果已开启）
-            if (proactiveChatEnabled) {
+            if (proactiveChatEnabled || proactiveVisionEnabled) {
                 resetProactiveChatBackoff();
             }
             // 显示文本输入区
@@ -1418,7 +1418,7 @@ function init_app(){
             showStatusToast(window.t ? window.t('app.returning', {name: lanlan_config.lanlan_name}) : `🫴 ${lanlan_config.lanlan_name}回来了！正在重新连接...`, 3000);
             
             // 重置主动搭话定时器（如果已开启）
-            if (proactiveChatEnabled) {
+            if (proactiveChatEnabled || proactiveVisionEnabled) {
                 resetProactiveChatBackoff();
             }
         } else {
@@ -1554,7 +1554,7 @@ function init_app(){
             }
             
             // 文本聊天后，重置主动搭话计时器（如果已开启）
-            if (proactiveChatEnabled) {
+            if (proactiveChatEnabled || proactiveVisionEnabled) {
                 resetProactiveChatBackoff();
             }
             
@@ -2501,7 +2501,10 @@ function init_app(){
                         if (proactiveChatEnabled) {
                             resetProactiveChatBackoff();
                         } else {
-                            stopProactiveChatSchedule();
+                            // 只有当主动视觉也关闭时才停止调度
+                            if (!proactiveVisionEnabled) {
+                                stopProactiveChatSchedule();
+                            }
                         }
                     });
                 }
@@ -4451,7 +4454,7 @@ function init_app(){
             proactiveChatTimer = null;
         }
         
-        // 如果主动搭话和主动视觉都未开启，不执行
+        // 两个功能都关闭时跳过
         if (!proactiveChatEnabled && !proactiveVisionEnabled) {
             return;
         }
@@ -4677,8 +4680,8 @@ function init_app(){
     // 加载设置
     loadSettings();
     
-    // 如果已开启主动搭话，立即启动定时器
-    if (proactiveChatEnabled) {
+    // 如果已开启主动搭话或主动视觉，立即启动定时器
+    if (proactiveChatEnabled || proactiveVisionEnabled) {
         scheduleProactiveChat();
     }
     
