@@ -9,6 +9,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from openai import APIConnectionError, InternalServerError, RateLimitError
 from config import MODELS_WITH_EXTRA_BODY
+from utils.frontend_utils import calculate_text_similarity
 
 # Setup logger for this module
 logger = logging.getLogger(__name__)
@@ -131,32 +132,6 @@ class OmniOfflineClient:
                 extra_body={"enable_thinking": False} if self.model in MODELS_WITH_EXTRA_BODY else None
             )
     
-    def _calculate_similarity(self, text1: str, text2: str) -> float:
-        """
-        计算两段文本的相似度（使用字符级 trigram 的 Jaccard 相似度）。
-        返回 0.0 到 1.0 之间的值。
-        """
-        if not text1 or not text2:
-            return 0.0
-        
-        # 生成字符级 trigrams
-        def get_trigrams(text: str) -> set:
-            text = text.lower().strip()
-            if len(text) < 3:
-                return {text}
-            return {text[i:i+3] for i in range(len(text) - 2)}
-        
-        trigrams1 = get_trigrams(text1)
-        trigrams2 = get_trigrams(text2)
-        
-        if not trigrams1 or not trigrams2:
-            return 0.0
-        
-        intersection = len(trigrams1 & trigrams2)
-        union = len(trigrams1 | trigrams2)
-        
-        return intersection / union if union > 0 else 0.0
-    
     async def _check_repetition(self, response: str) -> bool:
         """
         检查回复是否与近期回复高度重复。
@@ -166,7 +141,7 @@ class OmniOfflineClient:
         # 与最近的回复比较相似度
         high_similarity_count = 0
         for recent in self._recent_responses:
-            similarity = self._calculate_similarity(response, recent)
+            similarity = calculate_text_similarity(response, recent)
             if similarity >= self._repetition_threshold:
                 high_similarity_count += 1
         
@@ -288,9 +263,9 @@ class OmniOfflineClient:
                                     pipe_count += 1
                                     if pipe_count >= 2:
                                         # 触发围栏：找到第二个 | 的位置并截断
-                                        fence_index = content.find('|', content.find('|') + 1)
-                                        if fence_index != -1:
-                                            content = content[:fence_index]
+                                        pipe_positions = [i for i, c in enumerate(content) if c == '|']
+                                        if len(pipe_positions) >= 2:
+                                            content = content[:pipe_positions[1]]
                                         fence_triggered = True
                                         logger.info("OmniOfflineClient: 围栏触发 - 检测到第二个 | 字符，截断输出")
                                         break

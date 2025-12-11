@@ -12,6 +12,7 @@ from enum import Enum
 from langchain_openai import ChatOpenAI
 from utils.config_manager import get_config_manager
 from utils.audio_processor import AudioProcessor
+from utils.frontend_utils import calculate_text_similarity
 
 # Setup logger for this module
 logger = logging.getLogger(__name__)
@@ -522,32 +523,6 @@ class OmniRealtimeClient:
         }
         await self.send_event(event)
     
-    def _calculate_similarity(self, text1: str, text2: str) -> float:
-        """
-        计算两段文本的相似度（使用字符级 trigram 的 Jaccard 相似度）。
-        返回 0.0 到 1.0 之间的值。
-        """
-        if not text1 or not text2:
-            return 0.0
-        
-        # 生成字符级 trigrams
-        def get_trigrams(text: str) -> set:
-            text = text.lower().strip()
-            if len(text) < 3:
-                return {text}
-            return {text[i:i+3] for i in range(len(text) - 2)}
-        
-        trigrams1 = get_trigrams(text1)
-        trigrams2 = get_trigrams(text2)
-        
-        if not trigrams1 or not trigrams2:
-            return 0.0
-        
-        intersection = len(trigrams1 & trigrams2)
-        union = len(trigrams1 | trigrams2)
-        
-        return intersection / union if union > 0 else 0.0
-    
     async def _check_repetition(self, response: str) -> bool:
         """
         检查回复是否与近期回复高度重复。
@@ -556,8 +531,8 @@ class OmniRealtimeClient:
         
         # 与最近的回复比较相似度
         high_similarity_count = 0
-        for i, recent in enumerate(self._recent_responses):
-            similarity = self._calculate_similarity(response, recent)
+        for recent in self._recent_responses:
+            similarity = calculate_text_similarity(response, recent)
             if similarity >= self._repetition_threshold:
                 high_similarity_count += 1
         

@@ -154,6 +154,10 @@ function init_app() {
     let proactiveChatBackoffLevel = 0; // 退避级别：0=30s, 1=1min, 2=2min, 3=4min, etc.
     const PROACTIVE_CHAT_BASE_DELAY = 30000; // 30秒基础延迟
 
+    // 截图最大尺寸（1080p）
+    const MAX_SCREENSHOT_WIDTH = 1920;
+    const MAX_SCREENSHOT_HEIGHT = 1080;
+
     // Focus模式为true时，AI播放语音时会自动静音麦克风（不允许打断）
     let focusModeEnabled = false;
 
@@ -1596,18 +1600,22 @@ function init_app() {
 
     // 截图按钮事件
     screenshotButton.addEventListener('click', async () => {
+        let captureStream = null;
+
         try {
             // 临时禁用截图按钮，防止重复点击
             screenshotButton.disabled = true;
             showStatusToast(window.t ? window.t('app.capturing') : '正在截图...', 2000);
-
-            let captureStream;
 
             // 获取屏幕或摄像头流
             if (isMobile()) {
                 // 移动端使用摄像头
                 captureStream = await getMobileCameraStream();
             } else {
+                // API 兼容性检测（桌面端）
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                    throw new Error('UNSUPPORTED_API');
+                }
                 // 桌面端使用屏幕共享
                 captureStream = await navigator.mediaDevices.getDisplayMedia({
                     video: {
@@ -1628,31 +1636,43 @@ function init_app() {
 
             // 创建canvas来捕获帧
             const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
             const ctx = canvas.getContext('2d');
 
-            // 捕获当前帧
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            // 计算缩放后的尺寸（保持宽高比，限制到1080p）
+            let targetWidth = video.videoWidth;
+            let targetHeight = video.videoHeight;
+
+            if (targetWidth > MAX_SCREENSHOT_WIDTH || targetHeight > MAX_SCREENSHOT_HEIGHT) {
+                const widthRatio = MAX_SCREENSHOT_WIDTH / targetWidth;
+                const heightRatio = MAX_SCREENSHOT_HEIGHT / targetHeight;
+                const scale = Math.min(widthRatio, heightRatio);
+                targetWidth = Math.round(targetWidth * scale);
+                targetHeight = Math.round(targetHeight * scale);
+            }
+
+            // 设置canvas尺寸为缩放后的尺寸
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+
+            // 绘制视频帧到canvas（缩放绘制）
+            ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
             const dataUrl = canvas.toDataURL('image/jpeg', 0.8); // base64 jpeg
 
-            // 停止捕获流
-            captureStream.getTracks().forEach(track => track.stop());
+            console.log(`截图成功，尺寸: ${targetWidth}x${targetHeight}`);
 
             // 添加截图到待发送列表（不立即发送）
             addScreenshotToList(dataUrl);
 
             showStatusToast(window.t ? window.t('app.screenshotAdded') : '截图已添加，点击发送一起发送', 3000);
 
-            // 重新启用截图按钮
-            screenshotButton.disabled = false;
-
         } catch (err) {
             console.error('截图失败:', err);
 
             // 根据错误类型显示不同提示
             let errorMsg = window.t ? window.t('app.screenshotFailed') : '截图失败';
-            if (err.name === 'NotAllowedError') {
+            if (err.message === 'UNSUPPORTED_API') {
+                errorMsg = window.t ? window.t('app.screenshotUnsupported') : '当前浏览器不支持屏幕截图功能';
+            } else if (err.name === 'NotAllowedError') {
                 errorMsg = window.t ? window.t('app.screenshotCancelled') : '用户取消了截图';
             } else if (err.name === 'NotFoundError') {
                 errorMsg = window.t ? window.t('app.deviceNotFound') : '未找到可用的媒体设备';
@@ -1663,7 +1683,11 @@ function init_app() {
             }
 
             showStatusToast(errorMsg, 5000);
-
+        } finally {
+            // 确保流被正确关闭，防止资源泄漏
+            if (captureStream) {
+                captureStream.getTracks().forEach(track => track.stop());
+            }
             // 重新启用截图按钮
             screenshotButton.disabled = false;
         }
@@ -2163,10 +2187,24 @@ function init_app() {
 
         // 定时抓取当前帧并编码为jpeg
         video.play().then(() => {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            // 计算缩放后的尺寸（保持宽高比，限制到1080p）
+            let targetWidth = video.videoWidth;
+            let targetHeight = video.videoHeight;
+
+            if (targetWidth > MAX_SCREENSHOT_WIDTH || targetHeight > MAX_SCREENSHOT_HEIGHT) {
+                const widthRatio = MAX_SCREENSHOT_WIDTH / targetWidth;
+                const heightRatio = MAX_SCREENSHOT_HEIGHT / targetHeight;
+                const scale = Math.min(widthRatio, heightRatio);
+                targetWidth = Math.round(targetWidth * scale);
+                targetHeight = Math.round(targetHeight * scale);
+                console.log(`屏幕共享：原尺寸 ${video.videoWidth}x${video.videoHeight} -> 缩放到 ${targetWidth}x${targetHeight}`);
+            }
+
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+
             videoSenderInterval = setInterval(() => {
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
                 const dataUrl = canvas.toDataURL('image/jpeg', 0.8); // base64 jpeg
 
                 if (socket.readyState === WebSocket.OPEN) {
@@ -2177,7 +2215,7 @@ function init_app() {
                     }));
                 }
             }, 1000);
-        } // 每100ms一帧
+        } // 每1000ms一帧
         )
     }
 
@@ -4704,9 +4742,17 @@ function init_app() {
 
     // 主动搭话截图函数
     async function captureProactiveChatScreenshot() {
+        // API 兼容性检测
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+            console.warn('主动搭话截图失败：当前浏览器不支持 getDisplayMedia API');
+            return null;
+        }
+
+        let captureStream = null;
+
         try {
             // 使用屏幕共享API进行截图
-            const captureStream = await navigator.mediaDevices.getDisplayMedia({
+            captureStream = await navigator.mediaDevices.getDisplayMedia({
                 video: {
                     cursor: 'always',
                 },
@@ -4726,25 +4772,39 @@ function init_app() {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
 
-            // 设置canvas尺寸与视频相同
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            // 计算缩放后的尺寸（保持宽高比，限制到1080p）
+            let targetWidth = video.videoWidth;
+            let targetHeight = video.videoHeight;
 
-            // 绘制视频帧到canvas
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            if (targetWidth > MAX_SCREENSHOT_WIDTH || targetHeight > MAX_SCREENSHOT_HEIGHT) {
+                const widthRatio = MAX_SCREENSHOT_WIDTH / targetWidth;
+                const heightRatio = MAX_SCREENSHOT_HEIGHT / targetHeight;
+                const scale = Math.min(widthRatio, heightRatio);
+                targetWidth = Math.round(targetWidth * scale);
+                targetHeight = Math.round(targetHeight * scale);
+            }
 
-            // 转换为DataURL
-            const dataUrl = canvas.toDataURL('image/png');
+            // 设置canvas尺寸为缩放后的尺寸
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
 
-            // 停止捕获流
-            captureStream.getTracks().forEach(track => track.stop());
+            // 绘制视频帧到canvas（缩放绘制）
+            ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
 
-            console.log('主动搭话截图成功');
+            // 转换为DataURL（使用JPEG格式以减小文件大小）
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+            console.log(`主动搭话截图成功，尺寸: ${targetWidth}x${targetHeight}`);
             return dataUrl;
 
         } catch (err) {
             console.error('主动搭话截图失败:', err);
             return null;
+        } finally {
+            // 确保流被正确关闭，防止资源泄漏
+            if (captureStream) {
+                captureStream.getTracks().forEach(track => track.stop());
+            }
         }
     }
 

@@ -394,14 +394,18 @@ class LLMSessionManager:
     async def handle_repetition_detected(self):
         """处理重复度检测回调：通知前端"""
         try:
-            logger.warning(f"[{self.lanlan_name}] 检测到高重复度对话")
+            logger.warning(f"[{self.lanlan_name}] 检测到高重复度对话，准备通知前端")
             
             # 向前端发送重复警告消息（使用 i18n key）
             if self.websocket and hasattr(self.websocket, 'client_state') and self.websocket.client_state == self.websocket.client_state.CONNECTED:
+                logger.info(f"[{self.lanlan_name}] WebSocket 已连接，发送 repetition_warning")
                 await self.websocket.send_json({
                     "type": "repetition_warning",
                     "name": self.lanlan_name  # 前端会用这个名字填充 i18n 模板
                 })
+                logger.info(f"[{self.lanlan_name}] repetition_warning 已发送")
+            else:
+                logger.warning(f"[{self.lanlan_name}] WebSocket 未连接，无法发送通知")
             
         except Exception as e:
             logger.error(f"处理重复度检测时出错: {e}")

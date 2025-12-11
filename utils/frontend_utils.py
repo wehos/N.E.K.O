@@ -136,6 +136,33 @@ def is_only_punctuation(text):
     return bool(regex.fullmatch(punctuation_pattern, text))
 
 
+def calculate_text_similarity(text1: str, text2: str) -> float:
+    """
+    计算两段文本的相似度（使用字符级 trigram 的 Jaccard 相似度）。
+    返回 0.0 到 1.0 之间的值。
+    """
+    if not text1 or not text2:
+        return 0.0
+    
+    # 生成字符级 trigrams
+    def get_trigrams(text: str) -> set:
+        text = text.lower().strip()
+        if len(text) < 3:
+            return {text}
+        return {text[i:i+3] for i in range(len(text) - 2)}
+    
+    trigrams1 = get_trigrams(text1)
+    trigrams2 = get_trigrams(text2)
+    
+    if not trigrams1 or not trigrams2:
+        return 0.0
+    
+    intersection = len(trigrams1 & trigrams2)
+    union = len(trigrams1 | trigrams2)
+    
+    return intersection / union if union > 0 else 0.0
+
+
 def find_models():
     """
     递归扫描 'static' 文件夹、用户文档下的 'live2d' 文件夹和用户mod路径，查找所有包含 '.model3.json' 文件的子目录。

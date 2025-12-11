@@ -634,6 +634,7 @@
     "screenshotCancelled": "用户取消了截图",
     "deviceNotFound": "未找到可用的媒体设备",
     "deviceNotAccessible": "无法访问媒体设备",
+    "screenshotUnsupported": "当前浏览器不支持屏幕截图功能，请使用Chrome或Edge浏览器",
     "micNoSound": "⚠️ 麦克风无声音，请检查麦克风设置",
     "switchingCatgirl": "正在切换到 {{name}}...",
     "switchedCatgirl": "已切换到 {{name}}",

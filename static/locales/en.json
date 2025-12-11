@@ -635,6 +635,7 @@
     "screenshotCancelled": "User cancelled screenshot",
     "deviceNotFound": "No available media device found",
     "deviceNotAccessible": "Cannot access media device",
+    "screenshotUnsupported": "Your browser does not support screen capture, please use Chrome or Edge browser",
     "micNoSound": "⚠️ No microphone sound detected, please check microphone settings",
     "switchingCatgirl": "Switching to {{name}}...",
     "switchedCatgirl": "Switched to {{name}}",
