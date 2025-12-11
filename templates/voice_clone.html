@@ -286,7 +286,12 @@
                 method: 'POST',
                 body: formData
             })
-                .then(res => res.json())
+                .then(res => {
+                    if (!res.ok) {
+                        throw new Error(`API returned ${res.status}`);
+                    }
+                    return res.json();
+                })
                 .then(data => {
                     if (data.voice_id) {
                         resultDiv.innerHTML = window.t ? window.t('voice.registerSuccess', { voiceId: data.voice_id }) : '注册成功！voice_id: ' + data.voice_id;
@@ -297,7 +302,12 @@
                                 method: 'PUT',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ voice_id: data.voice_id })
-                            }).then(resp => resp.json()).then(res => {
+                            }).then(resp => {
+                                if (!resp.ok) {
+                                    throw new Error(`API returned ${resp.status}`);
+                                }
+                                return resp.json();
+                            }).then(res => {
                                 if (!res.success) {
                                     const errorMsg = res.error || (window.t ? window.t('common.unknownError') : '未知错误');
                                     resultDiv.innerHTML += '<br><span class="error">' + (window.t ? window.t('voice.voiceIdSaveFailed', { error: errorMsg }) : 'voice_id自动保存失败: ' + errorMsg) + '</span>';
