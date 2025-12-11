@@ -211,11 +211,17 @@ def get_input_schema(self) -> Dict[str, Any]:
 ```python
 def report_status(self, status: Dict[str, Any]) -> None:
     """上报插件状态到主进程"""
-    self.report_status({
-        "status": "running",
-        "progress": 50,
-        "message": "Processing..."
-    })
+    # 实际实现略
+```
+
+使用示例：
+
+```python
+self.report_status({
+    "status": "running",
+    "progress": 50,
+    "message": "Processing...",
+})
 ```
 
 **`collect_entries()`**
