@@ -1259,10 +1259,24 @@ async def proactive_chat(request: Request):
             # 使用 get_model_api_config 获取 API 配置
             correction_config = _config_manager.get_model_api_config('correction')
             
+            # 安全获取配置项，使用 .get() 避免 KeyError
+            correction_model = correction_config.get('model')
+            correction_base_url = correction_config.get('base_url')
+            correction_api_key = correction_config.get('api_key')
+            
+            # 验证必需的配置项
+            if not correction_model or not correction_api_key:
+                logger.error("纠错模型配置缺失: model或api_key未设置")
+                return JSONResponse({
+                    "success": False,
+                    "error": "纠错模型配置缺失",
+                    "detail": "请在设置中配置纠错模型的model和api_key"
+                }, status_code=500)
+            
             llm = ChatOpenAI(
-                model=correction_config['model'],
-                base_url=correction_config['base_url'],
-                api_key=correction_config['api_key'],
+                model=correction_model,
+                base_url=correction_base_url,
+                api_key=correction_api_key,
                 temperature=1.1,
                 streaming=False  # 不需要流式，直接获取完整响应
             )
@@ -1283,7 +1297,7 @@ async def proactive_chat(request: Request):
                     response_text = response.content.strip()
                     break  # 成功则退出重试循环
                 except (APIConnectionError, InternalServerError, RateLimitError) as e:
-                    logger.info(f"ℹ️ 捕获到 {type(e).__name__} 错误")
+                    logger.info(f"[INFO] 捕获到 {type(e).__name__} 错误")
                     if attempt < max_retries - 1:
                         wait_time = retry_delays[attempt]
                         logger.warning(f"[{lanlan_name}] 主动搭话LLM调用失败 (尝试 {attempt + 1}/{max_retries})，{wait_time}秒后重试: {e}")
@@ -5340,19 +5354,24 @@ async def emotion_analysis(request: Request):
         api_key = data.get('api_key')
         model = data.get('model')
         
-        # 使用参数或默认配置
+        # 使用参数或默认配置，使用 .get() 安全获取避免 KeyError
         emotion_config = _config_manager.get_model_api_config('emotion')
-        api_key = api_key or emotion_config['api_key']
-        model = model or emotion_config['model']
+        emotion_api_key = emotion_config.get('api_key')
+        emotion_model = emotion_config.get('model')
+        emotion_base_url = emotion_config.get('base_url')
+        
+        # 优先使用请求参数，其次使用配置
+        api_key = api_key or emotion_api_key
+        model = model or emotion_model
         
         if not api_key:
-            return {"error": "API密钥未提供且配置中未设置默认密钥"}
+            return {"error": "情绪分析模型配置缺失: API密钥未提供且配置中未设置默认密钥"}
         
         if not model:
-            return {"error": "模型名称未提供且配置中未设置默认模型"}
+            return {"error": "情绪分析模型配置缺失: 模型名称未提供且配置中未设置默认模型"}
         
         # 创建异步客户端
-        client = AsyncOpenAI(api_key=api_key, base_url=emotion_config['base_url'])
+        client = AsyncOpenAI(api_key=api_key, base_url=emotion_base_url)
         
         # 构建请求消息
         messages = [

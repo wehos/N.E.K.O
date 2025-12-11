@@ -239,6 +239,9 @@
                 // 如果 URL 中没有，从 API 获取
                 if (!lanlanName) {
                     const response = await fetch('/api/config/page_config');
+                    if (!response.ok) {
+                        throw new Error(`API returned ${response.status}`);
+                    }
                     const data = await response.json();
                     if (data.success) {
                         lanlanName = data.lanlan_name || "";
