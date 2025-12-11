@@ -72,12 +72,10 @@ export function PromptDialog({
     // 不在这里调用 onClose，让父组件处理关闭逻辑
   };
 
-  // 处理 Enter 和 ESC 键
+  // 处理 Enter 键（Esc 交由 BaseModal 统一处理）
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       handleConfirm();
-    } else if (e.key === "Escape") {
-      handleCancel();
     }
   };
 
