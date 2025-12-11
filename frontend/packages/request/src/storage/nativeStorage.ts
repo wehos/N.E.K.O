@@ -40,3 +40,9 @@ const nativeStorage: Storage = {
 
 export default nativeStorage;
 
+// 仅供测试覆盖使用，重置内部缓存
+export function __resetNativeStorageInternal() {
+  AsyncStorageInstance = null;
+  asyncStoragePromise = null;
+}
+

@@ -47,6 +47,9 @@ export class RequestQueue {
       this.resolveRefresh = resolve;
       this.rejectRefresh = reject;
     });
+    this.refreshPromise.catch(() => {
+      // 防止未被显式 await 时抛出未处理的拒绝
+    });
 
     return this.refreshPromise;
   }

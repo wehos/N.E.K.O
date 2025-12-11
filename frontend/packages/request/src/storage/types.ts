@@ -1,3 +1,5 @@
+/* c8 ignore file */
+/* istanbul ignore file */
 /**
  * 通用存储接口
  * 用于 Web (localStorage) 和 React Native (AsyncStorage) 的统一抽象

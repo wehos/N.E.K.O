@@ -1,3 +1,5 @@
+/* c8 ignore file */
+/* istanbul ignore file */
 import type { AxiosResponse, AxiosError, InternalAxiosRequestConfig } from "axios";
 
 /**
@@ -47,6 +49,8 @@ export interface RequestClientConfig {
   returnDataOnly?: boolean;
   /** 自定义错误处理 */
   errorHandler?: (error: AxiosError) => void | Promise<void>;
+  /** 是否启用请求/响应日志（优先级：config > 全局变量 > env；env 不可读时默认 false） */
+  logEnabled?: boolean;
 }
 
 /**

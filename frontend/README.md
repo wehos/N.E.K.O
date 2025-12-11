@@ -8,6 +8,7 @@ React 19 + Vite 7 的单页应用，使用 npm workspaces 管理组件库、通�
 - **构建工具**: Vite 7.1.7
 - **语言**: TypeScript 5.9.2
 - **HTTP 客户端**: Axios 1.13.2
+- **测试框架**: Vitest 2.1.3（含 coverage-v8）
 - **包管理**: npm workspaces
 
 ## 项目结构
@@ -38,19 +39,27 @@ frontend/
 │   │   ├── index.ts      # 组件导出入口
 │   │   └── vite.config.ts
 │   ├── request/          # HTTP 请求库（Axios 封装）
+│   │   ├── __tests__/    # 单元测试
+│   │   │   ├── requestClient.test.ts
+│   │   │   ├── entrypoints.test.ts
+│   │   │   └── nativeStorage.test.ts
+│   │   ├── coverage/     # 测试覆盖率报告
 │   │   ├── createClient.ts
 │   │   ├── index.ts      # 通用入口
 │   │   ├── index.web.ts  # Web 端入口（默认实例）
-│   │   ├── index.native.ts
+│   │   ├── index.native.ts # React Native 入口
 │   │   └── src/
 │   │       ├── request-client/  # 请求客户端核心
-│   │       │   ├── requestQueue.ts
-│   │       │   ├── tokenStorage.ts
-│   │       │   └── types.ts
+│   │       │   ├── requestQueue.ts  # 请求队列管理
+│   │       │   ├── tokenStorage.ts  # Token 存储实现
+│   │       │   └── types.ts         # 类型定义
 │   │       └── storage/          # 存储抽象层
-│   │           ├── index.web.ts
-│   │           ├── index.native.ts
-│   │           └── ...
+│   │           ├── index.ts          # 统一入口
+│   │           ├── index.web.ts      # Web 入口
+│   │           ├── index.native.ts   # Native 入口
+│   │           ├── webStorage.ts     # localStorage 封装
+│   │           ├── nativeStorage.ts  # AsyncStorage 封装
+│   │           └── types.ts          # Storage 接口定义
 │   ├── web-bridge/       # 桥接层（将组件与请求能力暴露到 window）
 │   │   ├── src/
 │   │   │   ├── index.ts
@@ -75,6 +84,7 @@ frontend/
 - **`src/web/`**: SPA 应用入口，包含 `main.tsx`（React 挂载）和 `App.tsx`（主组件逻辑）
 - **`packages/components/`**: UI 组件库，产出 ES/UMD 双格式，支持外部化 React/ReactDOM，包含 Button、StatusToast、Modal 等组件
 - **`packages/request/`**: Axios 封装库，提供请求队列、Token 自动刷新等功能，支持 Web/React Native 双平台
+- **`packages/request/__tests__/`**: 请求库单元测试，使用 Vitest 编写
 - **`packages/web-bridge/`**: 桥接层，将组件和请求能力暴露到 `window` 对象，供非 React 代码使用
 - **`packages/common/`**: 公共类型定义（如 `ApiResponse<T>`）和工具函数
 - **`scripts/`**: 构建辅助脚本，用于清理输出目录和复制 React UMD 文件
@@ -205,6 +215,38 @@ const ok = await modalRef.current?.confirm("确认要执行该操作吗？", "�
 // Prompt
 const name = await modalRef.current?.prompt("请输入昵称：", "Neko");
 ```
+
+## 测试
+
+### 运行测试
+
+请求库包含完整的单元测试套件，使用 Vitest 编写：
+
+```bash
+# 运行请求库测试
+cd frontend/packages/request && npm test
+
+# 或在 frontend 目录下
+cd frontend && npm run test -w @project_neko/request
+```
+
+### 测试覆盖率
+
+生成测试覆盖率报告：
+
+```bash
+cd frontend/packages/request && npx vitest run --coverage
+```
+
+覆盖率报告将生成到 `packages/request/coverage/` 目录。
+
+### 测试文件说明
+
+| 文件 | 描述 |
+|------|------|
+| `requestClient.test.ts` | 请求客户端核心功能测试（Token 刷新、请求队列、拦截器等） |
+| `entrypoints.test.ts` | 入口文件导出测试（index.ts、index.web.ts、index.native.ts） |
+| `nativeStorage.test.ts` | React Native 存储抽象测试 |
 
 ## 构建
 
@@ -402,10 +444,63 @@ UI 组件库，当前包含：
 
 HTTP 请求库，基于 Axios 封装，提供：
 
-- **请求队列**: 自动管理并发请求
-- **Token 管理**: 自动存储和刷新访问令牌
+- **请求队列**: 自动管理并发请求，Token 刷新期间暂存新请求
+- **Token 管理**: 自动存储和刷新访问令牌，支持 401 自动刷新
 - **平台适配**: 支持 Web（localStorage）和 React Native（AsyncStorage）
-- **错误处理**: 统一的错误处理机制
+- **错误处理**: 统一的错误处理机制，支持自定义错误处理器
+- **请求日志**: 可配置的请求/响应日志，开发环境自动启用
+
+#### 配置选项
+
+`createRequestClient(options: RequestClientConfig)` 支持以下配置：
+
+| 选项 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `baseURL` | `string` | ✅ | - | API 基础 URL |
+| `storage` | `TokenStorage` | ✅ | - | Token 存储实现 |
+| `refreshApi` | `TokenRefreshFn` | ✅ | - | Token 刷新函数 |
+| `timeout` | `number` | - | `15000` | 请求超时时间（毫秒） |
+| `requestInterceptor` | `Function` | - | - | 自定义请求拦截器 |
+| `responseInterceptor` | `Object` | - | - | 自定义响应拦截器 |
+| `returnDataOnly` | `boolean` | - | `true` | 是否只返回 `response.data` |
+| `errorHandler` | `Function` | - | - | 自定义错误处理器 |
+| `logEnabled` | `boolean` | - | auto | 是否启用请求日志 |
+
+#### 日志控制
+
+请求日志的启用优先级：
+1. `config.logEnabled`（配置项覆盖）
+2. `globalThis.NEKO_REQUEST_LOG_ENABLED`（全局变量）
+3. `import.meta.env.MODE`（构建模式，development 时启用）
+4. 默认关闭
+
+#### 导出内容
+
+```typescript
+// 类型导出
+export type { RequestClientConfig, TokenStorage, TokenRefreshFn, TokenRefreshResult, QueuedRequest, Storage };
+
+// 核心函数
+export { createRequestClient } from "./createClient";
+
+// Token 存储实现
+export { WebTokenStorage, NativeTokenStorage } from "./src/request-client/tokenStorage";
+
+// 存储抽象
+export { default as webStorage } from "./src/storage/webStorage";
+export { default as storage } from "./src/storage/index";
+
+// 异步获取 nativeStorage（避免 Web 环境加载 RN 依赖）
+export async function getNativeStorage(): Promise<Storage>;
+```
+
+#### 入口文件
+
+| 文件 | 用途 | 导出内容 |
+|------|------|----------|
+| `index.ts` | 通用入口 | 类型、`createRequestClient`、存储抽象 |
+| `index.web.ts` | Web 端入口 | 预配置的 `request` 实例 + 类型和工具 |
+| `index.native.ts` | React Native 入口 | `createNativeRequestClient()` + 类型和工具 |
 
 ### `@project_neko/web-bridge`
 
@@ -431,6 +526,7 @@ HTTP 请求库，基于 Axios 封装，提供：
 3. **路径别名**: 仅在开发环境中生效，构建时会解析为实际路径
 4. **UMD 全局变量**: 组件库 UMD 使用全局变量名 `ProjectNekoComponents`，请求库使用 `ProjectNekoRequest`，通用工具使用 `ProjectNekoCommon`，桥接层使用 `ProjectNekoBridge`
 5. **TypeScript 配置**: 项目使用 `moduleResolution: "Bundler"`，适合 Vite 构建环境
+6. **测试覆盖率**: 请求库的测试覆盖率报告位于 `packages/request/coverage/`，该目录已被 git 忽略
 
 ## 故障排查
 
@@ -459,4 +555,10 @@ HTTP 请求库，基于 Axios 封装，提供：
 - 验证 `#root` 元素是否存在（使用 SPA 时）
 - 确认 React/ReactDOM UMD 已正确加载（检查全局 `React` 和 `ReactDOM` 对象）
 - 使用桥接层时，确认组件库和请求库已加载，且 `window` 对象上存在相应 API
+
+### 测试失败
+
+- 确保在 `packages/request` 目录下运行测试
+- 检查是否有未安装的开发依赖（`vitest`、`@vitest/coverage-v8`）
+- 查看测试输出中的具体错误信息
 

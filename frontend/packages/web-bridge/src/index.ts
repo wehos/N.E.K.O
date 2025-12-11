@@ -36,6 +36,10 @@ const defaultStaticBase = (apiBase: string): string =>
 const defaultWebSocketBase = (apiBase: string): string =>
   window.WEBSOCKET_URL || readEnv("VITE_WEBSOCKET_URL") || apiBase;
 
+const resolveApiBaseUrl = (
+  options: Partial<RequestWindowOptions> & Partial<RequestClientConfig> = {}
+): string => options.apiBaseUrl || options.baseURL || defaultApiBase();
+
 const buildHttpUrl = (base: string, path: string): string => {
   if (isAbsoluteUrl(path)) return path;
   const cleanBase = trimTrailingSlash(base);
@@ -330,7 +334,7 @@ export interface CreateAndBindRequestOptions
 export function createAndBindRequest(
   options: CreateAndBindRequestOptions = {}
 ): { client: AxiosInstance; cleanup: Cleanup } {
-  const apiBaseUrl = options.apiBaseUrl || options.baseURL || defaultApiBase();
+  const apiBaseUrl = resolveApiBaseUrl(options);
   const storage = options.storage || new WebTokenStorage();
   const refreshApi =
     options.refreshApi ||
@@ -357,7 +361,7 @@ export function createAndBindRequest(
 export function createDefaultRequestClient(
   options: Partial<CreateAndBindRequestOptions> = {}
 ): AxiosInstance {
-  const apiBaseUrl = options.apiBaseUrl || options.baseURL || defaultApiBase();
+  const apiBaseUrl = resolveApiBaseUrl(options);
   const storage = options.storage || new WebTokenStorage();
   const refreshApi =
     options.refreshApi ||
@@ -376,9 +380,14 @@ export function createDefaultRequestClient(
 export function bindDefaultRequestToWindow(
   options: CreateAndBindRequestOptions = {}
 ): { client: AxiosInstance; cleanup: Cleanup } {
-  const client = createDefaultRequestClient(options);
+  const apiBaseUrl = resolveApiBaseUrl(options);
+  const client = createDefaultRequestClient({
+    ...options,
+    apiBaseUrl,
+    baseURL: apiBaseUrl,
+  });
   const cleanup = bindRequestToWindow(client, {
-    apiBaseUrl: options.apiBaseUrl,
+    apiBaseUrl,
     staticServerUrl: options.staticServerUrl,
     websocketUrl: options.websocketUrl,
   });

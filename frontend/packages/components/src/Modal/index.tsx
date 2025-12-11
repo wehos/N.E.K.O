@@ -265,18 +265,7 @@ const Modal = forwardRef<ModalHandle | null, {}>(function ModalComponent(_, ref)
             title={config.title || undefined}
             message={config.message}
             okText={config.okText}
-            onConfirm={() => {
-              setDialogState((prev) => {
-                if (prev.resolve) {
-                  prev.resolve(true);
-                }
-                return {
-                  isOpen: false,
-                  config: null,
-                  resolve: null,
-                };
-              });
-            }}
+            onConfirm={handleConfirm}
           />
         );
 
@@ -290,18 +279,7 @@ const Modal = forwardRef<ModalHandle | null, {}>(function ModalComponent(_, ref)
             okText={config.okText}
             cancelText={config.cancelText}
             danger={config.danger}
-            onConfirm={() => {
-              setDialogState((prev) => {
-                if (prev.resolve) {
-                  prev.resolve(true);
-                }
-                return {
-                  isOpen: false,
-                  config: null,
-                  resolve: null,
-                };
-              });
-            }}
+            onConfirm={handleConfirm}
             onCancel={handleCancel}
           />
         );
@@ -317,18 +295,7 @@ const Modal = forwardRef<ModalHandle | null, {}>(function ModalComponent(_, ref)
             placeholder={config.placeholder}
             okText={config.okText}
             cancelText={config.cancelText}
-            onConfirm={(value) => {
-              setDialogState((prev) => {
-                if (prev.resolve) {
-                  prev.resolve(value);
-                }
-                return {
-                  isOpen: false,
-                  config: null,
-                  resolve: null,
-                };
-              });
-            }}
+            onConfirm={handleConfirm}
             onCancel={handleCancel}
           />
         );
