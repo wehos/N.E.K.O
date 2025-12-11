@@ -1,5 +1,6 @@
 import threading
 import tkinter as tk
+import logging
 from typing import Any
 from plugin.sdk.decorators import neko_plugin, plugin_entry, on_event
 from plugin.sdk.base import NekoPluginBase
@@ -13,12 +14,15 @@ May contains unpredictable bugs and bug fix is not provided.
 class TkWindowPlugin(NekoPluginBase):
     def __init__(self, ctx: Any):
         super().__init__(ctx)
+        # 启用文件日志（同时输出到文件和控制台）
+        self.file_logger = self.enable_file_logging(log_level=logging.INFO)
         self._lock = threading.Lock()
         self._started: bool = False
         self._thread: threading.Thread | None = None
         self._root: tk.Tk | None = None
         self._should_close: bool = False
         self.ctx = ctx
+        self.file_logger.info("TkWindowPlugin initialized with file logging enabled")
         
     def _run_tk(self, title: str, message: str):
         root = tk.Tk()
@@ -168,11 +172,11 @@ class TkWindowPlugin(NekoPluginBase):
             metadata={
                 "action": "test",
                 "plugin": "tkWindow",
-                "timestamp": self.ctx.logger.name
+                "timestamp": self.file_logger.name
             }
         )
         
-        self.ctx.logger.info(f"[tkWindow] Sent test message: {test_msg}")
+        self.file_logger.info(f"[tkWindow] Sent test message: {test_msg}")
         
         return {
             "success": True,
@@ -192,7 +196,7 @@ class TkWindowPlugin(NekoPluginBase):
     )
     def startup(self, **_):
         # 这里可以放一些初始化逻辑,比如预加载配置等
-        self.ctx.logger.info("[tkWindow] plugin started")
+        self.file_logger.info("[tkWindow] plugin started")
         self.report_status({"status": "initialized"})
         return {"status": "initialized"}
     # 4) 一个 lifecycle 事件:插件停止时自动调用
@@ -206,7 +210,7 @@ class TkWindowPlugin(NekoPluginBase):
     )
     def on_shutdown(self, **_):
         # 在这里执行一些资源清理、状态保存等操作
-        self.ctx.logger.info("[tkWindow] plugin shutting down")
+        self.file_logger.info("[tkWindow] plugin shutting down")
         self.report_status({"status": "shutdown"})
         with self._lock:
             if self._root is not None:

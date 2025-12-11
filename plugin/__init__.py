@@ -47,6 +47,11 @@ from plugin.sdk.events import (
     EventType,
     EVENT_META_ATTR,
 )
+from plugin.sdk.logger import (
+    PluginFileLogger,
+    enable_plugin_file_logging,
+    plugin_file_logger,
+)
 from plugin.settings import EVENT_QUEUE_MAX, MESSAGE_QUEUE_MAX
 from plugin.sdk.decorators import (
     neko_plugin,
@@ -143,5 +148,9 @@ __all__ = [
     'lifecycle',
     'message',
     'timer_interval',
+    # Logger
+    'PluginFileLogger',
+    'enable_plugin_file_logging',
+    'plugin_file_logger',
 ]
 

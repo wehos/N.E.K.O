@@ -105,6 +105,24 @@ MESSAGE_CONSUMER_SLEEP_INTERVAL = 0.1
 RESULT_CONSUMER_SLEEP_INTERVAL = 0.1
 
 
+# ========== 插件Logger配置 ==========
+
+# 插件文件日志默认配置
+import logging
+
+# 默认日志级别
+PLUGIN_LOG_LEVEL = logging.INFO
+
+# 单个日志文件最大大小（字节），默认5MB
+PLUGIN_LOG_MAX_BYTES = 5 * 1024 * 1024
+
+# 保留的备份文件数量，默认10个
+PLUGIN_LOG_BACKUP_COUNT = 10
+
+# 最多保留的日志文件总数（包括当前和备份），默认20个
+PLUGIN_LOG_MAX_FILES = 20
+
+
 # ========== 配置验证 ==========
 
 def validate_config() -> None:
@@ -172,6 +190,12 @@ __all__ = [
     "STATUS_CONSUMER_SLEEP_INTERVAL",
     "MESSAGE_CONSUMER_SLEEP_INTERVAL",
     "RESULT_CONSUMER_SLEEP_INTERVAL",
+    
+    # 插件Logger配置
+    "PLUGIN_LOG_LEVEL",
+    "PLUGIN_LOG_MAX_BYTES",
+    "PLUGIN_LOG_BACKUP_COUNT",
+    "PLUGIN_LOG_MAX_FILES",
     
     # 验证函数
     "validate_config",
