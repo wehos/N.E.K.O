@@ -67,6 +67,8 @@ import sys
 import types
 
 # 创建虚拟模块以支持旧导入路径
+# 注意：这是临时的兼容层，建议迁移到新的导入路径
+# 未来版本可能会移除这些虚拟模块
 _old_modules = {
     'plugin.server_base': types.ModuleType('plugin.server_base'),
     'plugin.event_base': types.ModuleType('plugin.event_base'),

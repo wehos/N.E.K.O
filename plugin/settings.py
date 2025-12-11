@@ -9,6 +9,7 @@ Plugin System Configuration
 - 线程池配置
 - 消息队列配置
 """
+import os
 from pathlib import Path
 from typing import Dict, Any
 
@@ -69,7 +70,9 @@ PROCESS_TERMINATE_TIMEOUT = 1.0
 # ========== 线程池配置 ==========
 
 # 通信资源管理器的线程池最大工作线程数
-COMMUNICATION_THREAD_POOL_MAX_WORKERS = 1
+# 根据CPU核心数动态设置，适合I/O密集型操作
+# 公式：min(4, CPU核心数 + 2)，确保至少有足够的并发能力
+COMMUNICATION_THREAD_POOL_MAX_WORKERS = min(4, (os.cpu_count() or 1) + 2)
 
 
 # ========== 消息队列配置 ==========
@@ -134,20 +137,43 @@ def validate_config() -> None:
     """
     if EVENT_QUEUE_MAX <= 0:
         raise ValueError("EVENT_QUEUE_MAX must be positive")
+    if EVENT_QUEUE_MAX > 1000000:
+        raise ValueError("EVENT_QUEUE_MAX is unreasonably large (max: 1000000)")
+    
     if MESSAGE_QUEUE_MAX <= 0:
         raise ValueError("MESSAGE_QUEUE_MAX must be positive")
+    if MESSAGE_QUEUE_MAX > 1000000:
+        raise ValueError("MESSAGE_QUEUE_MAX is unreasonably large (max: 1000000)")
+    
     if PLUGIN_EXECUTION_TIMEOUT <= 0:
         raise ValueError("PLUGIN_EXECUTION_TIMEOUT must be positive")
+    if PLUGIN_EXECUTION_TIMEOUT > 3600:
+        raise ValueError("PLUGIN_EXECUTION_TIMEOUT is unreasonably large (max: 3600s)")
+    
     if PLUGIN_TRIGGER_TIMEOUT <= 0:
         raise ValueError("PLUGIN_TRIGGER_TIMEOUT must be positive")
+    if PLUGIN_TRIGGER_TIMEOUT > 3600:
+        raise ValueError("PLUGIN_TRIGGER_TIMEOUT is unreasonably large (max: 3600s)")
+    
     if PLUGIN_SHUTDOWN_TIMEOUT <= 0:
         raise ValueError("PLUGIN_SHUTDOWN_TIMEOUT must be positive")
+    if PLUGIN_SHUTDOWN_TIMEOUT > 300:
+        raise ValueError("PLUGIN_SHUTDOWN_TIMEOUT is unreasonably large (max: 300s)")
+    
     if COMMUNICATION_THREAD_POOL_MAX_WORKERS <= 0:
         raise ValueError("COMMUNICATION_THREAD_POOL_MAX_WORKERS must be positive")
+    if COMMUNICATION_THREAD_POOL_MAX_WORKERS > 100:
+        raise ValueError("COMMUNICATION_THREAD_POOL_MAX_WORKERS is unreasonably large (max: 100)")
+    
     if MESSAGE_QUEUE_DEFAULT_MAX_COUNT <= 0:
         raise ValueError("MESSAGE_QUEUE_DEFAULT_MAX_COUNT must be positive")
+    if MESSAGE_QUEUE_DEFAULT_MAX_COUNT > 10000:
+        raise ValueError("MESSAGE_QUEUE_DEFAULT_MAX_COUNT is unreasonably large (max: 10000)")
+    
     if STATUS_MESSAGE_DEFAULT_MAX_COUNT <= 0:
         raise ValueError("STATUS_MESSAGE_DEFAULT_MAX_COUNT must be positive")
+    if STATUS_MESSAGE_DEFAULT_MAX_COUNT > 10000:
+        raise ValueError("STATUS_MESSAGE_DEFAULT_MAX_COUNT is unreasonably large (max: 10000)")
 
 
 # 在模块加载时验证配置

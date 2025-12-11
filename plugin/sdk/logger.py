@@ -111,10 +111,10 @@ class PluginFileLogger:
                     log_file.unlink()
                     if self._logger:
                         self._logger.debug(f"Deleted old log file: {log_file.name}")
-                except Exception as e:
+                except (OSError, PermissionError) as e:
                     # 如果logger还没创建，使用print
                     print(f"Warning: Failed to delete old log file {log_file}: {e}", file=sys.stderr)
-        except Exception as e:
+        except (OSError, PermissionError) as e:
             print(f"Warning: Failed to cleanup old logs: {e}", file=sys.stderr)
     
     def setup(self, logger: Optional[logging.Logger] = None) -> logging.Logger:
@@ -188,13 +188,25 @@ class PluginFileLogger:
                 print(f"Error: Failed to setup file logger for plugin {self.plugin_id}: {e}", file=sys.stderr)
                 # 即使文件handler失败，也返回logger（可能还有控制台handler）
         
-        # 记录初始化信息
+        # 记录初始化信息（仅输出到文件，不输出到控制台）
         if self._file_handler:
+            # 临时移除控制台handler，只记录到文件
+            console_handlers = []
+            for handler in list(self._logger.handlers):
+                if isinstance(handler, StreamHandler) and handler.stream == sys.stdout:
+                    console_handlers.append(handler)
+                    self._logger.removeHandler(handler)
+            
+            # 记录初始化信息（此时只会输出到文件）
             self._logger.info(f"Plugin file logger initialized: {self.log_file}")
             self._logger.info(f"Log level: {logging.getLevelName(self.log_level)}")
             self._logger.info(f"Max file size: {self.max_bytes / 1024 / 1024:.1f}MB")
             self._logger.info(f"Backup count: {self.backup_count}")
             self._logger.info(f"Max files: {self.max_files}")
+            
+            # 恢复控制台handler
+            for handler in console_handlers:
+                self._logger.addHandler(handler)
         
         return self._logger
     
@@ -234,8 +246,10 @@ class PluginFileLogger:
                 self._file_handler.close()
                 if self._logger:
                     self._logger.removeHandler(self._file_handler)
-            except Exception:
-                pass
+            except Exception as e:
+                # 清理失败不影响主流程，但记录一下方便调试
+                if self._logger:
+                    self._logger.debug(f"Failed to cleanup file handler: {e}")
             self._file_handler = None
 
 

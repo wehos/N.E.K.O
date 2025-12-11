@@ -1,6 +1,7 @@
 import threading
 import tkinter as tk
 import logging
+from datetime import datetime, timezone
 from typing import Any
 from plugin.sdk.decorators import neko_plugin, plugin_entry, on_event
 from plugin.sdk.base import NekoPluginBase
@@ -172,7 +173,7 @@ class TkWindowPlugin(NekoPluginBase):
             metadata={
                 "action": "test",
                 "plugin": "tkWindow",
-                "timestamp": self.file_logger.name
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
         )
         
