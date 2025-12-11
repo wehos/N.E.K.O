@@ -1,18 +1,20 @@
 """
 截图分析工具库
-提供截图分析功能，仅用于分析前端浏览器发送的截图
+提供截图分析功能，包括前端浏览器发送的截图和屏幕分享数据流处理
 """
 import os
 import base64
 import logging
 import tempfile
-from typing import Optional
+from typing import Optional, Tuple
 import asyncio
+from io import BytesIO
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
 class ScreenshotUtils:
-    """截图分析工具类"""
+    """截图和屏幕分享工具类"""
     
     def __init__(self):
         # 不再需要截图目录，因为现在使用前端截图
@@ -45,6 +47,48 @@ class ScreenshotUtils:
             raise
         except Exception:
             logger.exception("截图分析异常:")
+            return None
+
+    async def process_screen_data(self, data: str) -> Optional[Tuple[str, bytes]]:
+        """
+        处理前端发送的屏幕分享数据流
+        
+        参数:
+            data: 前端发送的屏幕数据，格式为 'data:image/jpeg;base64,...'
+        
+        返回: 包含处理后的base64字符串和原始字节数据的元组，如果处理失败则返回None
+        """
+        try:
+            if isinstance(data, str) and data.startswith('data:image/jpeg;base64,'):
+                img_data = data.split(',')[1]
+                img_bytes = base64.b64decode(img_data)
+                
+                # Resize to 480p (height=480, keep aspect ratio)
+                image = Image.open(BytesIO(img_bytes))
+                w, h = image.size
+                new_h = 480
+                new_w = int(w * (new_h / h))
+                image = image.resize((new_w, new_h), Image.Resampling.LANCZOS)
+                
+                buffer = BytesIO()
+                image.save(buffer, format='JPEG')
+                buffer.seek(0)
+                resized_bytes = buffer.read()
+                resized_b64 = base64.b64encode(resized_bytes).decode('utf-8')
+                
+                logger.info(f"屏幕数据处理完成: 原始尺寸 {w}x{h} -> 调整后 {new_w}x{new_h}")
+                return resized_b64, img_bytes
+            else:
+                logger.error(f"无效的屏幕数据格式")
+                return None
+                
+        except ValueError as ve:
+            logger.error(f"Base64解码错误 (屏幕数据): {ve}")
+            return None
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error(f"处理屏幕数据错误: {e}")
             return None
     
     async def _analyze_screenshot_ai(self, screenshot_path: str) -> Optional[str]:
@@ -85,11 +129,14 @@ class ScreenshotUtils:
                     logger.info("自定义API视觉模型配置不完整，跳过AI分析")
                     return None
             else:
-                # 未开启自定义API：不使用自定义API配置，直接使用辅助API的默认配置
-                logger.info("自定义API未启用，使用辅助API默认视觉模型配置")
+                # 未开启自定义API：使用全局配置的默认设置
+                logger.info("自定义API未启用，使用全局配置的默认视觉模型配置")
+                
+                # 从全局配置中获取默认的视觉模型设置
+                from utils.api_config_loader import get_assist_api_key_fields, get_assist_api_profiles
+                from config import DEFAULT_VISION_MODEL
                 
                 # 获取辅助API对应的API密钥字段名
-                from utils.api_config_loader import get_assist_api_key_fields
                 assist_api_key_fields = get_assist_api_key_fields()
                 key_field = assist_api_key_fields.get(assist_api, 'ASSIST_API_KEY_QWEN')
                 vision_api_key = core_config.get(key_field) or core_config.get('CORE_API_KEY')
@@ -97,11 +144,14 @@ class ScreenshotUtils:
                 # 使用辅助API的默认视觉模型配置
                 vision_base_url = core_config.get('OPENROUTER_URL')
                 
-                # 直接从辅助API配置中获取对应的视觉模型
-                from utils.api_config_loader import get_assist_api_profiles
-                assist_api_profiles = get_assist_api_profiles()
-                assist_profile = assist_api_profiles.get(assist_api, assist_api_profiles.get('qwen'))
-                vision_model = assist_profile.get('VISION_MODEL', 'qwen3-vl-plus-2025-09-23')
+                # 从全局配置中获取默认的视觉模型
+                vision_model = core_config.get('VISION_MODEL', DEFAULT_VISION_MODEL)
+                
+                # 如果全局配置中没有设置，则从辅助API配置中获取
+                if not vision_model or vision_model == DEFAULT_VISION_MODEL:
+                    assist_api_profiles = get_assist_api_profiles()
+                    assist_profile = assist_api_profiles.get(assist_api, assist_api_profiles.get('qwen'))
+                    vision_model = assist_profile.get('VISION_MODEL', DEFAULT_VISION_MODEL)
                 
                 logger.info(f"辅助API配置 - 密钥字段: {key_field}, 模型: {vision_model}")
             
@@ -130,7 +180,7 @@ class ScreenshotUtils:
             try:
                 logger.info("发送AI分析请求...")
                 response = await client.chat.completions.create(
-                    model=vision_model if vision_model else "gpt-4o",
+                    model=vision_model if vision_model else DEFAULT_VISION_MODEL,
                     messages=[
                         {
                             "role": "user",
