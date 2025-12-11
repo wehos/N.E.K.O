@@ -46,6 +46,16 @@ class AudioProcessor:
     
     IMPORTANT: Call reset() after each speech turn to clear RNNoise's
     internal GRU state and prevent state drift during silence/background.
+    
+    Thread Safety:
+        This class is NOT safe for concurrent use. The following mutable
+        state is unprotected: _frame_buffer, _last_speech_prob,
+        _last_speech_time, _needs_reset, _denoiser.
+        
+        Callers must NOT invoke process_chunk() or reset() from multiple
+        threads or coroutines simultaneously. If concurrent access is
+        required, wrap calls with an external lock (e.g., threading.Lock
+        for threads or asyncio.Lock for async coroutines).
     """
     
     RNNOISE_SAMPLE_RATE = 48000  # RNNoise requires 48kHz
@@ -186,9 +196,12 @@ class AudioProcessor:
         """Reset RNNoise internal state without full reinitialization."""
         self._frame_buffer = np.array([], dtype=np.int16)
         self._last_speech_prob = 0.0
-        # Reinitialize denoiser to clear GRU hidden states
+        # Reset denoiser GRU hidden states (do not reinitialize)
         if self._denoiser is not None:
-            self._init_denoiser()
+            try:
+                self._denoiser.reset()
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to reset RNNoise denoiser: {e}")
     
     def reset(self) -> None:
         """
