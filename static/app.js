@@ -154,9 +154,41 @@ function init_app() {
     let proactiveChatBackoffLevel = 0; // 退避级别：0=30s, 1=1min, 2=2min, 3=4min, etc.
     const PROACTIVE_CHAT_BASE_DELAY = 30000; // 30秒基础延迟
 
-    // 截图最大尺寸（1080p）
-    const MAX_SCREENSHOT_WIDTH = 1920;
-    const MAX_SCREENSHOT_HEIGHT = 1080;
+    // 截图最大尺寸（720p，用于节流数据传输）
+    const MAX_SCREENSHOT_WIDTH = 1280;
+    const MAX_SCREENSHOT_HEIGHT = 720;
+
+    /**
+     * 统一的截图辅助函数：从video元素捕获一帧到canvas，统一720p节流和JPEG压缩
+     * @param {HTMLVideoElement} video - 视频源元素
+     * @param {number} jpegQuality - JPEG压缩质量 (0-1)，默认0.8
+     * @returns {{dataUrl: string, width: number, height: number}} 返回dataUrl和实际尺寸
+     */
+    function captureCanvasFrame(video, jpegQuality = 0.8) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // 计算缩放后的尺寸（保持宽高比，限制到720p）
+        let targetWidth = video.videoWidth;
+        let targetHeight = video.videoHeight;
+
+        if (targetWidth > MAX_SCREENSHOT_WIDTH || targetHeight > MAX_SCREENSHOT_HEIGHT) {
+            const widthRatio = MAX_SCREENSHOT_WIDTH / targetWidth;
+            const heightRatio = MAX_SCREENSHOT_HEIGHT / targetHeight;
+            const scale = Math.min(widthRatio, heightRatio);
+            targetWidth = Math.round(targetWidth * scale);
+            targetHeight = Math.round(targetHeight * scale);
+        }
+
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+
+        // 绘制视频帧到canvas（缩放绘制）并转换为JPEG
+        ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+        const dataUrl = canvas.toDataURL('image/jpeg', jpegQuality);
+
+        return { dataUrl, width: targetWidth, height: targetHeight };
+    }
 
     // Focus模式为true时，AI播放语音时会自动静音麦克风（不允许打断）
     let focusModeEnabled = false;
@@ -1638,31 +1670,10 @@ function init_app() {
             // 等待视频加载完成
             await video.play();
 
-            // 创建canvas来捕获帧
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
+            // 使用统一的截图辅助函数进行截取
+            const { dataUrl, width, height } = captureCanvasFrame(video);
 
-            // 计算缩放后的尺寸（保持宽高比，限制到1080p）
-            let targetWidth = video.videoWidth;
-            let targetHeight = video.videoHeight;
-
-            if (targetWidth > MAX_SCREENSHOT_WIDTH || targetHeight > MAX_SCREENSHOT_HEIGHT) {
-                const widthRatio = MAX_SCREENSHOT_WIDTH / targetWidth;
-                const heightRatio = MAX_SCREENSHOT_HEIGHT / targetHeight;
-                const scale = Math.min(widthRatio, heightRatio);
-                targetWidth = Math.round(targetWidth * scale);
-                targetHeight = Math.round(targetHeight * scale);
-            }
-
-            // 设置canvas尺寸为缩放后的尺寸
-            canvas.width = targetWidth;
-            canvas.height = targetHeight;
-
-            // 绘制视频帧到canvas（缩放绘制）
-            ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.8); // base64 jpeg
-
-            console.log(`截图成功，尺寸: ${targetWidth}x${targetHeight}`);
+            console.log(`截图成功，尺寸: ${width}x${height}`);
 
             // 添加截图到待发送列表（不立即发送）
             addScreenshotToList(dataUrl);
@@ -2186,7 +2197,7 @@ function init_app() {
 
         // 定时抓取当前帧并编码为jpeg
         video.play().then(() => {
-            // 计算缩放后的尺寸（保持宽高比，限制到1080p）
+            // 计算缩放后的尺寸（保持宽高比，限制到720p）
             let targetWidth = video.videoWidth;
             let targetHeight = video.videoHeight;
 
@@ -4767,33 +4778,10 @@ function init_app() {
             // 等待视频加载完成
             await video.play();
 
-            // 创建canvas来捕获帧
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
+            // 使用统一的截图辅助函数进行截取（使用0.85质量）
+            const { dataUrl, width, height } = captureCanvasFrame(video, 0.85);
 
-            // 计算缩放后的尺寸（保持宽高比，限制到1080p）
-            let targetWidth = video.videoWidth;
-            let targetHeight = video.videoHeight;
-
-            if (targetWidth > MAX_SCREENSHOT_WIDTH || targetHeight > MAX_SCREENSHOT_HEIGHT) {
-                const widthRatio = MAX_SCREENSHOT_WIDTH / targetWidth;
-                const heightRatio = MAX_SCREENSHOT_HEIGHT / targetHeight;
-                const scale = Math.min(widthRatio, heightRatio);
-                targetWidth = Math.round(targetWidth * scale);
-                targetHeight = Math.round(targetHeight * scale);
-            }
-
-            // 设置canvas尺寸为缩放后的尺寸
-            canvas.width = targetWidth;
-            canvas.height = targetHeight;
-
-            // 绘制视频帧到canvas（缩放绘制）
-            ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
-
-            // 转换为DataURL（使用JPEG格式以减小文件大小）
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-
-            console.log(`主动搭话截图成功，尺寸: ${targetWidth}x${targetHeight}`);
+            console.log(`主动搭话截图成功，尺寸: ${width}x${height}`);
             return dataUrl;
 
         } catch (err) {

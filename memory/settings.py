@@ -15,13 +15,13 @@ class ImportantSettingsManager:
     
     def _get_proposer(self):
         """动态获取Proposer LLM实例以支持配置热重载"""
-        core_config = self._config_manager.get_core_config()
-        return ChatOpenAI(model=SETTING_PROPOSER_MODEL, base_url=core_config['OPENROUTER_URL'], api_key=core_config['OPENROUTER_API_KEY'], temperature=0.5)
+        api_config = self._config_manager.get_model_api_config('summary')
+        return ChatOpenAI(model=SETTING_PROPOSER_MODEL, base_url=api_config['base_url'], api_key=api_config['api_key'], temperature=0.5)
     
     def _get_verifier(self):
         """动态获取Verifier LLM实例以支持配置热重载"""
-        core_config = self._config_manager.get_core_config()
-        return ChatOpenAI(model=SETTING_VERIFIER_MODEL, base_url=core_config['OPENROUTER_URL'], api_key=core_config['OPENROUTER_API_KEY'], temperature=0.5)
+        api_config = self._config_manager.get_model_api_config('summary')
+        return ChatOpenAI(model=SETTING_VERIFIER_MODEL, base_url=api_config['base_url'], api_key=api_config['api_key'], temperature=0.5)
 
     def load_settings(self):
         # It is important to update the settings with the latest character on-disk files

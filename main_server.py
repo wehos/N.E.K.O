@@ -46,7 +46,7 @@ from steamworks.exceptions import SteamNotLoadedException
 from steamworks.enums import EWorkshopFileType, EItemUpdateStatus
 import base64
 import tempfile
-from utils.screenshot_utils import ScreenshotUtils, analyze_screenshot_from_data_url
+from utils.screenshot_utils import analyze_screenshot_from_data_url
 
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, File, UploadFile, Form, Body
@@ -1254,17 +1254,13 @@ async def proactive_chat(request: Request):
 
         # 4. 直接使用langchain ChatOpenAI获取AI回复（不创建临时session）
         try:
-            core_config = _config_manager.get_core_config()
-            
-            # 直接使用langchain ChatOpenAI发送请求
-            from langchain_openai import ChatOpenAI
-            from langchain_core.messages import SystemMessage
-            from openai import APIConnectionError, InternalServerError, RateLimitError
+            # 使用 get_model_api_config 获取 API 配置
+            correction_config = _config_manager.get_model_api_config('correction')
             
             llm = ChatOpenAI(
-                model=core_config['CORRECTION_MODEL'],
-                base_url=core_config['OPENROUTER_URL'],
-                api_key=core_config['OPENROUTER_API_KEY'],
+                model=correction_config['model'],
+                base_url=correction_config['base_url'],
+                api_key=correction_config['api_key'],
                 temperature=1.1,
                 streaming=False  # 不需要流式，直接获取完整响应
             )
@@ -5340,9 +5336,9 @@ async def emotion_analysis(request: Request):
         model = data.get('model')
         
         # 使用参数或默认配置
-        core_config = _config_manager.get_core_config()
-        api_key = api_key or core_config['OPENROUTER_API_KEY']
-        model = model or core_config['EMOTION_MODEL']
+        emotion_config = _config_manager.get_model_api_config('emotion')
+        api_key = api_key or emotion_config['api_key']
+        model = model or emotion_config['model']
         
         if not api_key:
             return {"error": "API密钥未提供且配置中未设置默认密钥"}
@@ -5351,7 +5347,7 @@ async def emotion_analysis(request: Request):
             return {"error": "模型名称未提供且配置中未设置默认模型"}
         
         # 创建异步客户端
-        client = AsyncOpenAI(api_key=api_key, base_url=core_config['OPENROUTER_URL'])
+        client = AsyncOpenAI(api_key=api_key, base_url=emotion_config['base_url'])
         
         # 构建请求消息
         messages = [

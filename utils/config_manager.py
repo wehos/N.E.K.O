@@ -781,6 +781,122 @@ class ConfigManager:
 
         return config
 
+    def get_model_api_config(self, model_type: str) -> dict:
+        """
+        获取指定模型类型的 API 配置（自动处理自定义 API 优先级）
+        
+        Args:
+            model_type: 模型类型，可选值：
+                - 'summary': 摘要模型（回退到辅助API）
+                - 'correction': 纠错模型（回退到辅助API）
+                - 'emotion': 情感分析模型（回退到辅助API）
+                - 'vision': 视觉模型（回退到辅助API）
+                - 'realtime': 实时语音模型（回退到核心API）
+                - 'tts_default': 默认TTS（回退到核心API，用于OmniOfflineClient）
+                - 'tts_custom': 自定义TTS（回退到辅助API，用于voice_id场景）
+                
+        Returns:
+            dict: 包含以下字段的配置：
+                - 'model': 模型名称
+                - 'api_key': API密钥
+                - 'base_url': API端点URL
+                - 'is_custom': 是否使用自定义API配置
+        """
+        core_config = self.get_core_config()
+        enable_custom_api = core_config.get('ENABLE_CUSTOM_API', False)
+        
+        # 模型类型到配置字段的映射
+        # fallback_type: 'assist' = 辅助API, 'core' = 核心API
+        model_type_mapping = {
+            'summary': {
+                'custom_model': 'SUMMARY_MODEL',
+                'custom_url': 'SUMMARY_MODEL_URL',
+                'custom_key': 'SUMMARY_MODEL_API_KEY',
+                'default_model': 'SUMMARY_MODEL',
+                'fallback_type': 'assist',
+            },
+            'correction': {
+                'custom_model': 'CORRECTION_MODEL',
+                'custom_url': 'CORRECTION_MODEL_URL',
+                'custom_key': 'CORRECTION_MODEL_API_KEY',
+                'default_model': 'CORRECTION_MODEL',
+                'fallback_type': 'assist',
+            },
+            'emotion': {
+                'custom_model': 'EMOTION_MODEL',
+                'custom_url': 'EMOTION_MODEL_URL',
+                'custom_key': 'EMOTION_MODEL_API_KEY',
+                'default_model': 'EMOTION_MODEL',
+                'fallback_type': 'assist',
+            },
+            'vision': {
+                'custom_model': 'VISION_MODEL',
+                'custom_url': 'VISION_MODEL_URL',
+                'custom_key': 'VISION_MODEL_API_KEY',
+                'default_model': 'VISION_MODEL',
+                'fallback_type': 'assist',
+            },
+            'realtime': {
+                'custom_model': 'OMNI_MODEL',
+                'custom_url': 'OMNI_MODEL_URL',
+                'custom_key': 'OMNI_MODEL_API_KEY',
+                'default_model': 'OMNI_MODEL',
+                'fallback_type': 'core',  # 实时模型回退到核心API
+            },
+            'tts_default': {
+                'custom_model': 'TTS_MODEL',
+                'custom_url': 'TTS_MODEL_URL',
+                'custom_key': 'TTS_MODEL_API_KEY',
+                'default_model': 'TTS_MODEL',
+                'fallback_type': 'core',  # 默认TTS回退到核心API
+            },
+            'tts_custom': {
+                'custom_model': 'TTS_MODEL',
+                'custom_url': 'TTS_MODEL_URL',
+                'custom_key': 'TTS_MODEL_API_KEY',
+                'default_model': 'TTS_MODEL',
+                'fallback_type': 'assist',  # 自定义TTS回退到辅助API
+            },
+        }
+        
+        if model_type not in model_type_mapping:
+            raise ValueError(f"Unknown model_type: {model_type}. Valid types: {list(model_type_mapping.keys())}")
+        
+        mapping = model_type_mapping[model_type]
+        
+        # 优先使用自定义 API 配置
+        if enable_custom_api:
+            custom_model = core_config.get(mapping['custom_model'], '')
+            custom_url = core_config.get(mapping['custom_url'], '')
+            custom_key = core_config.get(mapping['custom_key'], '')
+            
+            # 自定义配置完整时使用自定义配置
+            if custom_model and custom_url and custom_key:
+                return {
+                    'model': custom_model,
+                    'api_key': custom_key,
+                    'base_url': custom_url,
+                    'is_custom': True,
+                }
+        
+        # 根据 fallback_type 回退到不同的 API
+        if mapping['fallback_type'] == 'core':
+            # 回退到核心 API 配置
+            return {
+                'model': core_config.get(mapping['default_model'], ''),
+                'api_key': core_config.get('CORE_API_KEY', ''),
+                'base_url': core_config.get('CORE_URL', ''),
+                'is_custom': False,
+            }
+        else:
+            # 回退到辅助 API 配置
+            return {
+                'model': core_config.get(mapping['default_model'], ''),
+                'api_key': core_config.get('OPENROUTER_API_KEY', ''),
+                'base_url': core_config.get('OPENROUTER_URL', ''),
+                'is_custom': False,
+            }
+
     def load_json_config(self, filename, default_value=None):
         """
         加载JSON配置文件

@@ -39,8 +39,8 @@ class TaskPlanner:
     
     def _get_llm(self):
         """动态获取LLM实例以支持配置热重载"""
-        core_config = self._config_manager.get_core_config()
-        return ChatOpenAI(model=core_config['SUMMARY_MODEL'], base_url=core_config['OPENROUTER_URL'], api_key=core_config['OPENROUTER_API_KEY'], temperature=0, extra_body={"enable_thinking": False} if core_config['SUMMARY_MODEL'] in MODELS_WITH_EXTRA_BODY else None)
+        api_config = self._config_manager.get_model_api_config('summary')
+        return ChatOpenAI(model=api_config['model'], base_url=api_config['base_url'], api_key=api_config['api_key'], temperature=0, extra_body={"enable_thinking": False} if api_config['model'] in MODELS_WITH_EXTRA_BODY else None)
 
     async def refresh_capabilities(self, force_refresh: bool = True) -> Dict[str, Dict[str, Any]]:
         """

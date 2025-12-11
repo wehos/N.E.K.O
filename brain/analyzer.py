@@ -33,10 +33,10 @@ class ConversationAnalyzer:
     async def analyze(self, messages: List[Dict[str, str]]):
         import json
         
-        core_config = self._config_manager.get_core_config()
-        model = core_config['SUMMARY_MODEL']
-        api_key = core_config['OPENROUTER_API_KEY']
-        base_url = core_config['OPENROUTER_URL']
+        api_config = self._config_manager.get_model_api_config('summary')
+        model = api_config['model']
+        api_key = api_config['api_key']
+        base_url = api_config['base_url']
         
         prompt = self._build_prompt(messages)
         

@@ -16,7 +16,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from utils.frontend_utils import contains_chinese, replace_blank, replace_corner_mark, remove_bracket, \
     is_only_punctuation, split_paragraph
 from utils.audio import make_wav_header
-from utils.screenshot_utils import ScreenshotUtils
+from utils.screenshot_utils import process_screen_data
 from main_helper.omni_realtime_client import OmniRealtimeClient
 from main_helper.omni_offline_client import OmniOfflineClient
 from main_helper.tts_helper import get_tts_worker
@@ -63,9 +63,6 @@ class LLMSessionManager:
         self.lanlan_name = lanlan_name
         # 获取角色相关配置
         self._config_manager = get_config_manager()
-        
-        # 初始化屏幕分享工具
-        self.screenshot_utils = ScreenshotUtils()
 
         (
             self.master_name,
@@ -79,18 +76,11 @@ class LLMSessionManager:
             self.setting_store,
             self.recent_log
         ) = self._config_manager.get_character_data()
-        # 获取API相关配置（动态读取以支持热重载）
+        # API配置现在通过 _config_manager.get_model_api_config() 动态获取
         core_config = self._config_manager.get_core_config()
-        self.model = core_config['CORE_MODEL']  # For realtime voice
-        self.text_model = core_config['CORRECTION_MODEL']  # For text-only mode
-        self.vision_model = core_config['VISION_MODEL']  # For vision tasks
-        self.core_url = core_config['CORE_URL']
-        self.core_api_key = core_config['CORE_API_KEY']
-        self.core_api_type = core_config['CORE_API_TYPE']
-        self.openrouter_url = core_config['OPENROUTER_URL']
-        self.openrouter_api_key = core_config['OPENROUTER_API_KEY']
+        self.core_api_type = core_config['CORE_API_TYPE']  # 用于判断TTS类型等
         self.memory_server_port = MEMORY_SERVER_PORT
-        self.audio_api_key = core_config['AUDIO_API_KEY']
+        self.audio_api_key = core_config['AUDIO_API_KEY']  # 用于CosyVoice自定义音色
         self.voice_id = self.lanlan_basic_config[self.lanlan_name].get('voice_id', '')
         # 注意：use_tts 会在 start_session 中根据 input_mode 重新设置
         self.use_tts = False
@@ -394,18 +384,14 @@ class LLMSessionManager:
     async def handle_repetition_detected(self):
         """处理重复度检测回调：通知前端"""
         try:
-            logger.warning(f"[{self.lanlan_name}] 检测到高重复度对话，准备通知前端")
+            logger.warning(f"[{self.lanlan_name}] 检测到高重复度对话")
             
             # 向前端发送重复警告消息（使用 i18n key）
             if self.websocket and hasattr(self.websocket, 'client_state') and self.websocket.client_state == self.websocket.client_state.CONNECTED:
-                logger.info(f"[{self.lanlan_name}] WebSocket 已连接，发送 repetition_warning")
                 await self.websocket.send_json({
                     "type": "repetition_warning",
                     "name": self.lanlan_name  # 前端会用这个名字填充 i18n 模板
                 })
-                logger.info(f"[{self.lanlan_name}] repetition_warning 已发送")
-            else:
-                logger.warning(f"[{self.lanlan_name}] WebSocket 未连接，无法发送通知")
             
         except Exception as e:
             logger.error(f"处理重复度检测时出错: {e}")
@@ -516,14 +502,7 @@ class LLMSessionManager:
         
         # 重新读取核心配置以支持热重载
         core_config = self._config_manager.get_core_config()
-        self.model = core_config['CORE_MODEL']
-        self.text_model = core_config['CORRECTION_MODEL']
-        self.vision_model = core_config['VISION_MODEL']
-        self.core_url = core_config['CORE_URL']
-        self.core_api_key = core_config['CORE_API_KEY']
         self.core_api_type = core_config['CORE_API_TYPE']
-        self.openrouter_url = core_config['OPENROUTER_URL']
-        self.openrouter_api_key = core_config['OPENROUTER_API_KEY']
         self.audio_api_key = core_config['AUDIO_API_KEY']
         
         # 重新读取角色配置以获取最新的voice_id（支持角色切换后的音色热更新）
@@ -599,9 +578,14 @@ class LLMSessionManager:
                 
                 self.tts_request_queue = MPQueue() # TTS request (多进程队列)
                 self.tts_response_queue = MPQueue() # TTS response (多进程队列)
+                # 根据是否有自定义音色选择 TTS API 配置
+                if has_custom_voice:
+                    tts_config = self._config_manager.get_model_api_config('tts_custom')
+                else:
+                    tts_config = self._config_manager.get_model_api_config('tts_default')
                 self.tts_process = Process(
                     target=tts_worker,
-                    args=(self.tts_request_queue, self.tts_response_queue, self.audio_api_key if has_custom_voice else self.core_api_key, self.voice_id)
+                    args=(self.tts_request_queue, self.tts_response_queue, tts_config['api_key'], self.voice_id)
                 )
                 self.tts_process.daemon = True
                 self.tts_process.start()
@@ -685,11 +669,15 @@ class LLMSessionManager:
             # 根据input_mode创建不同的session
             if input_mode == 'text':
                 # 文本模式：使用 OmniOfflineClient with OpenAI-compatible API
+                correction_config = self._config_manager.get_model_api_config('correction')
+                vision_config = self._config_manager.get_model_api_config('vision')
                 self.session = OmniOfflineClient(
-                    base_url=self.openrouter_url,
-                    api_key=self.openrouter_api_key,
-                    model=self.text_model,
-                    vision_model=self.vision_model,
+                    base_url=correction_config['base_url'],
+                    api_key=correction_config['api_key'],
+                    model=correction_config['model'],
+                    vision_model=vision_config['model'],
+                    vision_base_url=vision_config['base_url'],
+                    vision_api_key=vision_config['api_key'],
                     on_text_delta=self.handle_text_data,
                     on_input_transcript=self.handle_input_transcript,
                     on_output_transcript=self.handle_output_transcript,
@@ -699,10 +687,11 @@ class LLMSessionManager:
                 )
             else:
                 # 语音模式：使用 OmniRealtimeClient
+                realtime_config = self._config_manager.get_model_api_config('realtime')
                 self.session = OmniRealtimeClient(
-                    base_url=self.core_url,
-                    api_key=self.core_api_key,
-                    model=self.model,
+                    base_url=realtime_config['base_url'],
+                    api_key=realtime_config['api_key'],
+                    model=realtime_config['model'],
                     on_text_delta=self.handle_text_data,
                     on_audio_delta=self.handle_audio_data,
                     on_new_message=self.handle_new_message,
@@ -893,14 +882,7 @@ class LLMSessionManager:
         try:
             # 重新读取核心配置以支持热重载
             core_config = self._config_manager.get_core_config()
-            self.model = core_config['CORE_MODEL']
-            self.text_model = core_config['CORRECTION_MODEL']
-            self.vision_model = core_config['VISION_MODEL']
-            self.core_url = core_config['CORE_URL']
-            self.core_api_key = core_config['CORE_API_KEY']
             self.core_api_type = core_config['CORE_API_TYPE']
-            self.openrouter_url = core_config['OPENROUTER_URL']
-            self.openrouter_api_key = core_config['OPENROUTER_API_KEY']
             self.audio_api_key = core_config['AUDIO_API_KEY']
             
             # 重新读取角色配置以获取最新的voice_id（支持角色切换后的音色热更新）
@@ -915,11 +897,15 @@ class LLMSessionManager:
             # 根据input_mode创建对应类型的pending session
             if self.input_mode == 'text':
                 # 文本模式：使用 OmniOfflineClient
+                correction_config = self._config_manager.get_model_api_config('correction')
+                vision_config = self._config_manager.get_model_api_config('vision')
                 self.pending_session = OmniOfflineClient(
-                    base_url=self.openrouter_url,
-                    api_key=self.openrouter_api_key,
-                    model=self.text_model,
-                    vision_model=self.vision_model,
+                    base_url=correction_config['base_url'],
+                    api_key=correction_config['api_key'],
+                    model=correction_config['model'],
+                    vision_model=vision_config['model'],
+                    vision_base_url=vision_config['base_url'],
+                    vision_api_key=vision_config['api_key'],
                     on_text_delta=self.handle_text_data,
                     on_input_transcript=self.handle_input_transcript,
                     on_output_transcript=self.handle_output_transcript,
@@ -929,10 +915,11 @@ class LLMSessionManager:
                 logger.info(f"🔄 热切换准备: 创建文本模式 OmniOfflineClient")
             else:
                 # 语音模式：使用 OmniRealtimeClient
+                realtime_config = self._config_manager.get_model_api_config('realtime')
                 self.pending_session = OmniRealtimeClient(
-                    base_url=self.core_url,
-                    api_key=self.core_api_key,
-                    model=self.model,
+                    base_url=realtime_config['base_url'],
+                    api_key=realtime_config['api_key'],
+                    model=realtime_config['model'],
                     on_text_delta=self.handle_text_data,
                     on_audio_delta=self.handle_audio_data,
                     on_new_message=self.handle_new_message,
@@ -1280,16 +1267,14 @@ class LLMSessionManager:
 
             elif input_type in ['screen', 'camera']:
                 try:
-                    # 使用统一的屏幕分享工具处理数据
-                    result = await self.screenshot_utils.process_screen_data(data)
+                    # 使用统一的屏幕分享工具处理数据（只验证，不缩放）
+                    image_b64 = await process_screen_data(data)
                     
-                    if result:
-                        resized_b64, img_bytes = result
-                        
+                    if image_b64:
                         # 如果是文本模式（OmniOfflineClient），只存储图片，不立即发送
                         if isinstance(self.session, OmniOfflineClient):
                             # 只添加到待发送队列，等待与文本一起发送
-                            await self.session.stream_image(resized_b64)
+                            await self.session.stream_image(image_b64)
                         
                         # 如果是语音模式（OmniRealtimeClient），检查是否支持视觉并直接发送
                         elif isinstance(self.session, OmniRealtimeClient):
@@ -1299,9 +1284,9 @@ class LLMSessionManager:
                                 return
                             
                             # 语音模式直接发送图片
-                            await self.session.stream_image(resized_b64)
+                            await self.session.stream_image(image_b64)
                     else:
-                        logger.error(f"💥 Stream: 屏幕数据处理失败")
+                        logger.error(f"💥 Stream: 屏幕数据验证失败")
                         return
                 except asyncio.CancelledError:
                     raise

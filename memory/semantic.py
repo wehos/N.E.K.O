@@ -27,8 +27,8 @@ class SemanticMemory:
     
     def _get_reranker(self):
         """动态获取Reranker LLM实例以支持配置热重载"""
-        core_config = self._config_manager.get_core_config()
-        return ChatOpenAI(model=RERANKER_MODEL, base_url=core_config['OPENROUTER_URL'], api_key=core_config['OPENROUTER_API_KEY'], temperature=0.1, extra_body={"enable_thinking": False} if RERANKER_MODEL in MODELS_WITH_EXTRA_BODY else None)
+        api_config = self._config_manager.get_model_api_config('summary')
+        return ChatOpenAI(model=RERANKER_MODEL, base_url=api_config['base_url'], api_key=api_config['api_key'], temperature=0.1, extra_body={"enable_thinking": False} if RERANKER_MODEL in MODELS_WITH_EXTRA_BODY else None)
 
     async def store_conversation(self, event_id, messages, lanlan_name):
         self.original_memory[lanlan_name].store_conversation(event_id, messages)
@@ -100,8 +100,8 @@ class SemanticMemory:
 class SemanticMemoryOriginal:
     def __init__(self, persist_directory, lanlan_name, name_mapping):
         config_manager = get_config_manager()
-        core_config = config_manager.get_core_config()
-        self.embeddings = OpenAIEmbeddings(base_url=core_config['OPENROUTER_URL'], model=SEMANTIC_MODEL, api_key=core_config['OPENROUTER_API_KEY'])
+        api_config = config_manager.get_model_api_config('summary')
+        self.embeddings = OpenAIEmbeddings(base_url=api_config['base_url'], model=SEMANTIC_MODEL, api_key=api_config['api_key'])
         # self.vectorstore = Chroma(
         #     collection_name="Origin",
         #     persist_directory=persist_directory[lanlan_name],
@@ -155,8 +155,8 @@ class SemanticMemoryCompressed:
         self.lanlan_name = lanlan_name
         self.name_mapping = name_mapping
         config_manager = get_config_manager()
-        core_config = config_manager.get_core_config()
-        self.embeddings = OpenAIEmbeddings(base_url=core_config['OPENROUTER_URL'], model=SEMANTIC_MODEL, api_key=core_config['OPENROUTER_API_KEY'])
+        api_config = config_manager.get_model_api_config('summary')
+        self.embeddings = OpenAIEmbeddings(base_url=api_config['base_url'], model=SEMANTIC_MODEL, api_key=api_config['api_key'])
         self.vectorstore = None
         # self.vectorstore = Chroma(
         #     collection_name="Compressed",

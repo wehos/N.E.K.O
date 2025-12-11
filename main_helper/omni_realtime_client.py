@@ -9,7 +9,6 @@ import logging
 
 from typing import Optional, Callable, Dict, Any, Awaitable
 from enum import Enum
-from langchain_openai import ChatOpenAI
 from utils.config_manager import get_config_manager
 from utils.audio_processor import AudioProcessor
 from utils.frontend_utils import calculate_text_similarity
@@ -264,9 +263,9 @@ class OmniRealtimeClient:
                 })
             elif "step" in self.model:
                 await self.update_session({
-                    "instructions": instructions + '\n请使用默认女声与用户交流。\n',
+                    "instructions": instructions,
                     "modalities": ['text', 'audio'], # Step API只支持这一个模式
-                    "voice": self.voice if self.voice else "qingchunshaonv",
+                    "voice": self.voice if self.voice else "livelybreezy-female",
                     "input_audio_format": "pcm16",
                     "output_audio_format": "pcm16",
                     "turn_detection": {
@@ -283,9 +282,9 @@ class OmniRealtimeClient:
                 })
             elif "free" in self.model:
                 await self.update_session({
-                    "instructions": instructions + '\n请使用默认女声与用户交流。\n',
+                    "instructions": instructions,
                     "modalities": ['text', 'audio'], # Step API只支持这一个模式
-                    "voice": self.voice if self.voice else "qingchunshaonv",
+                    "voice": self.voice if self.voice else "livelybreezy-female",
                     "input_audio_format": "pcm16",
                     "output_audio_format": "pcm16",
                     "turn_detection": {
@@ -356,57 +355,28 @@ class OmniRealtimeClient:
         """Use VISION_MODEL to analyze image and return description."""
         try:
             self._image_being_analyzed = True
-            core_config = _config_manager.get_core_config()
-            vision_model = core_config.get('VISION_MODEL', '')
-            openrouter_url = core_config.get('OPENROUTER_URL', '')
-            openrouter_api_key = core_config.get('OPENROUTER_API_KEY', '')
             
-            if not vision_model:
-                logger.warning("VISION_MODEL not configured, skipping image analysis")
-                return ""
+            # 使用统一的视觉分析函数
+            from utils.screenshot_utils import analyze_image_with_vision_model
             
-            logger.info(f"🖼️ Using VISION_MODEL ({vision_model}) to analyze image")
+            # 实时对话场景使用更简洁的提示词
+            prompt = "你是一个图像描述助手, 请简洁地描述图片中的主要内容、关键细节和你觉得有趣的地方。你的回答不能超过250字。"
             
-            # Create vision LLM client
-            vision_llm = ChatOpenAI(
-                model=vision_model,
-                base_url=openrouter_url,
-                api_key=openrouter_api_key,
-                temperature=0.1,
+            description = await analyze_image_with_vision_model(
+                image_b64=image_b64,
+                prompt=prompt,
                 max_tokens=500
             )
             
-            # Prepare multi-modal message
-            messages = [
-                {
-                    "role": "system",
-                    "content": "你是一个图像描述助手, 请简洁地描述图片中的主要内容、关键细节和你觉得有趣的地方。你的回答不能超过250字。"
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{image_b64}"
-                            }
-                        },
-                        {
-                            "type": "text",
-                            "text": "请描述这张图片的内容。"
-                        }
-                    ]
-                }
-            ]
-            
-            # Call vision model
-            response = await vision_llm.ainvoke(messages)
-            description = response.content.strip()
-            self._image_description = f"[用户的实时屏幕截图或相机画面]: {description}"
-            
-            logger.info(f"✅ Image analysis complete.")
-            self._image_being_analyzed = False
-            return description
+            if description:
+                self._image_description = f"[用户的实时屏幕截图或相机画面]: {description}"
+                logger.info("✅ Image analysis complete.")
+                self._image_being_analyzed = False
+                return description
+            else:
+                logger.warning("VISION_MODEL not configured or analysis failed")
+                self._image_being_analyzed = False
+                return ""
             
         except Exception as e:
             logger.error(f"Error analyzing image with vision model: {e}")

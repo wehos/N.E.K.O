@@ -29,6 +29,12 @@ class OmniOfflineClient:
             The API key for authentication.
         model (str):
             Model to use for chat.
+        vision_model (str):
+            Model to use for vision tasks.
+        vision_base_url (str):
+            Optional separate base URL for vision model API.
+        vision_api_key (str):
+            Optional separate API key for vision model.
         llm (ChatOpenAI):
             Langchain ChatOpenAI client for streaming text generation.
         on_text_delta (Callable[[str, bool], Awaitable[None]]):
@@ -48,6 +54,8 @@ class OmniOfflineClient:
         api_key: str,
         model: str = "",
         vision_model: str = "",
+        vision_base_url: str = "",  # 独立的视觉模型 API URL
+        vision_api_key: str = "",   # 独立的视觉模型 API Key
         voice: str = "",  # Unused for text mode but kept for compatibility
         turn_detection_mode = None,  # Unused for text mode
         on_text_delta: Optional[Callable[[str, bool], Awaitable[None]]] = None,
@@ -65,12 +73,18 @@ class OmniOfflineClient:
         self.api_key = api_key if api_key and api_key != '' else None
         self.model = model
         self.vision_model = vision_model  # Store vision model for temporary switching
+        # 视觉模型独立配置（如果未指定则回退到主配置）
+        self.vision_base_url = vision_base_url if vision_base_url else base_url
+        self.vision_api_key = vision_api_key if vision_api_key else api_key
         self.on_text_delta = on_text_delta
         self.on_input_transcript = on_input_transcript
         self.on_output_transcript = on_output_transcript
         self.handle_connection_error = on_connection_error
         self.on_response_done = on_response_done
         self.on_repetition_detected = on_repetition_detected
+        
+        # Track if we're using vision model
+        self._using_vision_model = False
         
         # Initialize langchain ChatOpenAI client
         self.llm = ChatOpenAI(
@@ -114,19 +128,33 @@ class OmniOfflineClient:
             if self._conversation_history and isinstance(self._conversation_history[0], SystemMessage):
                 self._conversation_history[0] = SystemMessage(content=self._instructions)
     
-    def switch_model(self, new_model: str) -> None:
+    def switch_model(self, new_model: str, use_vision_config: bool = False) -> None:
         """
         Temporarily switch to a different model (e.g., vision model).
         This allows dynamic model switching for vision tasks.
+        
+        Args:
+            new_model: The model to switch to
+            use_vision_config: If True, use vision_base_url and vision_api_key
         """
         if new_model and new_model != self.model:
             logger.info(f"Switching model from {self.model} to {new_model}")
             self.model = new_model
-            # Recreate LLM instance with new model
+            self._using_vision_model = use_vision_config
+            
+            # 选择使用的 API 配置
+            if use_vision_config:
+                base_url = self.vision_base_url
+                api_key = self.vision_api_key if self.vision_api_key and self.vision_api_key != '' else None
+            else:
+                base_url = self.base_url
+                api_key = self.api_key
+            
+            # Recreate LLM instance with new model and config
             self.llm = ChatOpenAI(
                 model=self.model,
-                base_url=self.base_url,
-                api_key=self.api_key,
+                base_url=base_url,
+                api_key=api_key,
                 temperature=1.0,
                 streaming=True,
                 extra_body={"enable_thinking": False} if self.model in MODELS_WITH_EXTRA_BODY else None
@@ -193,7 +221,7 @@ class OmniOfflineClient:
             # (cannot switch back because image data remains in conversation history)
             if self.vision_model and self.vision_model != self.model:
                 logger.info(f"🖼️ Temporarily switching to vision model: {self.vision_model} (from {self.model})")
-                self.switch_model(self.vision_model)
+                self.switch_model(self.vision_model, use_vision_config=True)
             
             # Multi-modal message: images + text
             content = []

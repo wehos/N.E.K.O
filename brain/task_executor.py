@@ -128,16 +128,16 @@ class DirectTaskExecutor:
 
     def _get_client(self):
         """动态获取 OpenAI 客户端"""
-        core_config = self._config_manager.get_core_config()
+        api_config = self._config_manager.get_model_api_config('summary')
         return AsyncOpenAI(
-            api_key=core_config['OPENROUTER_API_KEY'],
-            base_url=core_config['OPENROUTER_URL']
+            api_key=api_config['api_key'],
+            base_url=api_config['base_url']
         )
     
     def _get_model(self):
         """获取模型名称"""
-        core_config = self._config_manager.get_core_config()
-        return core_config['SUMMARY_MODEL']
+        api_config = self._config_manager.get_model_api_config('summary')
+        return api_config['model']
     
     def _format_messages(self, messages: List[Dict[str, str]]) -> str:
         """格式化对话消息"""
