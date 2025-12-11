@@ -100,7 +100,22 @@ class TkWindowPlugin(NekoPluginBase):
             metadata={"action": "open", "title": window_title, "message": window_message}
         )
         
-        t.start()
+        try:
+            t.start()
+        except Exception as e:
+            # 线程启动失败，回滚状态并通知
+            with self._lock:
+                self._started = False
+                self._thread = None
+            self.ctx.push_message(
+                source="open_window",
+                message_type="text",
+                description="Failed to start Tk window",
+                priority=8,
+                content=f"Failed to start window thread: {e}",
+                metadata={"action": "open", "status": "error", "error": str(e)}
+            )
+            return {"started": False, "reason": f"thread start failed: {e}"}
         
         self.report_status({"started": True})
         
