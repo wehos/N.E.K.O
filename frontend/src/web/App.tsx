@@ -28,6 +28,11 @@ const request = createRequestClient({
   returnDataOnly: true
 });
 
+/**
+ * Root React component demonstrating API requests and interactive UI controls.
+ *
+ * 展示了请求示例、StatusToast 以及 Modal 交互入口。
+ */
 function App() {
   const toastRef = useRef<StatusToastHandle | null>(null);
   const modalRef = useRef<ModalHandle | null>(null);

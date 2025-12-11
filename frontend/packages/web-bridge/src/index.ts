@@ -58,6 +58,13 @@ export interface RequestWindowOptions {
   websocketUrl?: string;
 }
 
+/**
+ * Extract the lanlan_name identifier from the当前页面 URL。
+ *
+ * 优先读取查询参数 `lanlan_name`，若不存在则尝试从路径首段解析（排除保留段），并进行 URL 解码。
+ *
+ * @returns 解析到的 lanlan_name，若无法获取则返回空字符串
+ */
 export function resolveLanlanNameFromLocation(): string {
   // 优先 URL 参数
   const urlParams = new URLSearchParams(window.location.search);
@@ -74,6 +81,16 @@ export function resolveLanlanNameFromLocation(): string {
   return lanlanNameFromUrl;
 }
 
+/**
+ * 将 StatusToast 句柄绑定到 window，提供队列处理与就绪事件。
+ *
+ * - 暴露 `window.showStatusToast`，在 React 未就绪时会排队，待就绪后逐条显示。
+ * - 尝试展示启动提示（来自 `window.lanlan_config`）或挂起的消息。
+ * - 派发 `statusToastReady` 事件，返回清理函数。
+ *
+ * @param handle - 用于展示 toast 的 StatusToastHandle
+ * @returns 清理函数，移除监听并清理定时器
+ */
 export function bindStatusToastToWindow(handle: StatusToastHandle): Cleanup {
   if (typeof window === "undefined") {
     return () => {};
@@ -178,6 +195,15 @@ export function bindStatusToastToWindow(handle: StatusToastHandle): Cleanup {
   };
 }
 
+/**
+ * 将 Modal 相关方法绑定到 window 并派发就绪事件。
+ *
+ * 暴露 `window.showAlert` / `showConfirm` / `showPrompt`，使用传入的句柄执行实际弹窗逻辑，
+ * 并在短暂延迟后派发 `modalReady` 事件、设置 `window.__modalReady`。
+ *
+ * @param handle - 提供 alert/confirm/prompt 的 ModalHandle
+ * @returns 清理函数，用于取消就绪定时器
+ */
 export function bindModalToWindow(handle: ModalHandle): Cleanup {
   if (typeof window === "undefined") {
     return () => {};
@@ -263,6 +289,13 @@ export function bindModalToWindow(handle: ModalHandle): Cleanup {
   };
 }
 
+/**
+ * 将组件句柄批量绑定到 window。
+ *
+ * @param handles.toast - 可选的 toast 句柄
+ * @param handles.modal - 可选的 modal 句柄
+ * @returns 清理函数，逐一调用内部清理
+ */
 export function bindComponentsToWindow(handles: {
   toast?: StatusToastHandle | null;
   modal?: ModalHandle | null;
@@ -280,6 +313,16 @@ export function bindComponentsToWindow(handles: {
   };
 }
 
+/**
+ * 将 Axios 客户端与 URL 构建工具挂载到 window，并派发 `requestReady`。
+ *
+ * 暴露 `window.request`、`API_BASE_URL`、`STATIC_SERVER_URL`、`WEBSOCKET_URL` 以及
+ * `buildApiUrl`/`buildStaticUrl`/`buildWebSocketUrl`/`fetchWithBaseUrl`。
+ *
+ * @param client - 要挂载的 Axios 实例
+ * @param options - 可选的基础 URL 覆盖项
+ * @returns 清理函数，取消就绪定时器
+ */
 export function bindRequestToWindow(client: AxiosInstance, options: RequestWindowOptions = {}): Cleanup {
   if (typeof window === "undefined") {
     return () => {};
@@ -331,6 +374,12 @@ export interface CreateAndBindRequestOptions
   storage?: TokenStorage;
 }
 
+/**
+ * 创建 Axios 客户端并绑定到 window，返回客户端与清理函数。
+ *
+ * @param options - 可选项：apiBaseUrl/baseURL、staticServerUrl/websocketUrl、storage、refreshApi 等
+ * @returns 包含 `client` 与 `cleanup` 的对象
+ */
 export function createAndBindRequest(
   options: CreateAndBindRequestOptions = {}
 ): { client: AxiosInstance; cleanup: Cleanup } {
@@ -358,6 +407,12 @@ export function createAndBindRequest(
   return { client, cleanup };
 }
 
+/**
+ * 创建默认的 Axios 客户端（不绑定 window）。
+ *
+ * @param options - 允许覆盖 baseURL/apiBaseUrl、storage、refreshApi 等
+ * @returns 组装好的 Axios 实例
+ */
 export function createDefaultRequestClient(
   options: Partial<CreateAndBindRequestOptions> = {}
 ): AxiosInstance {
@@ -377,6 +432,12 @@ export function createDefaultRequestClient(
   });
 }
 
+/**
+ * 创建默认的 Axios 客户端并绑定到 window。
+ *
+ * @param options - 用于构建客户端和覆盖 window URL 的配置
+ * @returns `{ client, cleanup }`：已绑定的 Axios 实例与解绑函数
+ */
 export function bindDefaultRequestToWindow(
   options: CreateAndBindRequestOptions = {}
 ): { client: AxiosInstance; cleanup: Cleanup } {
@@ -394,7 +455,11 @@ export function bindDefaultRequestToWindow(
   return { client, cleanup };
 }
 
-// 在加载 web-bridge UMD 时自动将默认 request 绑定到 window.request（若尚未绑定）
+/**
+ * 确保默认 Axios 实例在浏览器环境下绑定到 window.request。
+ *
+ * 若已绑定则直接返回已存在实例；非浏览器环境返回 null。
+ */
 export function autoBindDefaultRequest(): AxiosInstance | null {
   if (typeof window === "undefined") return null;
   if (window.__nekoBridgeRequestBound && window.request) {

@@ -41,8 +41,20 @@ const isRequestLogEnabled = (logEnabledOverride?: boolean): boolean => {
 };
 
 /**
- * 创建统一的请求客户端
- * 支持 Axios、Token 刷新、请求队列、Web/RN 通用存储
+ * Create an Axios HTTP client preconfigured with token attachment, automatic refresh, queuing, and optional logging.
+ *
+ * The client:
+ * - attaches the latest access token from `storage` to every request,
+ * - queues new requests while a refresh is in progress to avoid duplicate refresh calls,
+ * - refreshes tokens on 401 via `refreshApi`, then retries queued requests,
+ * - supports custom request/response interceptors and a unified `errorHandler`,
+ * - returns `response.data` by default when `returnDataOnly` is true,
+ * - allows request/response logging controlled by `logEnabled`, a global flag, or env (development only).
+ *
+ * @param options - Client configuration including `baseURL`, `storage`, `refreshApi`, optional interceptors,
+ *                  `timeout`, `returnDataOnly`, `errorHandler`, and `logEnabled` overrides.
+ * @returns An AxiosInstance with Bearer token injection, refresh queue handling, optional interceptors,
+ *          safe logging, and sanitized error payloads.
  */
 export function createRequestClient(options: RequestClientConfig): AxiosInstance {
   const {

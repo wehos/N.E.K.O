@@ -25,7 +25,11 @@ export { default as webStorage } from "./src/storage/webStorage";
 export { default as storage } from "./src/storage/index";
 export type { Storage } from "./src/storage/types";
 
-// 提供异步获取 nativeStorage 的函数
+/**
+ * Loads the native storage implementation at runtime to avoid bundling native dependencies in web builds.
+ *
+ * @returns The default export from ./src/storage/nativeStorage — the native storage implementation.
+ */
 export async function getNativeStorage() {
   const module = await import("./src/storage/nativeStorage");
   return module.default;

@@ -3,8 +3,11 @@ import { NativeTokenStorage } from "./src/request-client/tokenStorage";
 import type { TokenRefreshFn } from "./src/request-client/types";
 
 /**
- * React Native 环境的请求客户端实例
- * 注意：请在应用侧传入 baseURL / refreshApi，而非依赖 Web 配置。
+ * Creates a request client configured for React Native environments.
+ *
+ * @param options.baseURL - 基础 API 地址（应用侧传入）
+ * @param options.refreshApi - 刷新 Token 的回调
+ * @returns 基于 NativeTokenStorage 的请求客户端实例
  */
 export function createNativeRequestClient(options: { baseURL: string; refreshApi: TokenRefreshFn }) {
   return createRequestClient({

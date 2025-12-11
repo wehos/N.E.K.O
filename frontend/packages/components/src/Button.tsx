@@ -42,6 +42,21 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children?: ReactNode;
 }
 
+/**
+ * Renders a configurable button with variants, sizes, optional icons, and a loading state.
+ *
+ * @param variant - Visual style of the button: "primary", "secondary", "danger", or "success".
+ * @param size - Button size: "sm", "md", or "lg".
+ * @param loading - When true, shows a spinner and disables the button.
+ * @param icon - Left-side icon to display when not loading.
+ * @param iconRight - Right-side icon to display when not loading.
+ * @param fullWidth - When true, the button expands to fill its container's width.
+ * @param disabled - If true the button is disabled; the button is also disabled while `loading` is true.
+ * @param className - Additional CSS class names applied to the button element.
+ * @param label - Fallback content used when `children` is not provided.
+ * @param children - Button content; takes precedence over `label`.
+ * @returns The rendered button element.
+ */
 export function Button({
   variant = "primary",
   size = "md",

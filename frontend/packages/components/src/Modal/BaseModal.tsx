@@ -12,6 +12,13 @@ export interface BaseModalProps {
   closeOnEscape?: boolean;
 }
 
+/**
+ * Render a modal dialog into document.body with an optional title, overlay click/Escape-to-close handling, and automatic focus of the first input or button when opened.
+ *
+ * @param closeOnClickOutside - Whether clicking the overlay closes the modal (defaults to `true`).
+ * @param closeOnEscape - Whether pressing the Escape key closes the modal (defaults to `true`).
+ * @returns The modal element mounted to `document.body` when `isOpen` is `true`, or `null` when closed.
+ */
 export function BaseModal({
   isOpen,
   onClose,

@@ -8,6 +8,20 @@ export interface AlertDialogProps extends Omit<BaseModalProps, "children"> {
   onConfirm: () => void;
 }
 
+/**
+ * Renders a confirmation modal with a message and a primary "OK" button.
+ *
+ * The primary button invokes `onConfirm` when clicked; the dialog does not close automatically
+ * — the parent should handle closing (e.g., by calling `onClose`). The button label uses
+ * `okText` if provided, otherwise it attempts to use `window.t("common.ok")` and falls back to `"确定"`.
+ *
+ * @param message - The message text displayed in the modal body
+ * @param okText - Optional text for the primary button; when omitted the component attempts localization
+ * @param onConfirm - Callback invoked when the primary button is clicked
+ * @param closeOnClickOutside - Whether clicking outside the modal closes it (defaults to `true`)
+ * @param closeOnEscape - Whether pressing Escape closes the modal (defaults to `true`)
+ * @returns The AlertDialog JSX element
+ */
 export function AlertDialog({
   isOpen,
   onClose,

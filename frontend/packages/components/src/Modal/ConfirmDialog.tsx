@@ -11,6 +11,25 @@ export interface ConfirmDialogProps extends Omit<BaseModalProps, "children"> {
   onCancel?: () => void;
 }
 
+/**
+ * Renders a confirmation modal with a message and Cancel/Confirm actions.
+ *
+ * The Confirm button invokes `onConfirm` and the Cancel button invokes `onCancel` if provided.
+ * Neither handler closes the modal; closing is delegated to the parent via `onClose`.
+ *
+ * @param isOpen - Whether the modal is visible
+ * @param onClose - Callback invoked when the modal requests to close (e.g., backdrop click or Escape)
+ * @param title - Optional modal title
+ * @param message - Text displayed in the modal body
+ * @param okText - Custom label for the confirm button
+ * @param cancelText - Custom label for the cancel button
+ * @param danger - If true, applies danger styling to the confirm button
+ * @param onConfirm - Callback invoked when the confirm button is clicked
+ * @param onCancel - Callback invoked when the cancel button is clicked (optional)
+ * @param closeOnClickOutside - Whether clicking outside the modal closes it
+ * @param closeOnEscape - Whether pressing Escape closes the modal
+ * @returns The confirmation modal React element
+ */
 export function ConfirmDialog({
   isOpen,
   onClose,
