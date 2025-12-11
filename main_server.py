@@ -2837,8 +2837,10 @@ async def voice_clone(file: UploadFile = File(...), prefix: str = Form(...)):
                 return JSONResponse({'error': f'上传成功但响应格式无法解析: {raw_text[:200]}'}, status_code=500)
         
         # 3. 用直链注册音色
-        core_config = _config_manager.get_core_config()
-        audio_api_key = core_config.get('AUDIO_API_KEY')
+        # 使用 get_model_api_config('tts_custom') 获取正确的 API 配置
+        # tts_custom 会优先使用自定义 TTS API，其次是 Qwen Cosyvoice API（目前唯一支持 voice clone 的服务）
+        tts_config = _config_manager.get_model_api_config('tts_custom')
+        audio_api_key = tts_config.get('api_key', '')
         
         if not audio_api_key:
             logger.error("未配置 AUDIO_API_KEY")
