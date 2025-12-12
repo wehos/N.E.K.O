@@ -29,7 +29,7 @@ logger = logging.getLogger("Main")
 
 
 @router.get("/api/live2d/models")
-async def get_live2d_models(simple: bool = False):
+def get_live2d_models(simple: bool = False):
     """
     获取Live2D模型列表
     Args:
@@ -301,7 +301,7 @@ async def update_catgirl_voice_id(name: str, request: Request):
 
 
 @router.get('/api/live2d/model_config/{model_name}')
-async def get_model_config(model_name: str):
+def get_model_config(model_name: str):
     """获取指定Live2D模型的model3.json配置"""
     try:
         # 查找模型目录（可能在static或用户文档目录）
@@ -393,7 +393,7 @@ async def update_model_config(model_name: str, request: Request):
 
 
 @router.get('/api/live2d/emotion_mapping/{model_name}')
-async def get_emotion_mapping(model_name: str):
+def get_emotion_mapping(model_name: str):
     """获取情绪映射配置"""
     try:
         # 查找模型目录（可能在static或用户文档目录）
@@ -485,7 +485,7 @@ async def update_emotion_mapping(model_name: str, request: Request):
 
 
 @router.get('/api/live2d/model_files/{model_name}')
-async def get_model_files(model_name: str):
+def get_model_files(model_name: str):
     """获取指定Live2D模型的动作和表情文件列表"""
     try:
         # 查找模型目录（可能在static或用户文档目录）
@@ -534,7 +534,7 @@ async def get_model_files(model_name: str):
 
 
 @router.get('/api/live2d/model_parameters/{model_name}')
-async def get_model_parameters(model_name: str):
+def get_model_parameters(model_name: str):
     """获取指定Live2D模型的参数信息（从.cdi3.json文件）"""
     try:
         # 查找模型目录
@@ -618,7 +618,7 @@ async def save_model_parameters(model_name: str, request: Request):
 
 
 @router.get('/api/live2d/load_model_parameters/{model_name}')
-async def load_model_parameters(model_name: str):
+def load_model_parameters(model_name: str):
     """从模型目录的parameters.json文件加载参数"""
     try:
         # 查找模型目录
@@ -647,7 +647,7 @@ async def load_model_parameters(model_name: str):
 
 
 @router.get("/api/live2d/model_config_by_id/{model_id}")
-async def get_model_config_by_id(model_id: str):
+def get_model_config_by_id(model_id: str):
     """获取指定Live2D模型的model3.json配置（通过workshop item_id）"""
     try:
         # 查找模型目录（可能在static或用户文档目录）
@@ -739,7 +739,7 @@ async def update_model_config_by_id(model_id: str, request: Request):
 
 
 @router.get('/api/live2d/model_files_by_id/{model_id}')
-async def get_model_files_by_id(model_id: str):
+def get_model_files_by_id(model_id: str):
     """获取指定Live2D模型的动作和表情文件列表（通过workshop item_id）"""
     try:
         # 直接拒绝无效的model_id
