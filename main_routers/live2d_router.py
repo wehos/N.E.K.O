@@ -186,12 +186,12 @@ async def update_model_config(model_name: str, request: Request):
         with open(model_json_path, 'r', encoding='utf-8') as f:
             current_config = json.load(f)
             
-        current_config = current_config.setdefault("FileReferences", {})
+        file_refs = current_config.setdefault("FileReferences", {})
         if 'FileReferences' in data and 'Motions' in data['FileReferences']:
-            current_config['FileReferences']['Motions'] = data['FileReferences']['Motions']
+            file_refs['Motions'] = data['FileReferences']['Motions']
             
         if 'FileReferences' in data and 'Expressions' in data['FileReferences']:
-            current_config['FileReferences']['Expressions'] = data['FileReferences']['Expressions']
+            file_refs['Expressions'] = data['FileReferences']['Expressions']
 
         with open(model_json_path, 'w', encoding='utf-8') as f:
             json.dump(current_config, f, ensure_ascii=False, indent=4) # 使用 indent=4 保持格式
@@ -531,7 +531,7 @@ def load_model_parameters(model_name: str):
         return {"success": False, "error": str(e), "parameters": {}}
 
 
-@router.get("/live2d/model_config_by_id/{model_id}")
+@router.get("/model_config_by_id/{model_id}")
 def get_model_config_by_id(model_id: str):
     """获取指定Live2D模型的model3.json配置"""
     try:
@@ -589,7 +589,7 @@ def get_model_config_by_id(model_id: str):
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 
-@router.post("/live2d/model_config_by_id/{model_id}")
+@router.post("/model_config_by_id/{model_id}")
 async def update_model_config_by_id(model_id: str, request: Request):
     """更新指定Live2D模型的model3.json配置"""
     try:
@@ -620,12 +620,12 @@ async def update_model_config_by_id(model_id: str, request: Request):
         with open(model_json_path, 'r', encoding='utf-8') as f:
             current_config = json.load(f)
             
-        current_config = current_config.setdefault("FileReferences", {})
+        file_refs = current_config.setdefault("FileReferences", {})
         if 'FileReferences' in data and 'Motions' in data['FileReferences']:
-            current_config['FileReferences']['Motions'] = data['FileReferences']['Motions']
+            file_refs['Motions'] = data['FileReferences']['Motions']
             
         if 'FileReferences' in data and 'Expressions' in data['FileReferences']:
-            current_config['FileReferences']['Expressions'] = data['FileReferences']['Expressions']
+            file_refs['Expressions'] = data['FileReferences']['Expressions']
 
         with open(model_json_path, 'w', encoding='utf-8') as f:
             json.dump(current_config, f, ensure_ascii=False, indent=4) # 使用 indent=4 保持格式
