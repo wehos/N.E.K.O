@@ -18,6 +18,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from .shared_state import (
     get_session_manager, 
     get_config_manager,
+    get_session_id,
 )
 
 router = APIRouter(tags=["websocket"])

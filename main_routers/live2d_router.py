@@ -730,6 +730,8 @@ async def upload_live2d_model(files: list[UploadFile] = File(...)):
                 file_path = file.filename
                 # 确保路径安全，移除可能的危险路径字符
                 file_path = file_path.replace('\\', '/').lstrip('/')
+                if not file_path or file_path.startswith(("/", "../")) or "/../" in f"/{file_path}":
+                    return JSONResponse(status_code=400, content={"success": False, "error": "非法文件路径"})
                 
                 target_file_path = temp_path / file_path
                 target_file_path.parent.mkdir(parents=True, exist_ok=True)

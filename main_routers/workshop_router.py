@@ -498,86 +498,83 @@ def get_workshop_item_details(item_id: str):
         
         # 直接获取查询结果，不检查handle
         result = steamworks.Workshop.GetQueryUGCResult(query_handle, 0)
-        
-        if result:
             
-            if result:
-                # 获取物品安装信息 - 支持字典格式（根据workshop.py的实现）
-                install_info = steamworks.Workshop.GetItemInstallInfo(item_id_int)
-                installed = bool(install_info)
-                folder = install_info.get('folder', '') if installed else ''
-                size = 0
-                disk_size = install_info.get('disk_size')
-                if isinstance(disk_size, (int, float)):
-                    size = int(disk_size)
-                
-                # 获取物品下载信息
-                download_info = steamworks.Workshop.GetItemDownloadInfo(item_id_int)
-                downloading = False
-                bytes_downloaded = 0
-                bytes_total = 0
-                
-                # 处理下载信息（使用正确的键名：downloaded和total）
-                if download_info:
-                    if isinstance(download_info, dict):
-                        downloaded = int(download_info.get("downloaded", 0) or 0)
-                        total = int(download_info.get("total", 0) or 0)
-                        downloading = downloaded > 0 and downloaded < total
-                        bytes_downloaded = downloaded
-                        bytes_total = total
-                    elif isinstance(download_info, tuple) and len(download_info) >= 3:
-                        # 兼容元组格式
-                        downloading, bytes_downloaded, bytes_total = download_info
-                
-                # 解码bytes类型的字段为字符串，避免JSON序列化错误
-                title = result.title.decode('utf-8', errors='replace') if hasattr(result, 'title') and isinstance(result.title, bytes) else getattr(result, 'title', '')
-                description = result.description.decode('utf-8', errors='replace') if hasattr(result, 'description') and isinstance(result.description, bytes) else getattr(result, 'description', '')
-                
-                # 构建详细的物品信息
-                item_info = {
-                    "publishedFileId": item_id_int,
-                    "title": title,
-                    "description": description,
-                    "steamIDOwner": result.steamIDOwner,
-                    "timeCreated": result.timeCreated,
-                    "timeUpdated": result.timeUpdated,
-                    "previewImageUrl": result.URL,  # 使用result.URL代替不存在的previewImageUrl
-                    "fileUrl": result.URL,  # 使用result.URL代替不存在的fileUrl
-                    "fileSize": result.fileSize,
-                    "fileId": result.file,  # 使用result.file代替不存在的fileId
-                    "previewFileId": result.previewFile,  # 使用result.previewFile代替不存在的previewFileId
-                    # 移除不存在的appID属性
-                    "tags": [],
-                    "state": {
-                        "subscribed": bool(item_state & 1),
-                        "legacyItem": bool(item_state & 2),
-                        "installed": installed,
-                        "needsUpdate": bool(item_state & 8),
-                        "downloading": downloading,
-                        "downloadPending": bool(item_state & 32),
-                        "isWorkshopItem": bool(item_state & 128)
-                    },
-                    "installedFolder": folder if installed else None,
-                    "fileSizeOnDisk": size if installed else 0,
-                    "downloadProgress": {
-                        "bytesDownloaded": bytes_downloaded if downloading else 0,
-                        "bytesTotal": bytes_total if downloading else 0,
-                        "percentage": (bytes_downloaded / bytes_total * 100) if bytes_total > 0 and downloading else 0
-                    }
+        if result:
+            # 获取物品安装信息 - 支持字典格式（根据workshop.py的实现）
+            install_info = steamworks.Workshop.GetItemInstallInfo(item_id_int)
+            installed = bool(install_info)
+            folder = install_info.get('folder', '') if installed else ''
+            size = 0
+            disk_size = install_info.get('disk_size')
+            if isinstance(disk_size, (int, float)):
+                size = int(disk_size)
+            
+            # 获取物品下载信息
+            download_info = steamworks.Workshop.GetItemDownloadInfo(item_id_int)
+            downloading = False
+            bytes_downloaded = 0
+            bytes_total = 0
+            
+            # 处理下载信息（使用正确的键名：downloaded和total）
+            if download_info:
+                if isinstance(download_info, dict):
+                    downloaded = int(download_info.get("downloaded", 0) or 0)
+                    total = int(download_info.get("total", 0) or 0)
+                    downloading = downloaded > 0 and downloaded < total
+                    bytes_downloaded = downloaded
+                    bytes_total = total
+                elif isinstance(download_info, tuple) and len(download_info) >= 3:
+                    # 兼容元组格式
+                    downloading, bytes_downloaded, bytes_total = download_info
+            
+            # 解码bytes类型的字段为字符串，避免JSON序列化错误
+            title = result.title.decode('utf-8', errors='replace') if hasattr(result, 'title') and isinstance(result.title, bytes) else getattr(result, 'title', '')
+            description = result.description.decode('utf-8', errors='replace') if hasattr(result, 'description') and isinstance(result.description, bytes) else getattr(result, 'description', '')
+            
+            # 构建详细的物品信息
+            item_info = {
+                "publishedFileId": item_id_int,
+                "title": title,
+                "description": description,
+                "steamIDOwner": result.steamIDOwner,
+                "timeCreated": result.timeCreated,
+                "timeUpdated": result.timeUpdated,
+                "previewImageUrl": result.URL,  # 使用result.URL代替不存在的previewImageUrl
+                "fileUrl": result.URL,  # 使用result.URL代替不存在的fileUrl
+                "fileSize": result.fileSize,
+                "fileId": result.file,  # 使用result.file代替不存在的fileId
+                "previewFileId": result.previewFile,  # 使用result.previewFile代替不存在的previewFileId
+                # 移除不存在的appID属性
+                "tags": [],
+                "state": {
+                    "subscribed": bool(item_state & 1),
+                    "legacyItem": bool(item_state & 2),
+                    "installed": installed,
+                    "needsUpdate": bool(item_state & 8),
+                    "downloading": downloading,
+                    "downloadPending": bool(item_state & 32),
+                    "isWorkshopItem": bool(item_state & 128)
+                },
+                "installedFolder": folder if installed else None,
+                "fileSizeOnDisk": size if installed else 0,
+                "downloadProgress": {
+                    "bytesDownloaded": bytes_downloaded if downloading else 0,
+                    "bytesTotal": bytes_total if downloading else 0,
+                    "percentage": (bytes_downloaded / bytes_total * 100) if bytes_total > 0 and downloading else 0
                 }
-                
-                # 注意：SteamWorkshop类中不存在ReleaseQueryUGCRequest方法，无需释放句柄
-                
-                return {
-                    "success": True,
-                    "item": item_info
-                }
-            else:
-                # 注意：SteamWorkshop类中不存在ReleaseQueryUGCRequest方法
-                return JSONResponse({
-                    "success": False,
-                    "error": "获取物品详情失败，未找到物品"
-                }, status_code=404)
+            }
+            
+            return {
+                "success": True,
+                "item": item_info
+            }
+            
+        else:
+            # 注意：SteamWorkshop类中不存在ReleaseQueryUGCRequest方法
+            return JSONResponse({
+                "success": False,
+                "error": "获取物品详情失败，未找到物品"
+            }, status_code=404)
             
     except ValueError:
         return JSONResponse({
