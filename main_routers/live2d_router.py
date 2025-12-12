@@ -18,14 +18,14 @@ import pathlib
 from fastapi import APIRouter, Request, File, UploadFile
 from fastapi.responses import JSONResponse
 
-from .shared_state import get_config_manager, get_initialize_character_data, get_session_manager
+from .shared_state import get_config_manager
 from .workshop_router import get_subscribed_workshop_items
 from utils.frontend_utils import find_models, find_model_directory, find_model_by_workshop_item_id, find_workshop_item_by_id
-router = APIRouter(tags=["live2d"])
+router = APIRouter(prefix="/api/live2d", tags=["live2d"])
 logger = logging.getLogger("Main")
 
 
-@router.get("/api/live2d/models")
+@router.get("/models")
 def get_live2d_models(simple: bool = False):
     """
     获取Live2D模型列表
@@ -109,279 +109,7 @@ def get_live2d_models(simple: bool = False):
         else:
             return []
 
-
-
-@router.get("/api/models")
-def get_models_legacy():
-    """
-    向后兼容的API端点，重定向到新的 /api/live2d/models
-    """
-    return get_live2d_models(simple=False)
-
-
-@router.get('/api/characters/current_live2d_model')
-async def get_current_live2d_model(catgirl_name: str = "", item_id: str = ""):
-    """获取指定角色或当前角色的Live2D模型信息
-    
-    Args:
-        catgirl_name: 角色名称
-        item_id: 可选的物品ID，用于直接指定模型
-    """
-    try:
-        _config_manager = get_config_manager()
-        characters = _config_manager.load_characters()
-        
-        # 如果没有指定角色名称，使用当前猫娘
-        if not catgirl_name:
-            catgirl_name = characters.get('当前猫娘', '')
-        
-        # 查找指定角色的Live2D模型
-        live2d_model_name = None
-        model_info = None
-        
-        # 首先尝试通过item_id查找模型
-        if item_id:
-            try:
-                logger.debug(f"尝试通过item_id {item_id} 查找模型")
-                # 获取所有模型
-                all_models = find_models()
-                # 查找匹配item_id的模型
-                matching_model = next((m for m in all_models if m.get('item_id') == item_id), None)
-                
-                if matching_model:
-                    logger.debug(f"通过item_id找到模型: {matching_model['name']}")
-                    # 复制模型信息
-                    model_info = matching_model.copy()
-                    live2d_model_name = model_info['name']
-            except Exception as e:
-                logger.warning(f"通过item_id查找模型失败: {e}")
-        
-        # 如果没有通过item_id找到模型，再通过角色名称查找
-        if not model_info and catgirl_name:
-            # 在猫娘列表中查找
-            if '猫娘' in characters and catgirl_name in characters['猫娘']:
-                catgirl_data = characters['猫娘'][catgirl_name]
-                live2d_model_name = catgirl_data.get('live2d')
-                
-                # 检查是否有保存的item_id
-                saved_item_id = catgirl_data.get('live2d_item_id')
-                if saved_item_id:
-                    logger.debug(f"发现角色 {catgirl_name} 保存的item_id: {saved_item_id}")
-                    try:
-                        # 尝试通过保存的item_id查找模型
-                        all_models = find_models()
-                        matching_model = next((m for m in all_models if m.get('item_id') == saved_item_id), None)
-                        if matching_model:
-                            logger.debug(f"通过保存的item_id找到模型: {matching_model['name']}")
-                            model_info = matching_model.copy()
-                            live2d_model_name = model_info['name']
-                    except Exception as e:
-                        logger.warning(f"通过保存的item_id查找模型失败: {e}")
-        
-        # 如果找到了模型名称，获取模型信息
-        if live2d_model_name:
-            try:
-                # 先从完整的模型列表中查找，这样可以获取到item_id等完整信息
-                all_models = find_models()
-                # 查找匹配的模型
-                matching_model = next((m for m in all_models if m['name'] == live2d_model_name), None)
-                
-                if matching_model:
-                    # 使用完整的模型信息，包含item_id
-                    model_info = matching_model.copy()
-                    logger.debug(f"从完整模型列表获取模型信息: {model_info}")
-                else:
-                    # 如果在完整列表中找不到，回退到原来的逻辑
-                    model_dir, url_prefix = find_model_directory(live2d_model_name)
-                    if os.path.exists(model_dir):
-                        # 查找模型配置文件
-                        model_files = [f for f in os.listdir(model_dir) if f.endswith('.model3.json')]
-                        if model_files:
-                            model_file = model_files[0]
-                            
-                            # 使用保存的item_id构建model_path
-                            # 从之前的逻辑中获取saved_item_id
-                            saved_item_id = catgirl_data.get('live2d_item_id', '') if 'catgirl_data' in locals() else ''
-                            
-                            # 如果有保存的item_id，使用它构建路径
-                            if saved_item_id:
-                                model_path = f'{url_prefix}/{saved_item_id}/{model_file}'
-                                logger.debug(f"使用保存的item_id构建模型路径: {model_path}")
-                            else:
-                                # 原始路径构建逻辑
-                                model_path = f'{url_prefix}/{live2d_model_name}/{model_file}'
-                                logger.debug(f"使用模型名称构建路径: {model_path}")
-                            
-                            model_info = {
-                                'name': live2d_model_name,
-                                'item_id': saved_item_id,
-                                'path': model_path
-                            }
-            except Exception as e:
-                logger.warning(f"获取模型信息失败: {e}")
-        
-        # 回退机制：如果没有找到模型，使用默认的mao_pro
-        if not live2d_model_name or not model_info:
-            logger.info(f"猫娘 {catgirl_name} 未设置Live2D模型，回退到默认模型 mao_pro")
-            live2d_model_name = 'mao_pro'
-            try:
-                # 先从完整的模型列表中查找mao_pro
-                all_models = find_models()
-                matching_model = next((m for m in all_models if m['name'] == 'mao_pro'), None)
-                
-                if matching_model:
-                    model_info = matching_model.copy()
-                    model_info['is_fallback'] = True
-                else:
-                    # 如果找不到，回退到原来的逻辑
-                    model_dir, url_prefix = find_model_directory('mao_pro')
-                    if os.path.exists(model_dir):
-                        model_files = [f for f in os.listdir(model_dir) if f.endswith('.model3.json')]
-                        if model_files:
-                            model_file = model_files[0]
-                            model_path = f'{url_prefix}/mao_pro/{model_file}'
-                            model_info = {
-                                'name': 'mao_pro',
-                                'path': model_path,
-                                'is_fallback': True  # 标记这是回退模型
-                            }
-            except Exception as e:
-                logger.error(f"获取默认模型mao_pro失败: {e}")
-        
-        return JSONResponse(content={
-            'success': True,
-            'catgirl_name': catgirl_name,
-            'model_name': live2d_model_name,
-            'model_info': model_info
-        })
-        
-    except Exception as e:
-        logger.error(f"获取角色Live2D模型失败: {e}")
-        return JSONResponse(content={
-            'success': False,
-            'error': str(e)
-        })
-
-
-@router.put('/api/characters/catgirl/l2d/{name}')
-async def update_catgirl_l2d(name: str, request: Request):
-    """更新指定猫娘的Live2D模型设置"""
-    try:
-        data = await request.json()
-        live2d_model = data.get('live2d')
-        item_id = data.get('item_id')  # 获取可选的item_id
-        
-        if not live2d_model:
-            return JSONResponse(content={
-                'success': False,
-                'error': '未提供Live2D模型名称'
-            })
-        
-        # 加载当前角色配置
-        _config_manager = get_config_manager()
-        characters = _config_manager.load_characters()
-        
-        # 确保猫娘配置存在
-        if '猫娘' not in characters:
-            characters['猫娘'] = {}
-        
-        # 确保指定猫娘的配置存在
-        if name not in characters['猫娘']:
-            characters['猫娘'][name] = {}
-        
-        # 更新Live2D模型设置，同时保存item_id（如果有）
-        characters['猫娘'][name]['live2d'] = live2d_model
-        if item_id:
-            characters['猫娘'][name]['live2d_item_id'] = item_id
-            logger.debug(f"已保存角色 {name} 的模型 {live2d_model} 和item_id {item_id}")
-        else:
-            logger.debug(f"已保存角色 {name} 的模型 {live2d_model}")
-        
-        # 保存配置
-        _config_manager.save_characters(characters)
-        # 自动重新加载配置
-        initialize_character_data = get_initialize_character_data()
-        await initialize_character_data()
-        
-        return JSONResponse(content={
-            'success': True,
-            'message': f'已更新角色 {name} 的Live2D模型为 {live2d_model}'
-        })
-        
-    except Exception as e:
-        logger.error(f"更新角色Live2D模型失败: {e}")
-        return JSONResponse(content={
-            'success': False,
-            'error': str(e)
-        })
-
-
-@router.put('/api/characters/catgirl/voice_id/{name}')
-async def update_catgirl_voice_id(name: str, request: Request):
-    data = await request.json()
-    if not data:
-        return JSONResponse({'success': False, 'error': '无数据'}, status_code=400)
-    _config_manager = get_config_manager()
-    session_manager = get_session_manager()
-    characters = _config_manager.load_characters()
-    if name not in characters.get('猫娘', {}):
-        return JSONResponse({'success': False, 'error': '猫娘不存在'}, status_code=404)
-    if 'voice_id' in data:
-        voice_id = data['voice_id']
-        # 验证voice_id是否在voice_storage中
-        if not _config_manager.validate_voice_id(voice_id):
-            voices = _config_manager.get_voices_for_current_api()
-            available_voices = list(voices.keys())
-            return JSONResponse({
-                'success': False, 
-                'error': f'voice_id "{voice_id}" 在当前API的音色库中不存在',
-                'available_voices': available_voices
-            }, status_code=400)
-        characters['猫娘'][name]['voice_id'] = voice_id
-    _config_manager.save_characters(characters)
-    
-    # 如果是当前活跃的猫娘，需要先通知前端，再关闭session
-    is_current_catgirl = (name == characters.get('当前猫娘', ''))
-    session_ended = False
-    
-    if is_current_catgirl and name in session_manager:
-        # 检查是否有活跃的session
-        if session_manager[name].is_active:
-            logger.info(f"检测到 {name} 的voice_id已更新，准备刷新...")
-            
-            # 1. 先发送刷新消息（WebSocket还连着）
-            if session_manager[name].websocket:
-                try:
-                    await session_manager[name].websocket.send_text(json.dumps({
-                        "type": "reload_page",
-                        "message": "语音已更新，页面即将刷新"
-                    }))
-                    logger.info(f"已通知 {name} 的前端刷新页面")
-                except Exception as e:
-                    logger.warning(f"通知前端刷新页面失败: {e}")
-            
-            # 2. 立刻关闭session（这会断开WebSocket）
-            try:
-                await session_manager[name].end_session(by_server=True)
-                session_ended = True
-                logger.info(f"{name} 的session已结束")
-            except Exception as e:
-                logger.error(f"结束session时出错: {e}")
-    
-    # 方案3：条件性重新加载 - 只有当前猫娘才重新加载配置
-    if is_current_catgirl:
-        # 3. 重新加载配置，让新的voice_id生效
-        initialize_character_data = get_initialize_character_data()
-        await initialize_character_data()
-        logger.info(f"配置已重新加载，新的voice_id已生效")
-    else:
-        # 不是当前猫娘，跳过重新加载，避免影响当前猫娘的session
-        logger.info(f"切换的是其他猫娘 {name} 的音色，跳过重新加载以避免影响当前猫娘的session")
-    
-    return {"success": True, "session_restarted": session_ended}
-
-
-@router.get("/api/live2d/model_config/{model_name}")
+@router.get("/model_config/{model_name}")
 def get_model_config(model_name: str):
     """获取指定Live2D模型的model3.json配置"""
     try:
@@ -433,7 +161,7 @@ def get_model_config(model_name: str):
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 
-@router.post("/api/live2d/model_config/{model_name}")
+@router.post("/model_config/{model_name}")
 async def update_model_config(model_name: str, request: Request):
     """更新指定Live2D模型的model3.json配置"""
     try:
@@ -473,7 +201,7 @@ async def update_model_config(model_name: str, request: Request):
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 
-@router.get('/api/live2d/emotion_mapping/{model_name}')
+@router.get('/emotion_mapping/{model_name}')
 def get_emotion_mapping(model_name: str):
     """获取情绪映射配置"""
     try:
@@ -540,7 +268,7 @@ def get_emotion_mapping(model_name: str):
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 
-@router.post('/api/live2d/emotion_mapping/{model_name}')
+@router.post('/emotion_mapping/{model_name}')
 async def update_emotion_mapping(model_name: str, request: Request):
     """更新情绪映射配置"""
     try:
@@ -630,7 +358,7 @@ async def update_emotion_mapping(model_name: str, request: Request):
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 
-@router.get('/api/live2d/model_files/{model_name}')
+@router.get('/model_files/{model_name}')
 def get_model_files(model_name: str):
     """获取指定Live2D模型的动作和表情文件列表"""
     try:
@@ -679,7 +407,7 @@ def get_model_files(model_name: str):
         return {"success": False, "error": str(e)}
 
 
-@router.get('/api/live2d/model_parameters/{model_name}')
+@router.get('/model_parameters/{model_name}')
 def get_model_parameters(model_name: str):
     """获取指定Live2D模型的参数信息（从.cdi3.json文件）"""
     try:
@@ -734,7 +462,7 @@ def get_model_parameters(model_name: str):
         return {"success": False, "error": str(e)}
 
 
-@router.post('/api/live2d/save_model_parameters/{model_name}')
+@router.post('/save_model_parameters/{model_name}')
 async def save_model_parameters(model_name: str, request: Request):
     """保存模型参数到模型目录的parameters.json文件"""
     try:
@@ -763,7 +491,7 @@ async def save_model_parameters(model_name: str, request: Request):
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 
-@router.get('/api/live2d/load_model_parameters/{model_name}')
+@router.get('/live2d/load_model_parameters/{model_name}')
 def load_model_parameters(model_name: str):
     """从模型目录的parameters.json文件加载参数"""
     try:
@@ -792,7 +520,7 @@ def load_model_parameters(model_name: str):
         return {"success": False, "error": str(e), "parameters": {}}
 
 
-@router.get("/api/live2d/model_config_by_id/{model_id}")
+@router.get("/live2d/model_config_by_id/{model_id}")
 def get_model_config_by_id(model_id: str):
     """获取指定Live2D模型的model3.json配置"""
     try:
@@ -844,8 +572,8 @@ def get_model_config_by_id(model_id: str):
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 
-@router.post("/api/live2d/model_config_by_id/{model_id}")
-async def update_model_config(model_id: str, request: Request):
+@router.post("/live2d/model_config_by_id/{model_id}")
+async def update_model_config_by_id(model_id: str, request: Request):
     """更新指定Live2D模型的model3.json配置"""
     try:
         data = await request.json()
@@ -884,7 +612,7 @@ async def update_model_config(model_id: str, request: Request):
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 
-@router.get('/api/live2d/model_files_by_id/{model_id}')
+@router.get('/model_files_by_id/{model_id}')
 def get_model_files_by_id(model_id: str):
     """获取指定Live2D模型的动作和表情文件列表"""
     try:
@@ -982,7 +710,7 @@ def get_model_files_by_id(model_id: str):
 # Steam 创意工坊管理相关API路由
 # 确保这个路由被正确注册
 
-@router.post('/api/live2d/upload_model')
+@router.post('/upload_model')
 async def upload_live2d_model(files: list[UploadFile] = File(...)):
     """上传Live2D模型到用户文档目录"""
     import shutil

@@ -15,14 +15,14 @@ import logging
 from fastapi import APIRouter, Request
 
 from .shared_state import get_config_manager, get_steamworks, get_session_manager, get_initialize_character_data
-from .live2d_router import get_current_live2d_model
+from .characters_router import get_current_live2d_model
 from utils.preferences import load_user_preferences, update_model_preferences, validate_model_preferences, move_model_to_top
 
-router = APIRouter(prefix="/api", tags=["config"])
+router = APIRouter(prefix="/api/config", tags=["config"])
 logger = logging.getLogger("Main")
 
 
-@router.get("/api/config/page_config")
+@router.get("/page_config")
 async def get_page_config(lanlan_name: str = ""):
     """获取页面配置（lanlan_name 和 model_path）"""
     try:
@@ -64,14 +64,14 @@ async def get_page_config(lanlan_name: str = ""):
         }
 
 
-@router.get("/api/preferences")
+@router.get("/preferences")
 async def get_preferences():
     """获取用户偏好设置"""
     preferences = load_user_preferences()
     return preferences
 
 
-@router.post("/api/preferences")
+@router.post("/preferences")
 async def save_preferences(request: Request):
     """保存用户偏好设置"""
     try:
@@ -97,7 +97,7 @@ async def save_preferences(request: Request):
 
 
 
-@router.post("/api/preferences/set-preferred")
+@router.post("/preferences/set-preferred")
 async def set_preferred_model(request: Request):
     """设置首选模型"""
     try:
@@ -114,7 +114,7 @@ async def set_preferred_model(request: Request):
         return {"success": False, "error": str(e)}
 
 
-@router.get("/api/steam_language")
+@router.get("/steam_language")
 async def get_steam_language():
     """获取 Steam 客户端的语言设置，用于前端 i18n 初始化"""
     steamworks = get_steamworks()
@@ -164,7 +164,7 @@ async def get_steam_language():
 
 
 
-@router.get("/api/config/core_api")
+@router.get("/core_api")
 async def get_core_config_api():
     """获取核心配置（API Key）"""
     try:
@@ -230,7 +230,7 @@ async def get_core_config_api():
 
 
 
-@router.post("/api/config/core_api")
+@router.post("/core_api")
 async def update_core_config(request: Request):
     """更新核心配置（API Key）"""
     try:
@@ -405,7 +405,7 @@ async def update_core_config(request: Request):
 
 
 
-@router.get("/api/config/api_providers")
+@router.get("/api_providers")
 async def get_api_providers_config():
     """获取API服务商配置（供前端使用）"""
     try:

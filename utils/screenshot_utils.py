@@ -137,7 +137,7 @@ async def analyze_image_with_vision_model(
                 }
             ],
             max_tokens=max_tokens,
-            extra_body=get_extra_body(vision_model)
+            extra_body=get_extra_body(vision_model) or None
         )
         
         if response and response.choices and len(response.choices) > 0:

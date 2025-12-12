@@ -10,20 +10,20 @@ after initialization.
 """
 
 from typing import Dict
-
+_UNSET = object()
 
 # Global state containers (set by main_server.py)
 _state = {
-    'sync_message_queue': {},
-    'sync_shutdown_event': {},
-    'session_manager': {},
-    'session_id': {},
-    'sync_process': {},
-    'websocket_locks': {},
+    'sync_message_queue': _UNSET,
+    'sync_shutdown_event': _UNSET,
+    'session_manager': _UNSET,
+    'session_id': _UNSET,
+    'sync_process': _UNSET,
+    'websocket_locks': _UNSET,
     'steamworks': None,
-    'templates': None,
-    'config_manager': None,
-    'logger': None,
+    'templates': _UNSET,
+    'config_manager': _UNSET,
+    'logger': _UNSET,
     'initialize_character_data': None,  # Function reference
 }
 
@@ -57,7 +57,7 @@ def init_shared_state(
 def _check_initialized(key: str) -> None:
     """Validate that a state key has been initialized via init_shared_state."""
     value = _state.get(key)
-    if value is None:
+    if value is _UNSET:
         raise RuntimeError(
             f"Shared state '{key}' is not initialized. "
             "Call init_shared_state() from main_server.py before accessing shared state."
@@ -101,8 +101,12 @@ def get_websocket_locks() -> Dict:
 
 
 def get_steamworks():
-    """Get the steamworks dictionary."""
-    _check_initialized('steamworks')
+    """Get the steamworks instance.
+    
+    Note: This may return None if Steamworks failed to initialize
+    (e.g., Steam client not running). Callers must handle None gracefully.
+    We do NOT call _check_initialized here because None is a valid value.
+    """
     return _state['steamworks']
 
 

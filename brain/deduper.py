@@ -25,7 +25,7 @@ class TaskDeduper:
             base_url=api_config['base_url'],
             api_key=api_config['api_key'],
             temperature=0,
-            extra_body=get_extra_body(api_config['model'])
+            extra_body=get_extra_body(api_config['model']) or None
         )
 
     def _build_prompt(self, new_task: str, candidates: List[Tuple[str, str]]) -> str:

@@ -22,7 +22,7 @@ router = APIRouter(prefix="/api/agent", tags=["agent"])
 logger = logging.getLogger("Main")
 
 
-@router.post('/api/agent/flags')
+@router.post('/flags')
 async def update_agent_flags(request: Request):
     """来自前端的Agent开关更新，级联到各自的session manager。"""
     try:
@@ -62,7 +62,7 @@ async def update_agent_flags(request: Request):
 
 
 
-@router.get('/api/agent/flags')
+@router.get('/flags')
 async def get_agent_flags():
     """获取当前 agent flags 状态（供前端同步）"""
     try:
@@ -76,7 +76,7 @@ async def get_agent_flags():
 
 
 
-@router.get('/api/agent/health')
+@router.get('/health')
 async def agent_health():
     """Check tool_server health via main_server proxy."""
     try:
@@ -95,7 +95,7 @@ async def agent_health():
 
 
 
-@router.get('/api/agent/computer_use/availability')
+@router.get('/computer_use/availability')
 async def proxy_cu_availability():
     try:
         async with httpx.AsyncClient(timeout=1.5) as client:
@@ -108,7 +108,7 @@ async def proxy_cu_availability():
 
 
 
-@router.get('/api/agent/mcp/availability')
+@router.get('/mcp/availability')
 async def proxy_mcp_availability():
     try:
         async with httpx.AsyncClient(timeout=1.5) as client:
@@ -120,7 +120,7 @@ async def proxy_mcp_availability():
         return JSONResponse({"ready": False, "reasons": [f"proxy error: {e}"]}, status_code=502)
 
 
-@router.get('/api/agent/user_plugin/availability')
+@router.get('/user_plugin/availability')
 async def proxy_up_availability():
     try:
         async with httpx.AsyncClient(timeout=1.5) as client:
@@ -134,7 +134,7 @@ async def proxy_up_availability():
 
 
 
-@router.get('/api/agent/tasks')
+@router.get('/tasks')
 async def proxy_tasks():
     """Get all tasks from tool server via main_server proxy."""
     try:
@@ -148,7 +148,7 @@ async def proxy_tasks():
 
 
 
-@router.get('/api/agent/tasks/{task_id}')
+@router.get('/tasks/{task_id}')
 async def proxy_task_detail(task_id: str):
     """Get specific task details from tool server via main_server proxy."""
     try:
@@ -163,7 +163,7 @@ async def proxy_task_detail(task_id: str):
 
 # Task status polling endpoint for frontend
 
-@router.get('/api/agent/task_status')
+@router.get('/task_status')
 async def get_task_status():
     """Get current task status for frontend polling - returns all tasks with their current status."""
     try:
@@ -216,7 +216,7 @@ async def get_task_status():
 
 
 
-@router.post('/api/agent/admin/control')
+@router.post('/admin/control')
 async def proxy_admin_control(payload: dict = Body(...)):
     """Proxy admin control commands to tool server."""
     try:
@@ -236,6 +236,25 @@ async def proxy_admin_control(payload: dict = Body(...)):
             "error": f"Failed to execute admin control: {str(e)}"
         }, status_code=500)
 
-
-# --- Run the Server ---
+@router.post('/notify_task_result')
+async def notify_task_result(request: Request):
+    """供工具/任务服务回调：在下一次正常回复之后，插入一条任务完成提示。"""
+    try:
+        _config_manager = get_config_manager()
+        session_manager = get_session_manager()
+        data = await request.json()
+        # 如果未显式提供，则使用当前默认角色
+        _, her_name_current, _, _, _, _, _, _, _, _ = _config_manager.get_character_data()
+        lanlan = data.get('lanlan_name') or her_name_current
+        text = (data.get('text') or '').strip()
+        if not text:
+            return JSONResponse({"success": False, "error": "text required"}, status_code=400)
+        mgr = session_manager.get(lanlan)
+        if not mgr:
+            return JSONResponse({"success": False, "error": "lanlan not found"}, status_code=404)
+        # 将提示加入待插入队列
+        mgr.pending_extra_replies.append(text)
+        return {"success": True}
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 

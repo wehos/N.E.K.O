@@ -9,7 +9,6 @@
   "GET /api/agent/tasks/{task_id}": "agent_router.py",
   "GET /api/agent/task_status": "agent_router.py",
   "POST /api/agent/admin/control": "agent_router.py",
-
   "GET /api/characters": "characters_router.py",
   "GET /api/characters/current_catgirl": "characters_router.py",
   "GET /api/characters/catgirl/{name}/voice_mode_status": "characters_router.py",
@@ -27,16 +26,14 @@
   "GET /api/voices": "characters_router.py",
   "POST /api/voices": "characters_router.py",
   "POST /api/voice_clone": "characters_router.py",
-
   "GET /api/config/page_config": "config_router.py",
-  "GET /api/preferences": "config_router.py",
-  "POST /api/preferences": "config_router.py",
-  "POST /api/preferences/set-preferred": "config_router.py",
+  "GET /api/config/preferences": "config_router.py",
+  "POST /api/config/preferences": "config_router.py",
+  "POST /api/config/preferences/set-preferred": "config_router.py",
   "GET /api/steam_language": "config_router.py",
   "GET /api/config/core_api": "config_router.py",
   "POST /api/config/core_api": "config_router.py",
   "GET /api/config/api_providers": "config_router.py",
-
   "GET /api/live2d/models": "live2d_router.py",
   "GET /api/models": "live2d_router.py",
   "GET /api/characters/current_live2d_model": "live2d_router.py",
@@ -54,14 +51,12 @@
   "POST /api/live2d/model_config_by_id/{model_id}": "live2d_router.py",
   "GET /api/live2d/model_files_by_id/{model_id}": "live2d_router.py",
   "POST /api/live2d/upload_model": "live2d_router.py",
-
   "GET /api/memory/recent_files": "memory_router.py",
   "GET /api/memory/recent_file": "memory_router.py",
   "POST /api/memory/recent_file/save": "memory_router.py",
   "POST /api/memory/update_catgirl_name": "memory_router.py",
   "GET /api/memory/review_config": "memory_router.py",
   "POST /api/memory/review_config": "memory_router.py",
-
   "GET /": "pages_router.py",
   "GET /l2d": "pages_router.py",
   "GET /live2d_parameter_editor": "pages_router.py",
@@ -72,7 +67,6 @@
   "GET /steam_workshop_manager": "pages_router.py",
   "GET /memory_browser": "pages_router.py",
   "GET /{lanlan_name}": "pages_router.py",
-
   "POST /api/beacon/shutdown": "system_router.py",
   "POST /api/emotion/analysis": "system_router.py",
   "POST /api/steam/set-achievement-status/{name}": "system_router.py",
@@ -80,11 +74,9 @@
   "GET /api/file-exists": "system_router.py",
   "GET /api/find-first-image": "system_router.py",
   "GET /api/proxy-image": "system_router.py",
-
   "WS /ws/{lanlan_name}": "websocket_router.py",
   "POST /api/notify_task_result": "websocket_router.py",
   "POST /api/proactive_chat": "websocket_router.py",
-
   "GET /api/steam/workshop/subscribed-items": "workshop_router.py",
   "GET /api/steam/workshop/item/{item_id}/path": "workshop_router.py",
   "GET /api/steam/workshop/item/{item_id}": "workshop_router.py",

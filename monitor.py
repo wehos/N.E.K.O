@@ -90,7 +90,7 @@ async def get_page_config(lanlan_name: str = ""):
         logger.error(f"获取页面配置失败: {e}")
         return {"success": False, "error": str(e)}
 
-@app.get("/api/preferences")
+@app.get("/api/config/preferences")
 async def get_preferences():
     """获取用户偏好设置（与main_server.py保持一致）"""
     preferences = load_user_preferences()

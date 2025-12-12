@@ -27,7 +27,7 @@ from utils.workshop_utils import (
     get_workshop_path,
 )
 
-router = APIRouter(tags=["workshop"])
+router = APIRouter(prefix="/api/steam/workshop", tags=["workshop"])
 logger = logging.getLogger("Main")
 
 def get_folder_size(folder_path):
@@ -55,7 +55,7 @@ def find_preview_image_in_folder(folder_path):
     
     return None
 
-@router.get('/api/steam/workshop/subscribed-items')
+@router.get('/subscribed-items')
 def get_subscribed_workshop_items():
     """
     获取用户订阅的Steam创意工坊物品列表
@@ -348,7 +348,7 @@ def get_subscribed_workshop_items():
                                 proxy_path = preview_image_path.replace('\\', '/')
                             else:
                                 proxy_path = preview_image_path
-                            preview_url = f"/api/proxy-image?image_path={quote(proxy_path)}"
+                            preview_url = f"/api/steam/proxy-image?image_path={quote(proxy_path)}"
                             logger.debug(f'为物品 {item_id} 找到本地预览图: {preview_url}')
                     except Exception as preview_error:
                         logger.warning(f'查找物品 {item_id} 预览图时出错: {preview_error}')
@@ -399,7 +399,7 @@ def get_subscribed_workshop_items():
         }, status_code=500)
 
 
-@router.get('/api/steam/workshop/item/{item_id}/path')
+@router.get('/item/{item_id}/path')
 def get_workshop_item_path(item_id: str):
     """
     获取单个Steam创意工坊物品的下载路径
@@ -466,7 +466,7 @@ def get_workshop_item_path(item_id: str):
         }, status_code=500)
 
 
-@router.get('/api/steam/workshop/item/{item_id}')
+@router.get('/item/{item_id}')
 def get_workshop_item_details(item_id: str):
     """
     获取单个Steam创意工坊物品的详细信息
@@ -592,7 +592,7 @@ def get_workshop_item_details(item_id: str):
         }, status_code=500)
 
 
-@router.post('/api/steam/workshop/unsubscribe')
+@router.post('/unsubscribe')
 async def unsubscribe_workshop_item(request: Request):
     """
     取消订阅Steam创意工坊物品
@@ -657,7 +657,7 @@ async def unsubscribe_workshop_item(request: Request):
         }, status_code=500)
 
 
-@router.get('/api/steam/workshop/config')
+@router.get('/config')
 async def get_workshop_config():
     try:
         from utils.workshop_utils import load_workshop_config
@@ -669,7 +669,7 @@ async def get_workshop_config():
 
 # 保存创意工坊配置
 
-@router.post('/api/steam/workshop/config')
+@router.post('/config')
 async def save_workshop_config_api(config_data: dict):
     try:
         # 导入与get_workshop_config相同路径的函数，保持一致性
@@ -703,8 +703,8 @@ async def save_workshop_config_api(config_data: dict):
         return {"success": False, "error": str(e)}
 
 
-@router.post('/api/steam/workshop/local-items/scan')
-def scan_local_workshop_items(request: Request):
+@router.post('/local-items/scan')
+async def scan_local_workshop_items(request: Request):
     try:
         logger.info('接收到扫描本地创意工坊物品的API请求')
         
@@ -713,7 +713,7 @@ def scan_local_workshop_items(request: Request):
         workshop_config_data = load_workshop_config()
         logger.info(f'创意工坊配置已加载: {workshop_config_data}')
         
-        data = asyncio.run(request.json())
+        data = await request.json()
         logger.info(f'请求数据: {data}')
         folder_path = data.get('folder_path')
         
@@ -798,7 +798,7 @@ def scan_local_workshop_items(request: Request):
 
 # 获取创意工坊配置
 
-@router.get('/api/steam/workshop/local-items/{item_id}')
+@router.get('/local-items/{item_id}')
 async def get_local_workshop_item(item_id: str, folder_path: str = None):
     try:
         # 这个接口需要从缓存或临时存储中获取物品信息
@@ -897,7 +897,7 @@ async def get_local_workshop_item(item_id: str, folder_path: str = None):
         return JSONResponse(content={"success": False, "error": str(e)}, status_code=500)
 
 
-@router.get('/api/steam/workshop/check-upload-status')
+@router.get('/check-upload-status')
 async def check_upload_status(item_path: str = None):
     try:
         # 验证路径参数
@@ -974,7 +974,7 @@ async def check_upload_status(item_path: str = None):
         }, status_code=500)
 
 
-@router.post('/api/steam/workshop/publish')
+@router.post('/publish')
 async def publish_to_workshop(request: Request):
     steamworks = get_steamworks()
     from steamworks.exceptions import SteamNotLoadedException

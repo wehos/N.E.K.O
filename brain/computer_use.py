@@ -289,7 +289,7 @@ class ComputerUseAdapter:
                     base_url=self._config_manager.get_core_config()['COMPUTER_USE_GROUND_URL'],
                     api_key=api_key,
                     temperature=0,
-                    extra_body=get_extra_body(ground_model)
+                    extra_body=get_extra_body(ground_model) or None
                 ).bind(max_tokens=5)
                 _ = test_llm.invoke("ok").content
                 self.init_ok = True

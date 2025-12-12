@@ -10,6 +10,7 @@ Handles character (catgirl) management endpoints including:
 
 import json
 import io
+import os
 import logging
 import asyncio
 from datetime import datetime
@@ -23,28 +24,280 @@ import dashscope
 from dashscope.audio.tts_v2 import VoiceEnrollmentService
 
 from .shared_state import get_config_manager, get_session_manager, get_initialize_character_data
+from utils.frontend_utils import find_models, find_model_directory
 from config import MEMORY_SERVER_PORT, TFLINK_UPLOAD_URL
 
-router = APIRouter(tags=["characters"])
+router = APIRouter(prefix="/api/characters", tags=["characters"])
 logger = logging.getLogger("Main")
 
 
-@router.get('/api/characters')
+@router.get('/')
 async def get_characters():
     _config_manager = get_config_manager()
     return JSONResponse(content=_config_manager.load_characters())
 
 
-@router.get('/api/characters/current_catgirl')
-async def get_current_catgirl():
-    """获取当前使用的猫娘名称"""
+@router.get('/current_live2d_model')
+async def get_current_live2d_model(catgirl_name: str = "", item_id: str = ""):
+    """获取指定角色或当前角色的Live2D模型信息
+    
+    Args:
+        catgirl_name: 角色名称
+        item_id: 可选的物品ID，用于直接指定模型
+    """
+    try:
+        _config_manager = get_config_manager()
+        characters = _config_manager.load_characters()
+        
+        # 如果没有指定角色名称，使用当前猫娘
+        if not catgirl_name:
+            catgirl_name = characters.get('当前猫娘', '')
+        
+        # 查找指定角色的Live2D模型
+        live2d_model_name = None
+        model_info = None
+        
+        # 首先尝试通过item_id查找模型
+        if item_id:
+            try:
+                logger.debug(f"尝试通过item_id {item_id} 查找模型")
+                # 获取所有模型
+                all_models = find_models()
+                # 查找匹配item_id的模型
+                matching_model = next((m for m in all_models if m.get('item_id') == item_id), None)
+                
+                if matching_model:
+                    logger.debug(f"通过item_id找到模型: {matching_model['name']}")
+                    # 复制模型信息
+                    model_info = matching_model.copy()
+                    live2d_model_name = model_info['name']
+            except Exception as e:
+                logger.warning(f"通过item_id查找模型失败: {e}")
+        
+        # 如果没有通过item_id找到模型，再通过角色名称查找
+        if not model_info and catgirl_name:
+            # 在猫娘列表中查找
+            if '猫娘' in characters and catgirl_name in characters['猫娘']:
+                catgirl_data = characters['猫娘'][catgirl_name]
+                live2d_model_name = catgirl_data.get('live2d')
+                
+                # 检查是否有保存的item_id
+                saved_item_id = catgirl_data.get('live2d_item_id')
+                if saved_item_id:
+                    logger.debug(f"发现角色 {catgirl_name} 保存的item_id: {saved_item_id}")
+                    try:
+                        # 尝试通过保存的item_id查找模型
+                        all_models = find_models()
+                        matching_model = next((m for m in all_models if m.get('item_id') == saved_item_id), None)
+                        if matching_model:
+                            logger.debug(f"通过保存的item_id找到模型: {matching_model['name']}")
+                            model_info = matching_model.copy()
+                            live2d_model_name = model_info['name']
+                    except Exception as e:
+                        logger.warning(f"通过保存的item_id查找模型失败: {e}")
+        
+        # 如果找到了模型名称，获取模型信息
+        if live2d_model_name:
+            try:
+                # 先从完整的模型列表中查找，这样可以获取到item_id等完整信息
+                all_models = find_models()
+                # 查找匹配的模型
+                matching_model = next((m for m in all_models if m['name'] == live2d_model_name), None)
+                
+                if matching_model:
+                    # 使用完整的模型信息，包含item_id
+                    model_info = matching_model.copy()
+                    logger.debug(f"从完整模型列表获取模型信息: {model_info}")
+                else:
+                    # 如果在完整列表中找不到，回退到原来的逻辑
+                    model_dir, url_prefix = find_model_directory(live2d_model_name)
+                    if os.path.exists(model_dir):
+                        # 查找模型配置文件
+                        model_files = [f for f in os.listdir(model_dir) if f.endswith('.model3.json')]
+                        if model_files:
+                            model_file = model_files[0]
+                            
+                            # 使用保存的item_id构建model_path
+                            # 从之前的逻辑中获取saved_item_id
+                            saved_item_id = catgirl_data.get('live2d_item_id', '') if 'catgirl_data' in locals() else ''
+                            
+                            # 如果有保存的item_id，使用它构建路径
+                            if saved_item_id:
+                                model_path = f'{url_prefix}/{saved_item_id}/{model_file}'
+                                logger.debug(f"使用保存的item_id构建模型路径: {model_path}")
+                            else:
+                                # 原始路径构建逻辑
+                                model_path = f'{url_prefix}/{live2d_model_name}/{model_file}'
+                                logger.debug(f"使用模型名称构建路径: {model_path}")
+                            
+                            model_info = {
+                                'name': live2d_model_name,
+                                'item_id': saved_item_id,
+                                'path': model_path
+                            }
+            except Exception as e:
+                logger.warning(f"获取模型信息失败: {e}")
+        
+        # 回退机制：如果没有找到模型，使用默认的mao_pro
+        if not live2d_model_name or not model_info:
+            logger.info(f"猫娘 {catgirl_name} 未设置Live2D模型，回退到默认模型 mao_pro")
+            live2d_model_name = 'mao_pro'
+            try:
+                # 先从完整的模型列表中查找mao_pro
+                all_models = find_models()
+                matching_model = next((m for m in all_models if m['name'] == 'mao_pro'), None)
+                
+                if matching_model:
+                    model_info = matching_model.copy()
+                    model_info['is_fallback'] = True
+                else:
+                    # 如果找不到，回退到原来的逻辑
+                    model_dir, url_prefix = find_model_directory('mao_pro')
+                    if os.path.exists(model_dir):
+                        model_files = [f for f in os.listdir(model_dir) if f.endswith('.model3.json')]
+                        if model_files:
+                            model_file = model_files[0]
+                            model_path = f'{url_prefix}/mao_pro/{model_file}'
+                            model_info = {
+                                'name': 'mao_pro',
+                                'path': model_path,
+                                'is_fallback': True  # 标记这是回退模型
+                            }
+            except Exception as e:
+                logger.error(f"获取默认模型mao_pro失败: {e}")
+        
+        return JSONResponse(content={
+            'success': True,
+            'catgirl_name': catgirl_name,
+            'model_name': live2d_model_name,
+            'model_info': model_info
+        })
+        
+    except Exception as e:
+        logger.error(f"获取角色Live2D模型失败: {e}")
+        return JSONResponse(content={
+            'success': False,
+            'error': str(e)
+        })
+
+@router.put('/catgirl/l2d/{name}')
+async def update_catgirl_l2d(name: str, request: Request):
+    """更新指定猫娘的Live2D模型设置"""
+    try:
+        data = await request.json()
+        live2d_model = data.get('live2d')
+        item_id = data.get('item_id')  # 获取可选的item_id
+        
+        if not live2d_model:
+            return JSONResponse(content={
+                'success': False,
+                'error': '未提供Live2D模型名称'
+            })
+        
+        # 加载当前角色配置
+        _config_manager = get_config_manager()
+        characters = _config_manager.load_characters()
+        
+        # 确保猫娘配置存在
+        if '猫娘' not in characters:
+            characters['猫娘'] = {}
+        
+        # 确保指定猫娘的配置存在
+        if name not in characters['猫娘']:
+            characters['猫娘'][name] = {}
+        
+        # 更新Live2D模型设置，同时保存item_id（如果有）
+        characters['猫娘'][name]['live2d'] = live2d_model
+        if item_id:
+            characters['猫娘'][name]['live2d_item_id'] = item_id
+            logger.debug(f"已保存角色 {name} 的模型 {live2d_model} 和item_id {item_id}")
+        else:
+            logger.debug(f"已保存角色 {name} 的模型 {live2d_model}")
+        
+        # 保存配置
+        _config_manager.save_characters(characters)
+        # 自动重新加载配置
+        initialize_character_data = get_initialize_character_data()
+        await initialize_character_data()
+        
+        return JSONResponse(content={
+            'success': True,
+            'message': f'已更新角色 {name} 的Live2D模型为 {live2d_model}'
+        })
+        
+    except Exception as e:
+        logger.error(f"更新角色Live2D模型失败: {e}")
+        return JSONResponse(content={
+            'success': False,
+            'error': str(e)
+        })
+
+
+@router.put('/catgirl/voice_id/{name}')
+async def update_catgirl_voice_id(name: str, request: Request):
+    data = await request.json()
+    if not data:
+        return JSONResponse({'success': False, 'error': '无数据'}, status_code=400)
     _config_manager = get_config_manager()
+    session_manager = get_session_manager()
     characters = _config_manager.load_characters()
-    current_catgirl = characters.get('当前猫娘', '')
-    return JSONResponse(content={'current_catgirl': current_catgirl})
+    if name not in characters.get('猫娘', {}):
+        return JSONResponse({'success': False, 'error': '猫娘不存在'}, status_code=404)
+    if 'voice_id' in data:
+        voice_id = data['voice_id']
+        # 验证voice_id是否在voice_storage中
+        if not _config_manager.validate_voice_id(voice_id):
+            voices = _config_manager.get_voices_for_current_api()
+            available_voices = list(voices.keys())
+            return JSONResponse({
+                'success': False, 
+                'error': f'voice_id "{voice_id}" 在当前API的音色库中不存在',
+                'available_voices': available_voices
+            }, status_code=400)
+        characters['猫娘'][name]['voice_id'] = voice_id
+    _config_manager.save_characters(characters)
+    
+    # 如果是当前活跃的猫娘，需要先通知前端，再关闭session
+    is_current_catgirl = (name == characters.get('当前猫娘', ''))
+    session_ended = False
+    
+    if is_current_catgirl and name in session_manager:
+        # 检查是否有活跃的session
+        if session_manager[name].is_active:
+            logger.info(f"检测到 {name} 的voice_id已更新，准备刷新...")
+            
+            # 1. 先发送刷新消息（WebSocket还连着）
+            if session_manager[name].websocket:
+                try:
+                    await session_manager[name].websocket.send_text(json.dumps({
+                        "type": "reload_page",
+                        "message": "语音已更新，页面即将刷新"
+                    }))
+                    logger.info(f"已通知 {name} 的前端刷新页面")
+                except Exception as e:
+                    logger.warning(f"通知前端刷新页面失败: {e}")
+            
+            # 2. 立刻关闭session（这会断开WebSocket）
+            try:
+                await session_manager[name].end_session(by_server=True)
+                session_ended = True
+                logger.info(f"{name} 的session已结束")
+            except Exception as e:
+                logger.error(f"结束session时出错: {e}")
+    
+    # 方案3：条件性重新加载 - 只有当前猫娘才重新加载配置
+    if is_current_catgirl:
+        # 3. 重新加载配置，让新的voice_id生效
+        initialize_character_data = get_initialize_character_data()
+        await initialize_character_data()
+        logger.info(f"配置已重新加载，新的voice_id已生效")
+    else:
+        # 不是当前猫娘，跳过重新加载，避免影响当前猫娘的session
+        logger.info(f"切换的是其他猫娘 {name} 的音色，跳过重新加载以避免影响当前猫娘的session")
+    
+    return {"success": True, "session_restarted": session_ended}
 
-
-@router.get('/api/characters/catgirl/{name}/voice_mode_status')
+@router.get('/catgirl/{name}/voice_mode_status')
 async def get_catgirl_voice_mode_status(name: str):
     """检查指定角色是否在语音模式下"""
     _config_manager = get_config_manager()
@@ -71,7 +324,104 @@ async def get_catgirl_voice_mode_status(name: str):
     })
 
 
-@router.post('/api/characters/current_catgirl')
+@router.post('/catgirl/{old_name}/rename')
+async def rename_catgirl(old_name: str, request: Request):
+    _config_manager = get_config_manager()
+    session_manager = get_session_manager()
+    data = await request.json()
+    new_name = data.get('new_name') if data else None
+    if not new_name:
+        return JSONResponse({'success': False, 'error': '新档案名不能为空'}, status_code=400)
+    characters = _config_manager.load_characters()
+    if old_name not in characters.get('猫娘', {}):
+        return JSONResponse({'success': False, 'error': '原猫娘不存在'}, status_code=404)
+    if new_name in characters['猫娘']:
+        return JSONResponse({'success': False, 'error': '新档案名已存在'}, status_code=400)
+    
+    # 如果当前猫娘是被重命名的猫娘，需要先保存WebSocket连接并发送通知
+    # 必须在 initialize_character_data() 之前发送，因为那个函数会删除旧的 session_manager 条目
+    is_current_catgirl = characters.get('当前猫娘') == old_name
+    
+    # 检查当前角色是否有活跃的语音session
+    if is_current_catgirl and old_name in session_manager:
+        mgr = session_manager[old_name]
+        if mgr.is_active:
+            # 检查是否是语音模式（通过session类型判断）
+            from main_logic.omni_realtime_client import OmniRealtimeClient
+            is_voice_mode = mgr.session and isinstance(mgr.session, OmniRealtimeClient)
+            
+            if is_voice_mode:
+                return JSONResponse({
+                    'success': False, 
+                    'error': '语音状态下无法修改角色名称，请先停止语音对话后再修改'
+                }, status_code=400)
+    if is_current_catgirl:
+        logger.info(f"开始通知WebSocket客户端：猫娘从 {old_name} 重命名为 {new_name}")
+        message = json.dumps({
+            "type": "catgirl_switched",
+            "new_catgirl": new_name,
+            "old_catgirl": old_name
+        })
+        # 在 initialize_character_data() 之前发送消息，因为之后旧的 session_manager 会被删除
+        if old_name in session_manager:
+            ws = session_manager[old_name].websocket
+            if ws:
+                try:
+                    await ws.send_text(message)
+                    logger.info(f"已向 {old_name} 发送重命名通知")
+                except Exception as e:
+                    logger.warning(f"发送重命名通知给 {old_name} 失败: {e}")
+    
+    # 重命名
+    characters['猫娘'][new_name] = characters['猫娘'].pop(old_name)
+    # 如果当前猫娘是被重命名的猫娘，也需要更新
+    if is_current_catgirl:
+        characters['当前猫娘'] = new_name
+    _config_manager.save_characters(characters)
+    # 自动重新加载配置
+    initialize_character_data = get_initialize_character_data()
+    await initialize_character_data()
+    
+    return {"success": True}
+
+
+@router.post('/catgirl/{name}/unregister_voice')
+async def unregister_voice(name: str):
+    """解除猫娘的声音注册"""
+    try:
+        _config_manager = get_config_manager()
+        characters = _config_manager.load_characters()
+        if name not in characters.get('猫娘', {}):
+            return JSONResponse({'success': False, 'error': '猫娘不存在'}, status_code=404)
+        
+        # 检查是否已有voice_id
+        if not characters['猫娘'][name].get('voice_id'):
+            return JSONResponse({'success': False, 'error': '该猫娘未注册声音'}, status_code=400)
+        
+        # 删除voice_id字段
+        if 'voice_id' in characters['猫娘'][name]:
+            characters['猫娘'][name].pop('voice_id')
+        _config_manager.save_characters(characters)
+        # 自动重新加载配置
+        initialize_character_data = get_initialize_character_data()
+        await initialize_character_data()
+        
+        logger.info(f"已解除猫娘 '{name}' 的声音注册")
+        return {"success": True, "message": "声音注册已解除"}
+        
+    except Exception as e:
+        logger.error(f"解除声音注册时出错: {e}")
+        return JSONResponse({'success': False, 'error': f'解除注册失败: {str(e)}'}, status_code=500)
+
+@router.get('/current_catgirl')
+async def get_current_catgirl():
+    """获取当前使用的猫娘名称"""
+    _config_manager = get_config_manager()
+    characters = _config_manager.load_characters()
+    current_catgirl = characters.get('当前猫娘', '')
+    return JSONResponse(content={'current_catgirl': current_catgirl})
+
+@router.post('/current_catgirl')
 async def set_current_catgirl(request: Request):
     """设置当前使用的猫娘"""
     data = await request.json()
@@ -143,7 +493,7 @@ async def set_current_catgirl(request: Request):
     return {"success": True}
 
 
-@router.post('/api/characters/reload')
+@router.post('/reload')
 async def reload_character_config():
     """重新加载角色配置（热重载）"""
     try:
@@ -158,7 +508,7 @@ async def reload_character_config():
         )
 
 
-@router.post('/api/characters/master')
+@router.post('/master')
 async def update_master(request: Request):
     data = await request.json()
     if not data or not data.get('档案名'):
@@ -173,7 +523,7 @@ async def update_master(request: Request):
     return {"success": True}
 
 
-@router.post('/api/characters/catgirl')
+@router.post('/catgirl')
 async def add_catgirl(request: Request):
     data = await request.json()
     if not data or not data.get('档案名'):
@@ -223,7 +573,7 @@ async def add_catgirl(request: Request):
     return {"success": True}
 
 
-@router.put('/api/characters/catgirl/{name}')
+@router.put('/catgirl/{name}')
 async def update_catgirl(name: str, request: Request):
     data = await request.json()
     if not data:
@@ -315,7 +665,7 @@ async def update_catgirl(name: str, request: Request):
     return {"success": True, "voice_id_changed": voice_id_changed, "session_restarted": session_ended}
 
 
-@router.delete('/api/characters/catgirl/{name}')
+@router.delete('/catgirl/{name}')
 async def delete_catgirl(name: str):
     import shutil
     _config_manager = get_config_manager()
@@ -360,98 +710,7 @@ async def delete_catgirl(name: str):
     await initialize_character_data()
     return {"success": True}
 
-
-@router.post('/api/characters/catgirl/{old_name}/rename')
-async def rename_catgirl(old_name: str, request: Request):
-    _config_manager = get_config_manager()
-    session_manager = get_session_manager()
-    data = await request.json()
-    new_name = data.get('new_name') if data else None
-    if not new_name:
-        return JSONResponse({'success': False, 'error': '新档案名不能为空'}, status_code=400)
-    characters = _config_manager.load_characters()
-    if old_name not in characters.get('猫娘', {}):
-        return JSONResponse({'success': False, 'error': '原猫娘不存在'}, status_code=404)
-    if new_name in characters['猫娘']:
-        return JSONResponse({'success': False, 'error': '新档案名已存在'}, status_code=400)
-    
-    # 如果当前猫娘是被重命名的猫娘，需要先保存WebSocket连接并发送通知
-    # 必须在 initialize_character_data() 之前发送，因为那个函数会删除旧的 session_manager 条目
-    is_current_catgirl = characters.get('当前猫娘') == old_name
-    
-    # 检查当前角色是否有活跃的语音session
-    if is_current_catgirl and old_name in session_manager:
-        mgr = session_manager[old_name]
-        if mgr.is_active:
-            # 检查是否是语音模式（通过session类型判断）
-            from main_logic.omni_realtime_client import OmniRealtimeClient
-            is_voice_mode = mgr.session and isinstance(mgr.session, OmniRealtimeClient)
-            
-            if is_voice_mode:
-                return JSONResponse({
-                    'success': False, 
-                    'error': '语音状态下无法修改角色名称，请先停止语音对话后再修改'
-                }, status_code=400)
-    if is_current_catgirl:
-        logger.info(f"开始通知WebSocket客户端：猫娘从 {old_name} 重命名为 {new_name}")
-        message = json.dumps({
-            "type": "catgirl_switched",
-            "new_catgirl": new_name,
-            "old_catgirl": old_name
-        })
-        # 在 initialize_character_data() 之前发送消息，因为之后旧的 session_manager 会被删除
-        if old_name in session_manager:
-            ws = session_manager[old_name].websocket
-            if ws:
-                try:
-                    await ws.send_text(message)
-                    logger.info(f"已向 {old_name} 发送重命名通知")
-                except Exception as e:
-                    logger.warning(f"发送重命名通知给 {old_name} 失败: {e}")
-    
-    # 重命名
-    characters['猫娘'][new_name] = characters['猫娘'].pop(old_name)
-    # 如果当前猫娘是被重命名的猫娘，也需要更新
-    if is_current_catgirl:
-        characters['当前猫娘'] = new_name
-    _config_manager.save_characters(characters)
-    # 自动重新加载配置
-    initialize_character_data = get_initialize_character_data()
-    await initialize_character_data()
-    
-    return {"success": True}
-
-
-@router.post('/api/characters/catgirl/{name}/unregister_voice')
-async def unregister_voice(name: str):
-    """解除猫娘的声音注册"""
-    try:
-        _config_manager = get_config_manager()
-        characters = _config_manager.load_characters()
-        if name not in characters.get('猫娘', {}):
-            return JSONResponse({'success': False, 'error': '猫娘不存在'}, status_code=404)
-        
-        # 检查是否已有voice_id
-        if not characters['猫娘'][name].get('voice_id'):
-            return JSONResponse({'success': False, 'error': '该猫娘未注册声音'}, status_code=400)
-        
-        # 删除voice_id字段
-        if 'voice_id' in characters['猫娘'][name]:
-            characters['猫娘'][name].pop('voice_id')
-        _config_manager.save_characters(characters)
-        # 自动重新加载配置
-        initialize_character_data = get_initialize_character_data()
-        await initialize_character_data()
-        
-        logger.info(f"已解除猫娘 '{name}' 的声音注册")
-        return {"success": True, "message": "声音注册已解除"}
-        
-    except Exception as e:
-        logger.error(f"解除声音注册时出错: {e}")
-        return JSONResponse({'success': False, 'error': f'解除注册失败: {str(e)}'}, status_code=500)
-
-
-@router.post('/api/characters/clear_voice_ids')
+@router.post('/clear_voice_ids')
 async def clear_voice_ids():
     """清除所有角色的本地Voice ID记录"""
     try:
@@ -483,7 +742,7 @@ async def clear_voice_ids():
         }, status_code=500)
 
 
-@router.post('/api/characters/set_microphone')
+@router.post('/set_microphone')
 async def set_microphone(request: Request):
     try:
         data = await request.json()
@@ -508,7 +767,7 @@ async def set_microphone(request: Request):
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
 
 
-@router.get('/api/characters/get_microphone')
+@router.get('/get_microphone')
 async def get_microphone():
     try:
         _config_manager = get_config_manager()
@@ -524,14 +783,14 @@ async def get_microphone():
         return {"microphone_id": None}
 
 
-@router.get('/api/voices')
+@router.get('/voices')
 async def get_voices():
     """获取当前API key对应的所有已注册音色"""
     _config_manager = get_config_manager()
     return {"voices": _config_manager.get_voices_for_current_api()}
 
 
-@router.post('/api/voices')
+@router.post('/voices')
 async def register_voice(request: Request):
     """注册新音色"""
     try:
@@ -570,7 +829,7 @@ async def register_voice(request: Request):
         }, status_code=500)
 
 
-@router.post('/api/voice_clone')
+@router.post('/voice_clone')
 async def voice_clone(file: UploadFile = File(...), prefix: str = Form(...)):
     # 直接读取到内存
     try:

@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/memory", tags=["memory"])
 logger = logging.getLogger("Main")
 
 
-@router.get('/api/memory/recent_files')
+@router.get('/recent_files')
 async def get_recent_files():
     """获取 memory 目录下所有 recent*.json 文件名列表"""
     from utils.config_manager import get_config_manager
@@ -30,7 +30,7 @@ async def get_recent_files():
     return {"files": file_names}
 
 
-@router.get('/api/memory/recent_file')
+@router.get('/recent_file')
 async def get_recent_file(filename: str):
     """获取指定 recent*.json 文件内容"""
     from utils.config_manager import get_config_manager
@@ -45,7 +45,7 @@ async def get_recent_file(filename: str):
     return {"content": content}
 
 
-@router.post('/api/memory/recent_file/save')
+@router.post('/recent_file/save')
 async def save_recent_file(request: Request):
     import json
     data = await request.json()
@@ -81,7 +81,7 @@ async def save_recent_file(request: Request):
         return {"success": False, "error": str(e)}
 
 
-@router.post('/api/memory/update_catgirl_name')
+@router.post('/update_catgirl_name')
 async def update_catgirl_name(request: Request):
     """
     更新记忆文件中的猫娘名称
@@ -177,7 +177,7 @@ async def update_catgirl_name(request: Request):
         return {"success": False, "error": str(e)}
 
 
-@router.get('/api/memory/review_config')
+@router.get('/review_config')
 async def get_review_config():
     """获取记忆整理配置"""
     try:
@@ -197,7 +197,7 @@ async def get_review_config():
         return {"enabled": True}
 
 
-@router.post('/api/memory/review_config')
+@router.post('/review_config')
 async def update_review_config(request: Request):
     """更新记忆整理配置"""
     try:

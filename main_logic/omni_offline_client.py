@@ -90,7 +90,7 @@ class OmniOfflineClient:
             api_key=self.api_key,
             temperature=1.0,
             streaming=True,
-            extra_body=get_extra_body(self.model)
+            extra_body=get_extra_body(self.model) or None
         )
         
         # State management
@@ -154,7 +154,7 @@ class OmniOfflineClient:
                 api_key=api_key,
                 temperature=1.0,
                 streaming=True,
-                extra_body=get_extra_body(self.model)
+                extra_body=get_extra_body(self.model) or None
             )
     
     async def _check_repetition(self, response: str) -> bool:
