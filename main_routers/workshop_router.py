@@ -249,11 +249,8 @@ def get_subscribed_workshop_items():
                             # 回调结果会在主线程中通过GetQueryUGCResult获取
                             pass
                         
-                        # 设置回调
-                        steamworks.Workshop.SetQueryUGCRequestCallback(query_completed_callback)
-                        
                         # 发送查询请求
-                        steamworks.Workshop.SendQueryUGCRequest(query_handle)
+                        steamworks.Workshop.SendQueryUGCRequest(query_handle, callback=query_completed_callback, override_callback=True)
                         
                         # 等待查询完成（简单的轮询方式）
                         import time
@@ -568,7 +565,7 @@ def get_workshop_item_details(item_id: str):
                 "success": True,
                 "item": item_info
             }
-            
+
         else:
             # 注意：SteamWorkshop类中不存在ReleaseQueryUGCRequest方法
             return JSONResponse({

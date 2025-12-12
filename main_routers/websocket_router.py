@@ -127,7 +127,13 @@ async def websocket_endpoint(websocket: WebSocket, lanlan_name: str):
     finally:
         logger.info(f"Cleaning up WebSocket resources: {websocket.client}")
         # 安全检查：如果角色已被重命名或删除，lanlan_name 可能不再存在
-        if lanlan_name in session_manager:
+        async with _lock:
+            session_id = get_session_id()
+            is_current = session_id.get(lanlan_name) == this_session_id
+            if is_current:
+                session_id.pop(lanlan_name, None)
+        
+        if is_current and lanlan_name in session_manager:
             await session_manager[lanlan_name].cleanup()
             # 注意：cleanup() 会清空 websocket，但只在连接真正断开时调用
             # 如果连接还在，websocket应该保持设置

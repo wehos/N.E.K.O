@@ -186,6 +186,7 @@ async def update_model_config(model_name: str, request: Request):
         with open(model_json_path, 'r', encoding='utf-8') as f:
             current_config = json.load(f)
             
+        current_config = current_config.setdefault("FileReferences", {})
         if 'FileReferences' in data and 'Motions' in data['FileReferences']:
             current_config['FileReferences']['Motions'] = data['FileReferences']['Motions']
             
@@ -310,7 +311,12 @@ async def update_emotion_mapping(model_name: str, request: Request):
             for file_path in files or []:
                 if not isinstance(file_path, str):
                     continue
-                normalized = file_path.replace('\\', '/').lstrip('./')
+                normalized = file_path.replace('\\', '/')
+                p = pathlib.PurePosixPath(normalized)
+                if p.is_absolute() or ".." in p.parts:
+                    continue
+                normalized = str(p)
+
                 items.append({"File": normalized})
             motions_output[group_name] = items
         file_refs['Motions'] = motions_output
@@ -336,7 +342,12 @@ async def update_emotion_mapping(model_name: str, request: Request):
             for file_path in files or []:
                 if not isinstance(file_path, str):
                     continue
-                normalized = file_path.replace('\\', '/').lstrip('./')
+                normalized = file_path.replace('\\', '/')
+                p = pathlib.PurePosixPath(normalized)
+                if p.is_absolute() or ".." in p.parts:
+                    continue
+                normalized = str(p)
+
                 base = os.path.basename(normalized)
                 base_no_ext = base.replace('.exp3.json', '')
                 name = f"{emotion}_{base_no_ext}"
@@ -525,7 +536,13 @@ def get_model_config_by_id(model_id: str):
     """获取指定Live2D模型的model3.json配置"""
     try:
         # 查找模型目录（可能在static或用户文档目录）
-        model_dir, url_prefix = find_model_by_workshop_item_id(model_id)
+        try:
+            model_dir, url_prefix = find_workshop_item_by_id(model_id)
+            logger.debug(f"通过model_id {model_id} 查找模型目录: {model_dir}")
+        except Exception as e:
+            model_dir = ""
+            logger.warning(f"通过model_id查找失败: {e}")
+
         if not os.path.exists(model_dir):
             return JSONResponse(status_code=404, content={"success": False, "error": "模型目录不存在"})
         
@@ -579,7 +596,13 @@ async def update_model_config_by_id(model_id: str, request: Request):
         data = await request.json()
         
         # 查找模型目录（可能在static或用户文档目录）
-        model_dir, url_prefix = find_model_by_workshop_item_id(model_id)
+        try:
+            model_dir, url_prefix = find_workshop_item_by_id(model_id)
+            logger.debug(f"通过model_id {model_id} 查找模型目录: {model_dir}")
+        except Exception as e:
+            model_dir = ""
+            logger.warning(f"通过model_id查找失败: {e}")
+
         if not os.path.exists(model_dir):
             return JSONResponse(status_code=404, content={"success": False, "error": "模型目录不存在"})
         
@@ -597,6 +620,7 @@ async def update_model_config_by_id(model_id: str, request: Request):
         with open(model_json_path, 'r', encoding='utf-8') as f:
             current_config = json.load(f)
             
+        current_config = current_config.setdefault("FileReferences", {})
         if 'FileReferences' in data and 'Motions' in data['FileReferences']:
             current_config['FileReferences']['Motions'] = data['FileReferences']['Motions']
             
