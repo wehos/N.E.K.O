@@ -590,7 +590,7 @@ class OmniRealtimeClient:
                     # Initialize streaming constraint state for this response
                     try:
                         self._stream_state = init_stream_state(max_words=None, hard_char_limit=100, fence_char='|')
-                    except Exception as e:
+                    except (ValueError, TypeError) as e:
                         logger.warning(f"OmniRealtimeClient: 初始化流式状态失败喵: {e}")
                         self._stream_state = None
                 elif event_type == "response.output_item.added":

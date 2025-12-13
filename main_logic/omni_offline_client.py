@@ -278,6 +278,7 @@ class OmniOfflineClient:
                             continue
 
                         try:
+                            allowed = ""  # 默认初始化以防止 UnboundLocalError
                             allowed = process_stream_chunk(state, content)
                         except GenerationTruncated as gt:
                             logger.info(f"OmniOfflineClient: Generation truncated: {gt.reason}")
