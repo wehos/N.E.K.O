@@ -44,6 +44,22 @@ def _count_words_or_chars(text: str) -> int:
     return len(text)
 
 
+def _get_separator(text: str) -> str:
+    """
+    根据文本内容智能返回连接符：
+    - 如果文本包含拉丁字母或空格，使用空格连接（英文）
+    - 否则使用空字符串连接（中文）
+    """
+    if not text:
+        return ''
+    
+    # 检测文本是否包含拉丁字母（A-Za-z）或空格
+    if re.search(r'[A-Za-z]|\s', text):
+        return ' '  # 英文文本使用空格连接
+    else:
+        return ''   # 中文文本使用无空格连接
+
+
 def optimize_response(text: str,
                       max_words: int | None = None,
                       enclosure: Tuple[str, str] | None = None) -> str:
@@ -101,9 +117,14 @@ def optimize_response(text: str,
                         truncated = truncated + '…'
                     out_parts.append(truncated)
                 break
-        final = ''.join(out_parts).strip()
+        
+        # 智能连接：检测文本是否包含拉丁字母或空格，决定连接方式
+        separator = _get_separator(text)
+        final = separator.join(out_parts).strip()
     else:
-        final = ''.join(deduped).strip()
+        # 智能连接：检测文本是否包含拉丁字母或空格，决定连接方式
+        separator = _get_separator(text)
+        final = separator.join(deduped).strip()
 
     # 4) 小幅清理：去除重复的连续标点
     final = re.sub(r'[。]{2,}', '。', final)
