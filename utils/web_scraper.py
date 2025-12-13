@@ -454,6 +454,7 @@ async def search_baidu(query: str, limit: int = 5) -> Dict[str, Any]:
             'error': str(e)
         }
 
+from bs4 import BeautifulSoup
 
 def parse_baidu_results(html_content: str, limit: int = 5) -> List[Dict[str, str]]:
     """
@@ -468,96 +469,44 @@ def parse_baidu_results(html_content: str, limit: int = 5) -> List[Dict[str, str
     """
     results = []
     
-    # 清理HTML标签的辅助函数
-    def clean_html(text):
-        if not text:
-            return ""
-        # 移除HTML标签
-        text = re.sub(r'<[^>]+>', '', text)
-        # 移除多余空白
-        text = ' '.join(text.split())
-        # 解码HTML实体
-        text = text.replace('&nbsp;', ' ')
-        text = text.replace('&lt;', '<')
-        text = text.replace('&gt;', '>')
-        text = text.replace('&amp;', '&')
-        text = text.replace('&quot;', '"')
-        text = text.replace('&#39;', "'")
-        return text.strip()
-    
     try:
-        # 方法1: 尝试提取 c-container 中的内容
-        # 百度搜索结果的主要容器
-        container_pattern = r'<div[^>]*class="[^"]*c-container[^"]*"[^>]*>(.*?)</div>\s*</div>\s*</div>'
-        containers = re.findall(container_pattern, html_content, re.DOTALL | re.IGNORECASE)
+        soup = BeautifulSoup(html_content, 'html.parser')
         
-        for container in containers[:limit * 2]:
-            # 从容器中提取标题
-            title_match = re.search(r'<a[^>]*>(.*?)</a>', container, re.DOTALL)
-            if title_match:
-                title = clean_html(title_match.group(1))
-                if title and len(title) > 5 and len(title) < 200:
+        # 提取搜索结果容器
+        containers = soup.find_all('div', class_=lambda x: x and 'c-container' in x, limit=limit * 2)
+        
+        for container in containers:
+            # 提取标题
+            link = container.find('a')
+            if link:
+                title = link.get_text(strip=True)
+                if title and 5 < len(title) < 200:
                     # 提取摘要
                     abstract = ""
-                    abstract_match = re.search(r'<span[^>]*class="[^"]*content-right[^"]*"[^>]*>(.*?)</span>', container, re.DOTALL)
-                    if not abstract_match:
-                        abstract_match = re.search(r'<span[^>]*>([\u4e00-\u9fa5].*?)</span>', container, re.DOTALL)
-                    if abstract_match:
-                        abstract = clean_html(abstract_match.group(1))
+                    content_span = container.find('span', class_=lambda x: x and 'content-right' in x)
+                    if content_span:
+                        abstract = content_span.get_text(strip=True)[:200]
                     
                     if not any(skip in title.lower() for skip in ['百度', '广告', 'javascript']):
                         results.append({
                             'title': title,
-                            'abstract': abstract[:200] if abstract else ''
+                            'abstract': abstract
                         })
                         if len(results) >= limit:
                             break
         
-        # 方法2: 如果方法1没有结果，尝试更通用的模式
+        # 如果没找到结果，尝试提取 h3 标题
         if not results:
-            # 提取所有 h3 标题中的链接
-            h3_pattern = r'<h3[^>]*>.*?<a[^>]*>(.*?)</a>.*?</h3>'
-            titles = re.findall(h3_pattern, html_content, re.DOTALL | re.IGNORECASE)
-            
-            for title in titles[:limit]:
-                cleaned_title = clean_html(title)
-                if cleaned_title and len(cleaned_title) > 5 and len(cleaned_title) < 200:
-                    if not any(skip in cleaned_title.lower() for skip in ['百度', '广告', '登录', '更多']):
+            h3_links = soup.find_all('h3')
+            for h3 in h3_links[:limit]:
+                link = h3.find('a')
+                if link:
+                    title = link.get_text(strip=True)
+                    if title and 5 < len(title) < 200:
                         results.append({
-                            'title': cleaned_title,
+                            'title': title,
                             'abstract': ''
                         })
-        
-        # 方法3: 提取 result-op 类型的结果（百度特殊结果）
-        if not results:
-            result_op_pattern = r'<div[^>]*class="[^"]*result-op[^"]*"[^>]*>.*?<h3[^>]*>.*?<a[^>]*>(.*?)</a>'
-            op_titles = re.findall(result_op_pattern, html_content, re.DOTALL | re.IGNORECASE)
-            
-            for title in op_titles[:limit]:
-                cleaned_title = clean_html(title)
-                if cleaned_title and len(cleaned_title) > 5:
-                    results.append({
-                        'title': cleaned_title,
-                        'abstract': ''
-                    })
-        
-        # 方法4: 最宽松的模式 - 提取所有看起来像标题的链接
-        if not results:
-            all_links_pattern = r'<a[^>]*href="http[^"]*"[^>]*>([^<]{10,100})</a>'
-            all_links = re.findall(all_links_pattern, html_content, re.IGNORECASE)
-            
-            seen = set()
-            for link_text in all_links:
-                cleaned = clean_html(link_text)
-                if cleaned and cleaned not in seen and len(cleaned) > 10:
-                    if not any(skip in cleaned.lower() for skip in ['百度', '广告', '登录', '设置', '更多', 'javascript', 'http', '下载', '安装']):
-                        seen.add(cleaned)
-                        results.append({
-                            'title': cleaned,
-                            'abstract': ''
-                        })
-                        if len(results) >= limit:
-                            break
         
         logger.info(f"解析到 {len(results)} 条百度搜索结果")
         return results[:limit]
