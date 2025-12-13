@@ -291,6 +291,109 @@ def optimize_response(text: str,
     return f"{start}{final}{end}"
 
 
+class GenerationTruncated(Exception):
+    """
+    Exception raised when generation is truncated by constraints.
+    Attributes:
+        reason: short string reason code ('hard_limit', 'fence', 'word_limit')
+        discard_output: whether caller should discard accumulated output (True for hard limit)
+    """
+    def __init__(self, reason: str, discard_output: bool = False):
+        super().__init__(f"Generation truncated: {reason}")
+        self.reason = reason
+        self.discard_output = discard_output
+
+
+def init_stream_state(max_words: int | None = None, hard_char_limit: int = 100, fence_char: str = '|') -> dict:
+    """Initialize a streaming constraint state dict."""
+    return {
+        'max_words': max_words if max_words is not None else DEFAULT_MAX_WORDS,
+        'hard_char_limit': int(hard_char_limit),
+        'fence_char': fence_char,
+        'chars': 0,
+        'words': 0,
+        'terminated': False,
+    }
+
+
+def _count_words_for_state(text: str) -> int:
+    return _count_words_or_chars(text)
+
+
+def process_stream_chunk(state: dict, chunk: str) -> str:
+    """
+    Process a single incoming generated chunk under constraints.
+
+    Behavior:
+    - If fence_char appears anywhere in chunk -> raise GenerationTruncated(reason='fence', discard_output=False) and stop further processing.
+    - If adding the chunk would cause cumulative chars > hard_char_limit -> raise GenerationTruncated(reason='hard_limit', discard_output=True).
+    - If adding the chunk would cause words > max_words -> truncate the chunk to fit and mark terminated (raise GenerationTruncated with reason='word_limit', discard_output=False) AFTER returning the truncated piece.
+
+    Returns the (possibly truncated) chunk to be emitted. If a GenerationTruncated is raised, caller must handle accordingly.
+    """
+    if not chunk:
+        return ''
+
+    fence = state.get('fence_char', '|')
+    hard_limit = int(state.get('hard_char_limit', 100))
+    max_words = state.get('max_words')
+
+    # 1) Fence detection: if present anywhere, truncate up to first occurrence and then raise
+    if fence in chunk:
+        # Truncate chunk before fence and raise
+        pos = chunk.find(fence)
+        allowed = chunk[:pos]
+        # if allowed non-empty, we may return it first; but spec requires instant truncate when '|' detected
+        # We choose to not emit content containing fence; emit allowed prefix (which is before fence) then raise
+        if allowed:
+            # check hard limit before returning
+            if state['chars'] + len(allowed) > hard_limit:
+                raise GenerationTruncated('hard_limit', discard_output=True)
+            state['chars'] += len(allowed)
+            state['words'] += _count_words_for_state(allowed)
+            # mark terminated
+        raise GenerationTruncated('fence', discard_output=False)
+
+    # 2) Hard char limit: if adding chunk would exceed, raise and ask to discard output
+    if state['chars'] + len(chunk) > hard_limit:
+        raise GenerationTruncated('hard_limit', discard_output=True)
+
+    # 3) Word count enforcement: if max_words >0 and adding chunk would exceed, truncate to fit
+    if max_words and max_words > 0:
+        incoming_words = _count_words_for_state(chunk)
+        if state['words'] + incoming_words > max_words:
+            # Need to trim chunk to fit remaining word budget
+            remain = max_words - state['words']
+            if remain <= 0:
+                # no budget left, terminate without emitting this chunk
+                state['terminated'] = True
+                return ''
+
+            # For english-like text split by whitespace, else fall back to char truncation
+            if re.search(r'\s', chunk):
+                parts = chunk.split()
+                if not parts:
+                    state['terminated'] = True
+                    return ''
+                allowed_parts = parts[:remain]
+                truncated = ' '.join(allowed_parts)
+            else:
+                # Chinese/no-space: truncate by characters
+                truncated = chunk[:remain]
+
+            # update state with truncated
+            state['chars'] += len(truncated)
+            state['words'] += _count_words_for_state(truncated)
+            # After emitting truncated piece, signal termination
+            state['terminated'] = True
+            return truncated
+
+    # Normal case: accept whole chunk
+    state['chars'] += len(chunk)
+    state['words'] += _count_words_for_state(chunk)
+    return chunk
+
+
 if __name__ == '__main__':
     # 简单示例
     demo = "你好！这是第一句。你好！这是第一句。这里有很多无关的重复。这里有很多无关的重复。最后一句。"
