@@ -637,6 +637,10 @@ class OmniRealtimeClient:
                                             await self.on_response_done()
                                         continue
                                     if gt.reason == 'fence':
+                                        # Emit partial content before fence if any
+                                        if gt.partial_content:
+                                            await self.on_text_delta(gt.partial_content, self._is_first_text_chunk)
+                                            self._is_first_text_chunk = False
                                         # Stop emitting further content for this response
                                         self._is_responding = False
                                         if self.on_response_done:

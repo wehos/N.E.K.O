@@ -289,8 +289,14 @@ class OmniOfflineClient:
                                 # stop responding and do not append assistant_message
                                 self._is_responding = False
                                 break
-                            # Fence -> stop emitting further content
+                            # Fence -> emit partial content then stop emitting further content
                             if gt.reason == 'fence':
+                                # Emit partial content before fence if any
+                                if gt.partial_content:
+                                    assistant_message += gt.partial_content
+                                    if self.on_text_delta:
+                                        await self.on_text_delta(gt.partial_content, is_first_chunk)
+                                    is_first_chunk = False
                                 break
                             # For word_limit we use returned truncated piece (process_stream_chunk returns trimmed and sets terminated flag)
 
