@@ -12,6 +12,37 @@ Live2DManager.prototype.setupDragAndDrop = function(model) {
     let isDragging = false;
     let dragStartPos = new PIXI.Point();
 
+    // 智能事件传播管理 - 在拖动过程中临时禁用按钮事件拦截
+    const enableButtonEventPropagation = () => {
+        const buttons = document.querySelectorAll('.live2d-floating-btn, [id^="live2d-btn-"]');
+        buttons.forEach(btn => {
+            btn.style.pointerEvents = 'none';
+        });
+        
+        const buttonWrappers = document.querySelectorAll('[id^="live2d-btn-"]').parentElement || 
+                              document.querySelectorAll('.live2d-floating-btn').parentElement;
+        if (buttonWrappers.length > 0) {
+            buttonWrappers.forEach(wrapper => {
+                wrapper.style.pointerEvents = 'none';
+            });
+        }
+    };
+
+    const disableButtonEventPropagation = () => {
+        const buttons = document.querySelectorAll('.live2d-floating-btn, [id^="live2d-btn-"]');
+        buttons.forEach(btn => {
+            btn.style.pointerEvents = 'auto';
+        });
+        
+        const buttonWrappers = document.querySelectorAll('[id^="live2d-btn-"]').parentElement || 
+                              document.querySelectorAll('.live2d-floating-btn').parentElement;
+        if (buttonWrappers.length > 0) {
+            buttonWrappers.forEach(wrapper => {
+                wrapper.style.pointerEvents = 'auto';
+            });
+        }
+    };
+
     model.on('pointerdown', (event) => {
         if (this.isLocked) return;
         
@@ -28,12 +59,18 @@ Live2DManager.prototype.setupDragAndDrop = function(model) {
         dragStartPos.x = globalPos.x - model.x;
         dragStartPos.y = globalPos.y - model.y;
         document.getElementById('live2d-canvas').style.cursor = 'grabbing';
+        
+        // 开始拖动时，临时禁用按钮的事件拦截
+        enableButtonEventPropagation();
     });
 
     const onDragEnd = () => {
         if (isDragging) {
             isDragging = false;
             document.getElementById('live2d-canvas').style.cursor = 'grab';
+            
+            // 拖拽结束后恢复按钮的事件拦截
+            disableButtonEventPropagation();
             
             // 拖拽结束后自动保存位置
             this._savePositionAfterInteraction();
