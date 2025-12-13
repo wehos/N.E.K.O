@@ -230,7 +230,7 @@ def optimize_response(text: str,
         out_parts = []
         total = 0
         # 提前计算分隔符
-        separator = _get_separator(''.join(deduped) if deduped else text)
+        separator = _get_separator(text)
         sep_len = len(separator)
         
         for s in deduped:
@@ -241,31 +241,31 @@ def optimize_response(text: str,
                 out_parts.append(s)
                 total += separator_cost + s_len
             else:
-                    remain = effective_maxw - total
-                    if remain > 0:
-                        # 截断时需要同时考虑"潜在分隔符 + 省略号"占用
-                        separator_cost = sep_len if out_parts else 0
-                        available = remain - separator_cost
-                        if available <= 0:
-                            break
+                remain = effective_maxw - total
+                if remain > 0:
+                    # 截断时需要同时考虑"潜在分隔符 + 省略号"占用
+                    separator_cost = sep_len if out_parts else 0
+                    available = remain - separator_cost
+                    if available <= 0:
+                        break
 
-                        # 预留省略号空间（避免补 '…' 后超限）
-                        need_ellipsis = not s.rstrip().endswith('…')
-                        content_budget = available - (1 if need_ellipsis else 0)
-                        if content_budget <= 0:
-                            truncated = '…'
-                        else:
-                            truncated = s[:content_budget].rstrip()
-                            if need_ellipsis and not truncated.endswith('…'):
-                                truncated = truncated + '…'
+                    # 预留省略号空间（避免补 '…' 后超限）
+                    need_ellipsis = not s.rstrip().endswith('…')
+                    content_budget = available - (1 if need_ellipsis else 0)
+                    if content_budget <= 0:
+                        truncated = '…'
+                    else:
+                        truncated = s[:content_budget].rstrip()
+                        if need_ellipsis and not truncated.endswith('…'):
+                            truncated = truncated + '…'
 
-                        out_parts.append(truncated)
-                    break
+                    out_parts.append(truncated)
+                break
         
         final = separator.join(out_parts).strip()
     else:
         # 智能连接：检测文本是否包含拉丁字母或空格，决定连接方式
-        separator = _get_separator(''.join(deduped) if deduped else text)
+        separator = _get_separator(text)
         final = separator.join(deduped).strip()
 
     # 4) 小幅清理：去除重复的连续标点
