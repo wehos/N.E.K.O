@@ -1,3 +1,61 @@
+// ==================== OGG OPUS 流式解码器 (WASM) ====================
+// 使用 @wasm-audio-decoders/ogg-opus-decoder
+// https://github.com/eshaz/wasm-audio-decoders/tree/main/src/ogg-opus-decoder
+// 库已在 index.html 中预加载，全局变量为 window["ogg-opus-decoder"]
+let oggOpusDecoder = null;
+let oggOpusDecoderReady = null;
+
+async function getOggOpusDecoder() {
+    if (oggOpusDecoder) return oggOpusDecoder;
+    if (oggOpusDecoderReady) return oggOpusDecoderReady;
+    
+    oggOpusDecoderReady = (async () => {
+        const module = window["ogg-opus-decoder"];
+        if (!module || !module.OggOpusDecoder) {
+            console.error('ogg-opus-decoder 未加载，请检查 index.html');
+            return null;
+        }
+        
+        try {
+            const decoder = new module.OggOpusDecoder();
+            await decoder.ready;
+            console.log('OGG OPUS WASM 解码器已就绪');
+            oggOpusDecoder = decoder;
+            return decoder;
+        } catch (e) {
+            console.error('创建 OGG OPUS 解码器失败:', e);
+            return null;
+        }
+    })();
+    
+    return oggOpusDecoderReady;
+}
+
+// 重置解码器（在新的音频流开始时调用）
+async function resetOggOpusDecoder() {
+    if (oggOpusDecoder) {
+        try {
+            oggOpusDecoder.free();
+        } catch (e) {}
+        oggOpusDecoder = null;
+        oggOpusDecoderReady = null;
+    }
+}
+
+async function decodeOggOpusChunk(uint8Array) {
+    const decoder = await getOggOpusDecoder();
+    if (!decoder) {
+        throw new Error('OGG OPUS 解码器不可用');
+    }
+    
+    // decode() 用于流式解码
+    const { channelData, samplesDecoded, sampleRate } = await decoder.decode(uint8Array);
+    if (channelData && channelData[0] && channelData[0].length > 0) {
+        return { float32Data: channelData[0], sampleRate: sampleRate || 48000 };
+    }
+    return null; // 数据不足，等待更多
+}
+
 // ==================== 全局窗口管理函数 ====================
 // 关闭所有已打开的设置窗口（弹窗）
 window.closeAllSettingsWindows = function () {
@@ -2074,6 +2132,9 @@ function init_app() {
         isPlaying = false;
         audioStartTime = 0;
         nextStartTime = 0; // 新增：重置预调度时间
+        
+        // 重置 OGG OPUS 流式解码器
+        resetOggOpusDecoder();
     }
 
 
@@ -2149,10 +2210,9 @@ function init_app() {
 
 
     async function handleAudioBlob(blob) {
-        // 你现有的PCM处理代码...
-        const pcmBytes = await blob.arrayBuffer();
-        if (!pcmBytes || pcmBytes.byteLength === 0) {
-            console.warn('收到空的PCM数据，跳过处理');
+        const arrayBuffer = await blob.arrayBuffer();
+        if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+            console.warn('收到空的音频数据，跳过处理');
             return;
         }
 
@@ -2164,12 +2224,42 @@ function init_app() {
             await audioPlayerContext.resume();
         }
 
-        const int16Array = new Int16Array(pcmBytes);
-        const audioBuffer = audioPlayerContext.createBuffer(1, int16Array.length, 48000);
-        const channelData = audioBuffer.getChannelData(0);
-        for (let i = 0; i < int16Array.length; i++) {
-            channelData[i] = int16Array[i] / 32768.0;
+        // 检测是否是 OGG 格式 (魔数 "OggS" = 0x4F 0x67 0x67 0x53)
+        const header = new Uint8Array(arrayBuffer, 0, 4);
+        const isOgg = header[0] === 0x4F && header[1] === 0x67 && header[2] === 0x67 && header[3] === 0x53;
+
+        let float32Data;
+        let sampleRate = 48000;
+
+        if (isOgg) {
+            // OGG OPUS 格式，用 WASM 流式解码
+            try {
+                const result = await decodeOggOpusChunk(new Uint8Array(arrayBuffer));
+                if (!result) {
+                    // 数据不足，等待更多
+                    return;
+                }
+                float32Data = result.float32Data;
+                sampleRate = result.sampleRate;
+            } catch (e) {
+                console.error('OGG OPUS 解码失败:', e);
+                return;
+            }
+        } else {
+            // PCM Int16 格式，直接转换
+            const int16Array = new Int16Array(arrayBuffer);
+            float32Data = new Float32Array(int16Array.length);
+            for (let i = 0; i < int16Array.length; i++) {
+                float32Data[i] = int16Array[i] / 32768.0;
+            }
         }
+
+        if (!float32Data || float32Data.length === 0) {
+            return;
+        }
+
+        const audioBuffer = audioPlayerContext.createBuffer(1, float32Data.length, sampleRate);
+        audioBuffer.copyToChannel(float32Data, 0);
 
         const bufferObj = { seq: seqCounter++, buffer: audioBuffer };
         audioBufferQueue.push(bufferObj);
