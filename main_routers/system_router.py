@@ -662,9 +662,12 @@ async def proactive_chat(request: Request):
                     use_window_search = False
                 else:
                     formatted_window_content = format_window_context_content(window_context_content)
-                    logger.info(f"[{lanlan_name}] 成功获取窗口上下文: {window_context_content.get('window_title', '')}")
+                    # 截断窗口标题以避免记录敏感信息
+                    raw_title = window_context_content.get('window_title', '')
+                    sanitized_title = raw_title[:30] + '...' if len(raw_title) > 30 else raw_title
+                    logger.info(f"[{lanlan_name}] 成功获取窗口上下文: {sanitized_title}")
                 
-            except Exception as e:
+            except Exception:
                 logger.exception(f"[{lanlan_name}] 获取窗口上下文失败")
                 # 回退到首页推荐
                 use_window_search = False

@@ -297,10 +297,17 @@ def get_active_window_title() -> Optional[str]:
     
     try:
         import pygetwindow as gw
+    except ImportError:
+        logger.error("pygetwindow模块未安装。在Windows系统上请安装: pip install pygetwindow")
+        return None
+    
+    try:
         active_window = gw.getActiveWindow()
         if active_window:
             title = active_window.title
-            logger.info(f"获取到活跃窗口标题: {title}")
+            # 截断标题以避免记录敏感信息
+            sanitized_title = title[:30] + '...' if len(title) > 30 else title
+            logger.info(f"获取到活跃窗口标题: {sanitized_title}")
             return title
         else:
             logger.warning("没有找到活跃窗口")
@@ -615,7 +622,9 @@ async def fetch_window_context_content(limit: int = 5) -> Dict[str, Any]:
                 'window_title': window_title
             }
         
-        logger.info(f"从窗口标题「{window_title}」提取搜索关键词: {search_query}")
+        # 截断窗口标题以避免记录敏感信息
+        sanitized_title = window_title[:30] + '...' if len(window_title) > 30 else window_title
+        logger.info(f"从窗口标题「{sanitized_title}」提取搜索关键词: {search_query}")
         
         # 进行百度搜索
         search_result = await search_baidu(search_query, limit)
