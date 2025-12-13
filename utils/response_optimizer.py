@@ -18,10 +18,48 @@ Response optimizer for NEKO
 from __future__ import annotations
 import os
 import re
+import logging
 from typing import Tuple
 
+# 设置模块日志记录器
+logger = logging.getLogger(__name__)
+
+
+def _safe_get_int_env(env_var: str, default: int) -> int:
+    """
+    安全地获取整数环境变量值
+    
+    Args:
+        env_var: 环境变量名
+        default: 默认值
+        
+    Returns:
+        解析后的整数值，如果解析失败则返回默认值
+    """
+    value = os.getenv(env_var)
+    if value is None:
+        return default
+    
+    # 去除前后空格
+    value = value.strip()
+    if not value:
+        return default
+    
+    try:
+        # 尝试转换为整数
+        int_value = int(value)
+        # 检查是否为非负整数
+        if int_value < 0:
+            logger.warning(f"环境变量 {env_var} 包含负值 {int_value}，使用默认值 {default}")
+            return default
+        return int_value
+    except ValueError as e:
+        logger.warning(f"环境变量 {env_var} 的值 '{value}' 无法解析为整数，使用默认值 {default}: {e}")
+        return default
+
+
 # 默认配置
-DEFAULT_MAX_WORDS = int(os.getenv('NEKO_RESPONSE_MAX_WORDS', '200'))
+DEFAULT_MAX_WORDS = _safe_get_int_env('NEKO_RESPONSE_MAX_WORDS', 200)
 DEFAULT_ENC_START = os.getenv('NEKO_RESPONSE_ENC_START', '【')
 DEFAULT_ENC_END = os.getenv('NEKO_RESPONSE_ENC_END', '】')
 
@@ -58,6 +96,70 @@ def _get_separator(text: str) -> str:
         return ' '  # 英文文本使用空格连接
     else:
         return ''   # 中文文本使用无空格连接
+
+
+def _is_english_text(text: str) -> bool:
+    """
+    检测文本是否为英文文本
+    
+    Args:
+        text: 待检测文本
+        
+    Returns:
+        True 如果是英文文本，False 如果是中文文本
+    """
+    if not text:
+        return False
+    
+    # 检测文本是否包含拉丁字母（A-Za-z）
+    return bool(re.search(r'[A-Za-z]', text))
+
+
+def _truncate_by_words(text: str, max_words: int) -> str:
+    """
+    按单词截断英文文本
+    
+    Args:
+        text: 原始文本
+        max_words: 最大单词数
+        
+    Returns:
+        截断后的文本
+    """
+    if not text or max_words <= 0:
+        return ''
+    
+    # 分割单词，保留原始分隔符信息
+    words = re.split(r'(\s+)', text)
+    
+    # 计算实际单词数（忽略纯空格）
+    actual_words = [w for w in words if w.strip()]
+    
+    if len(actual_words) <= max_words:
+        return text
+    
+    # 截取前max_words个单词
+    truncated_words = []
+    word_count = 0
+    
+    for word in words:
+        if word.strip():  # 如果是实际单词
+            if word_count >= max_words:
+                break
+            truncated_words.append(word)
+            word_count += 1
+        else:  # 如果是空格分隔符
+            truncated_words.append(word)
+    
+    # 重新组合文本
+    truncated_text = ''.join(truncated_words).rstrip()
+    
+    # 确保以标点符号或空格结尾
+    if not re.search(r'[.!?\s]$', truncated_text):
+        # 如果截断在单词中间，添加省略号
+        truncated_text += '…'
+    
+    return truncated_text
 
 
 def optimize_response(text: str,
@@ -112,7 +214,14 @@ def optimize_response(text: str,
                 # 还可以塞一部分
                 remain = maxw - total
                 if remain > 0:
-                    truncated = s[:remain].rstrip()
+                    # 根据文本类型进行智能截断
+                    if _is_english_text(s):
+                        # 英文文本：按单词截断
+                        truncated = _truncate_by_words(s, remain)
+                    else:
+                        # 中文文本：按字符截断
+                        truncated = s[:remain].rstrip()
+                    
                     if not truncated.endswith('…'):
                         truncated = truncated + '…'
                     out_parts.append(truncated)
