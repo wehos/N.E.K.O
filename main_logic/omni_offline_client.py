@@ -282,8 +282,13 @@ class OmniOfflineClient:
                             continue
 
                         try:
-                            allowed = ""  # 默认初始化以防止 UnboundLocalError
-                            allowed = process_stream_chunk(state, content)
+                            # 默认初始化以防止 UnboundLocalError
+                            allowed = ""
+                            # init_stream_state 失败时，降级为不做约束处理
+                            if state is None:
+                                allowed = content
+                            else:
+                                allowed = process_stream_chunk(state, content)
                         except GenerationTruncated as gt:
                             logger.info(f"OmniOfflineClient: Generation truncated: {gt.reason}")
                             # Hard limit -> discard accumulated assistant_message and notify connection error handler
@@ -312,7 +317,7 @@ class OmniOfflineClient:
                             is_first_chunk = False
 
                         # If state indicates termination (word-limit hit), stop after emitting
-                        if state.get('terminated'):
+                        if state and state.get('terminated'):
                             logger.info("OmniOfflineClient: Generation ended due to word limit")
                             break
                     

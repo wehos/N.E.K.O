@@ -586,6 +586,7 @@ class OmniRealtimeClient:
                     self._current_response_id = event.get("response", {}).get("id")
                     self._is_responding = True
                     self._is_first_text_chunk = self._is_first_transcript_chunk = True
+                    self._response_done_called = False
                     # 清空转录 buffer，防止累积旧内容
                     self._output_transcript_buffer = ""
                     self._current_response_transcript = ""  # 重置当前回复转录
