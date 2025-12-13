@@ -10,6 +10,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from openai import APIConnectionError, InternalServerError, RateLimitError
 from config import get_extra_body
 from utils.frontend_utils import calculate_text_similarity
+from utils.response_optimizer import init_stream_state, process_stream_chunk, GenerationTruncated
 
 # Setup logger for this module
 logger = logging.getLogger(__name__)
@@ -268,47 +269,45 @@ class OmniOfflineClient:
                     pipe_count = 0  # 围栏：追踪 | 字符的出现次数
                     fence_triggered = False  # 围栏是否已触发
                     
-                    # Stream response using langchain
+                    # Stream response using langchain with real-time constraints
+                    state = init_stream_state(max_words=None, hard_char_limit=100, fence_char='|')
                     async for chunk in self.llm.astream(self._conversation_history):
                         if not self._is_responding:
-                            # Interrupted
                             break
-                        
-                        # 检查围栏是否已触发
-                        if fence_triggered:
-                            break
-                            
+
                         content = chunk.content if hasattr(chunk, 'content') else str(chunk)
-                        
-                        # 只处理非空内容，从源头过滤空文本
-                        if content and content.strip():
-                            # 围栏检测：检查 | 字符
-                            for char in content:
-                                if char == '|':
-                                    pipe_count += 1
-                                    if pipe_count >= 2:
-                                        # 触发围栏：找到第二个 | 的位置并截断
-                                        pipe_positions = [i for i, c in enumerate(content) if c == '|']
-                                        if len(pipe_positions) >= 2:
-                                            content = content[:pipe_positions[1]]
-                                        fence_triggered = True
-                                        logger.info("OmniOfflineClient: 围栏触发 - 检测到第二个 | 字符，截断输出")
-                                        break
-                            
-                            if content and content.strip():
-                                assistant_message += content
-                                
-                                # 文本模式只调用 on_text_delta，不调用 on_output_transcript
-                                # 这与 OmniRealtimeClient 的行为一致：
-                                # - 文本响应使用 on_text_delta
-                                # - 语音转录使用 on_output_transcript
-                                if self.on_text_delta:
-                                    await self.on_text_delta(content, is_first_chunk)
-                                
-                                is_first_chunk = False
-                        elif content and not content.strip():
-                            # 记录被过滤的空内容（仅包含空白字符）
-                            logger.debug(f"OmniOfflineClient: 过滤空白内容 - content_repr: {repr(content)[:100]}")
+                        if not content:
+                            continue
+
+                        try:
+                            allowed = process_stream_chunk(state, content)
+                        except GenerationTruncated as gt:
+                            logger.info(f"OmniOfflineClient: Generation truncated: {gt.reason}")
+                            # Hard limit -> discard accumulated assistant_message and notify connection error handler
+                            if gt.reason == 'hard_limit':
+                                if self.handle_connection_error:
+                                    await self.handle_connection_error("生成被强制终止：超过硬性字符限制（100 字符），已丢弃本轮输出。")
+                                # stop responding and do not append assistant_message
+                                self._is_responding = False
+                                fence_triggered = True
+                                break
+                            # Fence -> stop emitting further content
+                            if gt.reason == 'fence':
+                                fence_triggered = True
+                                break
+                            # For word_limit we use returned truncated piece (process_stream_chunk returns trimmed and sets terminated flag)
+
+                        # If allowed is empty string, it means nothing to emit (or word budget exhausted)
+                        if allowed and allowed.strip():
+                            assistant_message += allowed
+                            if self.on_text_delta:
+                                await self.on_text_delta(allowed, is_first_chunk)
+                            is_first_chunk = False
+
+                        # If state indicates termination (word-limit hit), stop after emitting
+                        if state.get('terminated'):
+                            logger.info("OmniOfflineClient: Generation ended due to word limit")
+                            break
                     
                     # Add assistant response to history
                     if assistant_message:

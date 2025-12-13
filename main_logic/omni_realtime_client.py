@@ -12,6 +12,7 @@ from enum import Enum
 from utils.config_manager import get_config_manager
 from utils.audio_processor import AudioProcessor
 from utils.frontend_utils import calculate_text_similarity
+from utils.response_optimizer import init_stream_state, process_stream_chunk, GenerationTruncated
 
 # Setup logger for this module
 logger = logging.getLogger(__name__)
@@ -586,6 +587,11 @@ class OmniRealtimeClient:
                     # 清空转录 buffer，防止累积旧内容
                     self._output_transcript_buffer = ""
                     self._current_response_transcript = ""  # 重置当前回复转录
+                    # Initialize streaming constraint state for this response
+                    try:
+                        self._stream_state = init_stream_state(max_words=None, hard_char_limit=100, fence_char='|')
+                    except Exception:
+                        self._stream_state = None
                 elif event_type == "response.output_item.added":
                     self._current_item_id = event.get("item", {}).get("id")
                 # Handle interruptions
@@ -612,8 +618,39 @@ class OmniRealtimeClient:
                     if event_type in ["response.text.delta", "response.output_text.delta"]:
                         if self.on_text_delta:
                             if "glm" not in self.model:
-                                await self.on_text_delta(event["delta"], self._is_first_text_chunk)
-                                self._is_first_text_chunk = False
+                                delta = event.get("delta", "")
+                                try:
+                                    if getattr(self, '_stream_state', None) is not None:
+                                        allowed = process_stream_chunk(self._stream_state, delta)
+                                    else:
+                                        allowed = delta
+                                except GenerationTruncated as gt:
+                                    logger.info(f"OmniRealtimeClient: Generation truncated: {gt.reason}")
+                                    if gt.reason == 'hard_limit':
+                                        # Hard limit: ask higher layer to handle and stop response
+                                        if self.on_connection_error:
+                                            await self.on_connection_error("生成被强制终止：超过硬性字符限制（100 字符），已丢弃本轮输出。")
+                                        # Stop responding and call on_response_done to keep flow
+                                        self._is_responding = False
+                                        if self.on_response_done:
+                                            await self.on_response_done()
+                                        continue
+                                    if gt.reason == 'fence':
+                                        # Stop emitting further content for this response
+                                        self._is_responding = False
+                                        if self.on_response_done:
+                                            await self.on_response_done()
+                                        continue
+                                # Emit allowed delta if any
+                                if allowed and allowed.strip():
+                                    await self.on_text_delta(allowed, self._is_first_text_chunk)
+                                    self._is_first_text_chunk = False
+                                # If stream_state marks terminated (word limit), finish response
+                                if getattr(self, '_stream_state', {}).get('terminated'):
+                                    logger.info('OmniRealtimeClient: Generation ended due to word limit')
+                                    self._is_responding = False
+                                    if self.on_response_done:
+                                        await self.on_response_done()
                     elif event_type in ["response.audio.delta", "response.output_audio.delta"]:
                         if self.on_audio_delta:
                             audio_bytes = base64.b64decode(event["delta"])
