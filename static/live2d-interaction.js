@@ -14,13 +14,10 @@ Live2DManager.prototype.setupDragAndDrop = function(model) {
 
     // 智能事件传播管理 - 在拖动过程中临时禁用按钮事件拦截
     const enableButtonEventPropagation = () => {
-        const elementsToDisable = new Set();
-        
         // 收集所有按钮元素
         const buttons = document.querySelectorAll('.live2d-floating-btn, [id^="live2d-btn-"]');
         buttons.forEach(btn => {
             if (btn) {
-                elementsToDisable.add(btn);
                 // 保存当前的pointerEvents值
                 const currentValue = btn.style.pointerEvents || '';
                 btn.setAttribute('data-prev-pointer-events', currentValue);
@@ -28,20 +25,18 @@ Live2DManager.prototype.setupDragAndDrop = function(model) {
             }
         });
         
-        // 收集所有按钮包装器元素
+        // 收集并处理所有按钮包装器元素
+        const wrappers = new Set();
         buttons.forEach(btn => {
             if (btn && btn.parentElement) {
-                elementsToDisable.add(btn.parentElement);
+                wrappers.add(btn.parentElement);
             }
         });
         
-        // 处理包装器元素
-        elementsToDisable.forEach(element => {
-            if (element && !element.hasAttribute('data-prev-pointer-events')) {
-                const currentValue = element.style.pointerEvents || '';
-                element.setAttribute('data-prev-pointer-events', currentValue);
-                element.style.pointerEvents = 'none';
-            }
+        wrappers.forEach(wrapper => {
+            const currentValue = wrapper.style.pointerEvents || '';
+            wrapper.setAttribute('data-prev-pointer-events', currentValue);
+            wrapper.style.pointerEvents = 'none';
         });
     };
 
