@@ -266,7 +266,6 @@ class OmniOfflineClient:
                 try:
                     assistant_message = ""
                     is_first_chunk = True
-                    pipe_count = 0  # 围栏：追踪 | 字符的出现次数
                     
                     # Stream response using langchain with real-time constraints
                     state = init_stream_state(max_words=None, hard_char_limit=100, fence_char='|')
@@ -288,6 +287,7 @@ class OmniOfflineClient:
                                     await self.handle_connection_error("生成被强制终止：超过硬性字符限制（100 字符），已丢弃本轮输出。")
                                 # stop responding and do not append assistant_message
                                 self._is_responding = False
+                                assistant_message = ""  # 清空累积内容以确保真正丢弃输出
                                 break
                             # Fence -> emit partial content then stop emitting further content
                             if gt.reason == 'fence':

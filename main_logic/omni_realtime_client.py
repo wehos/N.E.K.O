@@ -656,6 +656,7 @@ class OmniRealtimeClient:
                                     self._is_responding = False
                                     if self.on_response_done:
                                         await self.on_response_done()
+                                    continue
                     elif event_type in ["response.audio.delta", "response.output_audio.delta"]:
                         if self.on_audio_delta:
                             audio_bytes = base64.b64decode(event["delta"])
