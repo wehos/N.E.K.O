@@ -91,13 +91,13 @@ async def fetch_bilibili_trending(limit: int = 10) -> Dict[str, Any]:
                 }
                 
     except httpx.TimeoutException:
-        logger.error("获取B站首页推荐超时")
+        logger.exception("获取B站首页推荐超时")
         return {
             'success': False,
             'error': '请求超时'
         }
     except Exception as e:
-        logger.error(f"获取B站首页推荐失败: {e}")
+        logger.exception(f"获取B站首页推荐失败: {e}")
         return {
             'success': False,
             'error': str(e)
@@ -161,13 +161,13 @@ async def fetch_weibo_trending(limit: int = 10) -> Dict[str, Any]:
                 }
                 
     except httpx.TimeoutException:
-        logger.error("获取微博热议话题超时")
+        logger.exception("获取微博热议话题超时")
         return {
             'success': False,
             'error': '请求超时'
         }
     except Exception as e:
-        logger.error(f"获取微博热议话题失败: {e}")
+        logger.exception(f"获取微博热议话题失败: {e}")
         return {
             'success': False,
             'error': str(e)
@@ -325,7 +325,7 @@ def get_active_window_title(include_raw: bool = False) -> Optional[Union[str, Di
             logger.warning("没有找到活跃窗口")
             return None
     except Exception as e:
-        logger.error(f"获取活跃窗口标题失败: {e}")
+        logger.exception(f"获取活跃窗口标题失败: {e}")
         return None
 
 
@@ -442,13 +442,13 @@ async def search_baidu(query: str, limit: int = 5) -> Dict[str, Any]:
                 }
                 
     except httpx.TimeoutException:
-        logger.error("百度搜索超时")
+        logger.exception("百度搜索超时")
         return {
             'success': False,
             'error': '搜索超时'
         }
     except Exception as e:
-        logger.error(f"百度搜索失败: {e}")
+        logger.exception(f"百度搜索失败: {e}")
         return {
             'success': False,
             'error': str(e)
@@ -512,7 +512,7 @@ def parse_baidu_results(html_content: str, limit: int = 5) -> List[Dict[str, str
         return results[:limit]
         
     except Exception as e:
-        logger.error(f"解析百度搜索结果失败: {e}")
+        logger.exception(f"解析百度搜索结果失败: {e}")
         return []
 
 
@@ -602,7 +602,7 @@ async def fetch_window_context_content(limit: int = 5) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        logger.error(f"获取窗口上下文内容失败: {e}")
+        logger.exception(f"获取窗口上下文内容失败: {e}")
         return {
             'success': False,
             'error': str(e)
